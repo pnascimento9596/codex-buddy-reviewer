@@ -407,6 +407,7 @@ test('workspace status and purge integrate provider attribution while preserving
   assert.equal(purged.provider_temporary.removed_runs, 1);
   assert.equal(purged.provider_temporary.retained_live_runs, 1);
   await assert.rejects(access(dead.directory));
+  await assert.rejects(cleanupProviderTempRun(dead), /ownership proof changed/);
   await access(live.directory);
   await access(other.directory);
   await cleanupProviderTempRun(live);

@@ -130,6 +130,24 @@ async function secureParent(tempBase, platform = process.platform) {
   return { parent, identity: before };
 }
 
+async function openRunIdentityHandle(directory, platform) {
+  if (platform === 'win32') return null;
+  const handle = await open(
+    directory,
+    constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0)
+  );
+  try {
+    const identity = await handle.stat({ bigint: true });
+    if (!identity.isDirectory()) {
+      throw new Error('Buddy provider temporary run identity handle is not a directory');
+    }
+    return { handle, identity };
+  } catch (error) {
+    await handle.close().catch(() => {});
+    throw error;
+  }
+}
+
 async function assertParentUnchanged(parent, expected, platform = process.platform) {
   const actual = await lstat(parent, { bigint: true });
   if (!actual.isDirectory() || actual.isSymbolicLink() || !ownedByCurrentUser(actual)
@@ -787,12 +805,18 @@ export async function createProviderTempRun({
   let issuedIdentity;
   let issuedMarker;
   let createdIdentity;
+  let identityHandle;
   try {
     const runStat = await lstat(directory, { bigint: true });
-    createdIdentity = runStat;
     if (!runStat.isDirectory() || runStat.isSymbolicLink() || !ownedByCurrentUser(runStat)
         || (platform !== 'win32' && !exactMode(runStat, 0o700))) {
       throw new Error('Provider temporary run directory cannot be secured');
+    }
+    const pinned = await openRunIdentityHandle(directory, platform);
+    identityHandle = pinned?.handle;
+    createdIdentity = pinned?.identity ?? runStat;
+    if (!providerTempIdentitiesMatch(runStat, createdIdentity, platform)) {
+      throw new Error('Provider temporary run directory changed while it was being pinned');
     }
     const marker = {
       schema: TEMP_SCHEMA,
@@ -828,6 +852,7 @@ export async function createProviderTempRun({
         && (platform === 'win32' || exactMode(cleanupTarget, 0o700))) {
       await rm(directory, { recursive: true, force: true }).catch(() => {});
     }
+    await identityHandle?.close().catch(() => {});
     throw error;
   }
 
@@ -836,6 +861,7 @@ export async function createProviderTempRun({
     identity: issuedIdentity,
     marker: issuedMarker,
     parentIdentity: identity,
+    identityHandle,
     platform
   }));
   return run;
@@ -850,22 +876,31 @@ export async function cleanupProviderTempRun(run, { cleanupImpl = rm } = {}) {
   if (run.directory !== path.join(run.parent, `${RUN_PREFIX}${run.runId}`)) {
     throw new Error('Provider temporary cleanup target is invalid');
   }
-  await assertParentUnchanged(run.parent, issued.parentIdentity, issued.platform);
-  const current = await lstat(run.directory, { bigint: true }).catch(() => null);
-  const marker = current
-    ? await readMarker(run.directory, run.runId, issued.platform)
-    : null;
-  if (!current || !current.isDirectory() || current.isSymbolicLink()
-      || !providerTempIdentitiesMatch(current, issued.identity, issued.platform)
-      || !ownedByCurrentUser(current)
-      || (issued.platform !== 'win32' && !exactMode(current, 0o700))
-      || !sameMarker(marker, issued.marker)) {
-    throw new Error('Provider temporary cleanup ownership proof changed');
+  issuedRuns.delete(run);
+  try {
+    await assertParentUnchanged(run.parent, issued.parentIdentity, issued.platform);
+    const heldIdentity = issued.identityHandle
+      ? await issued.identityHandle.stat({ bigint: true })
+      : issued.identity;
+    const current = await lstat(run.directory, { bigint: true }).catch(() => null);
+    const marker = current
+      ? await readMarker(run.directory, run.runId, issued.platform)
+      : null;
+    if (!current || !current.isDirectory() || current.isSymbolicLink()
+        || !providerTempIdentitiesMatch(current, heldIdentity, issued.platform)
+        || !providerTempIdentitiesMatch(heldIdentity, issued.identity, issued.platform)
+        || !ownedByCurrentUser(current)
+        || (issued.platform !== 'win32' && !exactMode(current, 0o700))
+        || !sameMarker(marker, issued.marker)) {
+      throw new Error('Provider temporary cleanup ownership proof changed');
+    }
+    await cleanupImpl(run.directory, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 50
+    });
+  } finally {
+    await issued.identityHandle?.close().catch(() => {});
   }
-  await cleanupImpl(run.directory, {
-    recursive: true,
-    force: true,
-    maxRetries: 3,
-    retryDelay: 50
-  });
 }

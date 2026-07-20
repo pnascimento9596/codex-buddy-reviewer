@@ -6,6 +6,9 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
+  readlink,
+  realpath,
   rm,
   symlink,
   truncate,
@@ -87,6 +90,13 @@ async function writeEmptyFiles(directory, count, prefix) {
   }
 }
 
+async function procFileDescriptorTargets() {
+  const descriptors = await readdir('/proc/self/fd');
+  return Promise.all(descriptors.map(async (descriptor) => (
+    readlink(path.join('/proc/self/fd', descriptor)).catch(() => null)
+  )));
+}
+
 test('provider temporary runs use a private parent, minimal marker, and injected normal cleanup', async () => {
   const tempBase = await temporaryBase('normal');
   const createdAt = Date.UTC(2026, 6, 19, 12, 0, 0);
@@ -137,6 +147,50 @@ test('provider temporary runs use a private parent, minimal marker, and injected
   await assert.rejects(access(run.directory));
 });
 
+test('provider temporary cleanup consumes its issuance before an overlapping remover can start', {
+  timeout: 5_000
+}, async () => {
+  const tempBase = await temporaryBase('overlapping-cleanup');
+  const run = await createTempRun({
+    tempBase,
+    randomBytesImpl: deterministicRandom(0x12)
+  });
+  let enterCleanup;
+  let releaseCleanup;
+  const cleanupEntered = new Promise((resolve) => { enterCleanup = resolve; });
+  const cleanupReleased = new Promise((resolve) => { releaseCleanup = resolve; });
+  const first = cleanupProviderTempRun(run, {
+    cleanupImpl: async (target, options) => {
+      enterCleanup();
+      await cleanupReleased;
+      await rm(target, options);
+    }
+  });
+  let entryTimeout;
+  try {
+    await Promise.race([
+      cleanupEntered,
+      first.then(() => {
+        throw new Error('Provider cleanup completed before its injected remover was entered');
+      }),
+      new Promise((_, reject) => {
+        entryTimeout = setTimeout(() => {
+          reject(new Error('Provider cleanup did not enter its injected remover'));
+        }, 2_000);
+      })
+    ]);
+    await assert.rejects(
+      cleanupProviderTempRun(run),
+      /requires an issued run/
+    );
+  } finally {
+    clearTimeout(entryTimeout);
+    releaseCleanup();
+  }
+  await first;
+  await assert.rejects(access(run.directory));
+});
+
 test('a new provider run removes only stale marked runs owned by a dead PID', async () => {
   const tempBase = await temporaryBase('stale');
   const nowMs = Date.UTC(2026, 6, 19, 12, 0, 0);
@@ -157,6 +211,7 @@ test('a new provider run removes only stale marked runs owned by a dead PID', as
     await access(stale.directory);
   } else {
     await assert.rejects(access(stale.directory));
+    await assert.rejects(cleanupProviderTempRun(stale), /ownership proof changed/);
   }
   await access(current.directory);
   await cleanupProviderTempRun(current);
@@ -180,6 +235,57 @@ test('normal cleanup refuses a replacement directory even when its name and mark
     /ownership proof changed/
   );
   assert.equal(await readFile(sentinel, 'utf8'), 'not Buddy issued state\n');
+});
+
+test('Linux fallback pins a live run so an immediately recycled path cannot reuse its identity', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const tempBase = await temporaryBase('linux-pinned-replacement');
+  const run = await createTempRun({
+    tempBase,
+    pid: 2202,
+    platform: 'linux',
+    randomBytesImpl: deterministicRandom(0x37)
+  });
+  const marker = await readFile(path.join(run.directory, '.codex-buddy-owner.json'), 'utf8');
+  await rm(run.directory, { recursive: true, force: true });
+  await mkdir(run.directory, { mode: 0o700 });
+  await writeFile(path.join(run.directory, '.codex-buddy-owner.json'), marker, { mode: 0o600 });
+  const sentinel = path.join(run.directory, 'replacement-must-survive');
+  await writeFile(sentinel, 'not Buddy issued state\n');
+  await assert.rejects(cleanupProviderTempRun(run), /ownership proof changed/);
+  assert.equal(await readFile(sentinel, 'utf8'), 'not Buddy issued state\n');
+});
+
+test('Linux keeps the issued directory descriptor live through unlink and closes it after refusal', {
+  skip: process.platform !== 'linux'
+}, async (context) => {
+  const tempBase = await temporaryBase('linux-descriptor-lifecycle');
+  const run = await createTempRun({
+    tempBase,
+    randomBytesImpl: deterministicRandom(0x38)
+  });
+  let descriptorTargets;
+  try {
+    descriptorTargets = await procFileDescriptorTargets();
+  } catch {
+    await cleanupProviderTempRun(run);
+    context.skip('procfs file-descriptor inspection is unavailable');
+    return;
+  }
+  const resolvedDirectory = await realpath(run.directory);
+  try {
+    assert.equal(descriptorTargets.includes(resolvedDirectory), true);
+    await rm(run.directory, { recursive: true, force: true });
+    assert.equal((await procFileDescriptorTargets()).includes(`${resolvedDirectory} (deleted)`), true);
+    await assert.rejects(cleanupProviderTempRun(run), /ownership proof changed/);
+    assert.equal(
+      (await procFileDescriptorTargets()).some((target) => target?.startsWith(resolvedDirectory)),
+      false
+    );
+  } finally {
+    await cleanupProviderTempRun(run).catch(() => {});
+  }
 });
 
 test('failed creation cleanup preserves a directory replacement instead of deleting by name', async () => {
@@ -247,6 +353,7 @@ test('stale cleanup preserves live owners and preserves dead owners through the 
     await cleanupProviderTempRun(fresh);
   } else {
     await assert.rejects(access(fresh.directory));
+    await assert.rejects(cleanupProviderTempRun(fresh), /ownership proof changed/);
   }
   await cleanupProviderTempRun(live);
 });
@@ -295,6 +402,7 @@ test('stale cleanup refuses symlinks and malformed ownership markers without fol
   assert.equal(summary.refused >= 2, true);
   assert.equal(await readFile(path.join(outside, 'sentinel'), 'utf8'), 'preserve me\n');
   await assert.rejects(access(nested.directory));
+  await assert.rejects(cleanupProviderTempRun(nested), /ownership proof changed/);
   assert.equal((await lstat(symlinkRun)).isSymbolicLink(), true);
   assert.equal((await lstat(malformedRun)).isDirectory(), true);
 });
@@ -371,6 +479,7 @@ test('workspace status attributes provider bytes without storing raw roots and p
   assert.equal(result.retained_live_runs, 1);
   assert.equal(result.removed_files >= 2, true);
   await assert.rejects(access(dead.directory));
+  await assert.rejects(cleanupProviderTempRun(dead), /ownership proof changed/);
   await access(live.directory);
   await access(other.directory);
   await cleanupProviderTempRun(live);
