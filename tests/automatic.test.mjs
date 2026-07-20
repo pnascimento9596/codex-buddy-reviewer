@@ -1511,8 +1511,7 @@ test('capability spend precedes blocked review-started publication and provider 
   );
   let holding = Promise.resolve();
 
-  let reviewEntered;
-  const entered = new Promise((resolve) => { reviewEntered = resolve; });
+  let providerEntered = false;
   let releaseReview;
   const reviewRelease = new Promise((resolve) => { releaseReview = resolve; });
   const stopping = reviewTurnStop({
@@ -1527,7 +1526,7 @@ test('capability spend precedes blocked review-started publication and provider 
       const registry = await readEgressRegistry({ root, dataDir: modeDataDir });
       assert.equal(registry.active.length, 1);
       assert.equal(registry.active[0].state, 'consumed');
-      reviewEntered();
+      providerEntered = true;
       await reviewRelease;
       return {
         evidence,
@@ -1539,8 +1538,6 @@ test('capability spend precedes blocked review-started publication and provider 
       };
     }
   });
-  let activeObserved = false;
-  let enteredBeforeOutboxRelease = false;
   let stopped;
   try {
     await waitFor(async () => {
@@ -1555,18 +1552,16 @@ test('capability spend precedes blocked review-started publication and provider 
     releaseModeLock();
     await holdingMode;
 
-    activeObserved = await (async () => {
-      const deadline = performance.now() + 5_000;
-      while (performance.now() < deadline) {
-        if ((await readEgressRegistry({ root, dataDir: modeDataDir })).active.length === 1) return true;
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      return false;
-    })();
-    enteredBeforeOutboxRelease = activeObserved && await Promise.race([
-      entered.then(() => true),
-      new Promise((resolve) => setTimeout(() => resolve(false), 1_000))
-    ]);
+    await waitFor(async () => {
+      const registry = await readEgressRegistry({ root, dataDir: modeDataDir });
+      return registry.active.length === 1
+        && registry.active[0].state === 'consumed';
+    }, 'capability spend to become durably visible', CONCURRENT_STATE_VISIBILITY_TIMEOUT_MS);
+    await waitFor(
+      () => providerEntered,
+      'provider execution while review-started publication remains blocked',
+      CONCURRENT_STATE_VISIBILITY_TIMEOUT_MS
+    );
   } finally {
     releaseModeLock();
     releaseLock();
@@ -1574,8 +1569,6 @@ test('capability spend precedes blocked review-started publication and provider 
     [stopped] = await Promise.all([stopping, holding, holdingMode]);
   }
 
-  assert.equal(activeObserved, true);
-  assert.equal(enteredBeforeOutboxRelease, true);
   assert.equal(stopped.result.status, 'no_findings');
   assert.deepEqual((await readEgressRegistry({ root, dataDir: modeDataDir })).active, []);
 });
