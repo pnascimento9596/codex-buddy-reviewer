@@ -27,7 +27,7 @@
 
 Keep Codex as the main coding agent, then let one or two separately configured reviewer connections inspect a bounded snapshot-to-snapshot Git delta, subject to the documented RC completeness limits. Buddy validates and attributes their findings, preserves useful disagreement, reports partial failures honestly, and presents the result beside a persistent animated Codex pet.
 
-> Keep GPT-5.6 Sol as your main implementer, then put an underused Ollama Cloud subscription with GLM 5.2 and a SuperGrok connection with Grok 4.5 to work as two independent reviewers. The same pattern works with Claude Max, ChatGPT Pro through OpenCode, Kimi through OpenCode, local Ollama, or any supported mix you already have.
+> Keep codex and GPT-5.6 Sol as your main implementer, then put an underused secondary subscription, for example: Ollama cloud, Claude, SuperGrok, Opencode, Zai, Kimi Code, etc...with any model (I like GLM 5.2 as my primary reviewer) and even a secondary subscription/agent connection to work as two independent reviewers. The same pattern works with Claude Max, ChatGPT Pro through OpenCode, Kimi through OpenCode, local Ollama, or any supported mix you already have.
 
 Buddy never asks you to paste tokens into its configuration. Authentication remains owned by Claude Code, Grok CLI, Ollama, or OpenCode.
 
