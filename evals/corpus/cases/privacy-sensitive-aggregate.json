@@ -1,0 +1,38 @@
+{
+  "schema_version": "1",
+  "id": "privacy-sensitive-aggregate",
+  "category": "privacy",
+  "description": "A sensitive-only change is represented by a count, never by its path or bytes, and must not call a provider.",
+  "live_eligible": true,
+  "egress_expected": false,
+  "evidence": {
+    "schema_version": "1",
+    "review_id": "eval-privacy-sensitive-aggregate",
+    "captured_at": "2026-07-18T00:00:00.000Z",
+    "repository_root": "eval-fixture",
+    "head": "4444444444444444444444444444444444444444",
+    "scope": "turn",
+    "base": "3333333333333333333333333333333333333333",
+    "changed_paths": [],
+    "excluded_paths": [],
+    "sensitive_change_count": 1,
+    "ignored_change_count": 0,
+    "path_evidence": [],
+    "incomplete_paths": [],
+    "hunk_ranges": {},
+    "status": "deterministic eval fixture",
+    "patch": "",
+    "patch_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "patch_bytes": 0,
+    "truncated": false,
+    "line_counts": {},
+    "old_line_counts": {}
+  },
+  "expected": {
+    "allowed_statuses": ["abstain"],
+    "min_findings": 0,
+    "max_findings": 0,
+    "provider_call": "forbidden",
+    "required_anchors": []
+  }
+}

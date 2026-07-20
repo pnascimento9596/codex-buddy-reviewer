@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "pet_id": "buddy-lupo",
+  "scope": "public",
+  "status": "validated",
+  "redistribution": "cleared",
+  "binary_asset_present": true,
+  "source_type": "AI-assisted V2 sprite package derived from user-authorized source artwork",
+  "validation": "V2 8x11 atlas; 1536x2288; transparent WebP; deterministic atlas validation passed with no errors or warnings",
+  "rights": {
+    "basis": "source-asset-owner-attestation",
+    "rights_holder_role": "project-owner-and-source-asset-owner",
+    "authorization": {
+      "status": "recorded",
+      "date": "2026-07-19",
+      "date_status": "recorded",
+      "source": "project-owner-attestation",
+      "source_reference": "docs/PROVENANCE.md#pet-asset-rights-records"
+    },
+    "license": {
+      "spdx_expression": "Apache-2.0",
+      "repository_license_file": "LICENSE",
+      "grant": "The rights holder licenses this asset and its derivative works to the public under the Apache License, Version 2.0."
+    }
+  },
+  "asset_lineage": {
+    "source_asset": {
+      "description": "User-owned Lupo companion source artwork used for the V2 package.",
+      "sha256": null,
+      "sha256_status": "not-recorded"
+    },
+    "transformation": {
+      "method": "AI-assisted V2 sprite package creation from source artwork",
+      "tool": null,
+      "tool_status": "not-recorded",
+      "date": null,
+      "date_status": "not-recorded",
+      "first_repository_recorded_on": "2026-07-18"
+    },
+    "derived_asset": {
+      "path": "spritesheet.webp",
+      "sha256": "5d20b8fffc10c7282f05909ac5bbbe3c5f3b36f473edbebaeea325580bbb8a4e"
+    }
+  },
+  "notes": "The project owner attests to owning the source asset and grants public redistribution under Apache-2.0. No personal identity or source filesystem path is retained."
+}

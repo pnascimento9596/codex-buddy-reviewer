@@ -1,0 +1,29 @@
+{
+  "name": "codex-buddy-reviewer",
+  "version": "0.5.0-rc.1",
+  "private": true,
+  "description": "Independent post-turn code reviewer and persistent companion for OpenAI Codex",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "review": "node scripts/buddy-review.mjs review",
+    "test": "node --test",
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "check:assets": "node scripts/buddy-review.mjs pet list --json",
+    "check:atlas-structure": "node scripts/validate-pet-atlases.mjs --json",
+    "eval:validate": "node scripts/buddy-eval.mjs validate --json",
+    "bench:privacy": "node scripts/benchmark-privacy-kernel.mjs",
+    "security:secrets": "gitleaks git . --no-banner --redact=100 --log-opts=--all && gitleaks dir . --no-banner --redact=100",
+    "security:publication": "node scripts/check-publication-boundary.mjs",
+    "release:build": "node scripts/build-public-plugin.mjs",
+    "release:verify": "node scripts/verify-public-plugin.mjs",
+    "release:distribution": "node scripts/build-distribution-commit.mjs",
+    "release:boundary": "node scripts/check-public-release.mjs",
+    "check:portable": "npm run check:syntax && npm run check:assets && npm run check:atlas-structure && npm run eval:validate && npm run release:boundary && node scripts/buddy-review.mjs --help && node scripts/buddy-review.mjs mode --help && node scripts/buddy-review.mjs pet --help && node scripts/buddy-review.mjs presentation --help && node scripts/buddy-review.mjs summary-guard --help && node scripts/buddy-review.mjs renderer --help && node scripts/buddy-review.mjs doctor --help && node scripts/buddy-review.mjs setup --help && node scripts/buddy-review.mjs data --help && node scripts/buddy-eval.mjs --help && node scripts/buddy-live-eval.mjs --help && node scripts/verify-host-e2e.mjs --help && node scripts/build-public-plugin.mjs --help && node scripts/verify-public-plugin.mjs --help && node scripts/build-distribution-commit.mjs --help && node scripts/check-publication-boundary.mjs --help",
+    "check": "npm test && npm run check:portable",
+    "validate": "npm run check"
+  },
+  "license": "Apache-2.0"
+}

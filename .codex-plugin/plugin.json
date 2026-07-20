@@ -1,0 +1,39 @@
+{
+  "name": "codex-buddy-reviewer",
+  "version": "0.5.0-rc.1+codex.20260719195058",
+  "description": "One or two turn-window-grounded reviewers with animated companions, attributed results, diagnostics, and reversible setup.",
+  "author": {
+    "name": "Paulo Nascimento",
+    "url": "https://github.com/pnascimento9596"
+  },
+  "homepage": "https://github.com/pnascimento9596/codex-buddy-reviewer",
+  "repository": "https://github.com/pnascimento9596/codex-buddy-reviewer",
+  "license": "Apache-2.0",
+  "keywords": [
+    "codex",
+    "code-review",
+    "independent-reviewer",
+    "claude",
+    "grok",
+    "ollama",
+    "opencode",
+    "buddy"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Buddy Reviewer",
+    "shortDescription": "Automatic independent review after Codex work",
+    "longDescription": "Capture private start and finish snapshots for enabled Codex turns, run one or two isolated configured reviewers concurrently, preserve provider attribution and partial failures, leave the worker summary in the Codex transcript, and deliver grounded technical review plus optional primary-only separately consented summary advice through one safe Stop continuation.",
+    "developerName": "Paulo Nascimento",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/pnascimento9596/codex-buddy-reviewer",
+    "privacyPolicyURL": "https://github.com/pnascimento9596/codex-buddy-reviewer/blob/main/docs/PRIVACY.md",
+    "defaultPrompt": [
+      "Use $codex-buddy-reviewer:buddy-review to toggle automatic review for this workspace.",
+      "Use $codex-buddy-reviewer:review to run a one-shot review of my current changes."
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+name: validate
+
+on:
+  workflow_call:
+  pull_request:
+  push:
+    branches: [main, 'hardening/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Repository credential scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out complete history without persisted credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject committed credential material
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+          GITLEAKS_ENABLE_SUMMARY: false
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_VERSION: 8.30.1
+      - name: Scan complete reachable Git history
+        run: gitleaks git . --no-banner --redact=100 --log-opts=--all
+
+  node:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: 22
+          - os: macos-latest
+            node: 22
+          - os: windows-latest
+            node: 22
+          - os: windows-latest
+            node: 24
+          - os: ubuntu-latest
+            node: 24
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact source revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Select Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Reject non-public data in the exact source tree
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        run: node scripts/check-publication-boundary.mjs --tree-only
+      - name: Build the Windows Job Object test helper
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $installation) { throw 'Visual Studio C++ build tools were not found' }
+          $devcmd = Join-Path $installation 'Common7\Tools\VsDevCmd.bat'
+          New-Item -ItemType Directory -Force 'bin\win32-x64', 'build\windows-tests', 'build\windows-tests\trusted-bin' | Out-Null
+          @(
+            "call `"$devcmd`" -arch=x64 -host_arch=x64",
+            'cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:bin\win32-x64\buddy-job-supervisor.exe native\windows\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT',
+            'if errorlevel 1 exit /b %errorlevel%',
+            'cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:build\windows-tests\breakaway-probe.exe tests\fixtures\windows\breakaway-probe.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT',
+            'if errorlevel 1 exit /b %errorlevel%',
+            'cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:build\windows-tests\trusted-bin\buddy-resolution-probe.exe tests\fixtures\windows\executable-marker.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT',
+            'if errorlevel 1 exit /b %errorlevel%',
+            'cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /DCBR_DECOY /MT /Fe:build\windows-tests\decoy-resolution-probe.exe tests\fixtures\windows\executable-marker.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT',
+            'exit /b %errorlevel%'
+          ) | Set-Content -Encoding ascii 'build\windows-tests\compile.cmd'
+          & 'build\windows-tests\compile.cmd'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $helper = (Resolve-Path 'bin\win32-x64\buddy-job-supervisor.exe').Path
+          $helperRoot = Split-Path $helper
+          $hash = (Get-FileHash -Algorithm SHA256 $helper).Hash.ToLowerInvariant()
+          $runtimeManifest = (Resolve-Path 'build\windows-tests').Path + '\helpers.json'
+          @{
+            schema_version = '1'
+            protocol_version = '1'
+            helpers = @{
+              'win32-x64' = @{
+                status = 'verified'
+                protocol_version = '1'
+                path = 'buddy-job-supervisor.exe'
+                sha256 = $hash
+              }
+            }
+          } | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM $runtimeManifest
+          "CODEX_BUDDY_TEST_WINDOWS_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CODEX_BUDDY_TEST_WINDOWS_BREAKAWAY_PROBE=$((Resolve-Path 'build\windows-tests\breakaway-probe.exe').Path)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CODEX_BUDDY_TEST_WINDOWS_TRUSTED_EXECUTABLE=$((Resolve-Path 'build\windows-tests\trusted-bin\buddy-resolution-probe.exe').Path)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CODEX_BUDDY_TEST_WINDOWS_DECOY_EXECUTABLE=$((Resolve-Path 'build\windows-tests\decoy-resolution-probe.exe').Path)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CODEX_BUDDY_WINDOWS_HELPER_MANIFEST=$runtimeManifest" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CODEX_BUDDY_WINDOWS_HELPER_ROOT=$helperRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Validate source and runtime contracts
+        run: npm run validate
+
+  validation-gate:
+    name: Validation gate
+    if: ${{ always() }}
+    needs: [secrets, node]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every validation lane
+        env:
+          NODE_RESULT: ${{ needs.node.result }}
+          SECRETS_RESULT: ${{ needs.secrets.result }}
+        run: |
+          if [[ "$SECRETS_RESULT" != 'success' || "$NODE_RESULT" != 'success' ]]; then
+            echo "Validation failed: secrets=$SECRETS_RESULT node=$NODE_RESULT" >&2
+            exit 1
+          fi

@@ -1,0 +1,116 @@
+{
+  "schema_version": "1",
+  "public_pet_ids": [
+    "buddy-byte",
+    "buddy-mochi",
+    "buddy-orbit",
+    "buddy-bella",
+    "buddy-lupo"
+  ],
+  "trees": [
+    "evals",
+    "hooks",
+    "native",
+    "schemas",
+    "skills",
+    "src"
+  ],
+  "files": [
+    {
+      "source": ".gitattributes",
+      "destination": ".gitattributes"
+    },
+    {
+      "source": ".claude-plugin/marketplace.json",
+      "destination": ".claude-plugin/marketplace.json"
+    },
+    {
+      "source": "scripts/buddy-eval.mjs",
+      "destination": "scripts/buddy-eval.mjs"
+    },
+    {
+      "source": "scripts/buddy-hook.mjs",
+      "destination": "scripts/buddy-hook.mjs"
+    },
+    {
+      "source": "scripts/buddy-live-eval.mjs",
+      "destination": "scripts/buddy-live-eval.mjs"
+    },
+    {
+      "source": "scripts/buddy-review.mjs",
+      "destination": "scripts/buddy-review.mjs"
+    },
+    {
+      "source": "scripts/lib/eval-corpus.mjs",
+      "destination": "scripts/lib/eval-corpus.mjs"
+    },
+    {
+      "source": "scripts/validate-pet-atlases.mjs",
+      "destination": "scripts/validate-pet-atlases.mjs"
+    },
+    {
+      "source": "scripts/verify-host-e2e.mjs",
+      "destination": "scripts/verify-host-e2e.mjs"
+    },
+    {
+      "source": "docs/assets/buddy-review-workflow.png",
+      "destination": "docs/assets/buddy-review-workflow.png"
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "destination": "CONTRIBUTING.md"
+    },
+    {
+      "source": "docs/ARCHITECTURE.md",
+      "destination": "docs/ARCHITECTURE.md"
+    },
+    {
+      "source": "docs/decisions/0001-no-renderer-sidecar-for-v0.5.md",
+      "destination": "docs/decisions/0001-no-renderer-sidecar-for-v0.5.md"
+    },
+    {
+      "source": "docs/AUTOMATIC-MODE.md",
+      "destination": "docs/AUTOMATIC-MODE.md"
+    },
+    {
+      "source": "docs/HOST-E2E-RUNBOOK.md",
+      "destination": "docs/HOST-E2E-RUNBOOK.md"
+    },
+    {
+      "source": "docs/PET-RENDERER-PROTOCOL.md",
+      "destination": "docs/PET-RENDERER-PROTOCOL.md"
+    },
+    {
+      "source": "docs/PETS.md",
+      "destination": "docs/PETS.md"
+    },
+    {
+      "source": "docs/PRIVACY.md",
+      "destination": "docs/PRIVACY.md"
+    },
+    {
+      "source": "docs/PROVENANCE.md",
+      "destination": "docs/PROVENANCE.md"
+    },
+    {
+      "source": "docs/SECURITY.md",
+      "destination": "docs/SECURITY.md"
+    },
+    {
+      "source": "docs/VALIDATION.md",
+      "destination": "docs/VALIDATION.md"
+    },
+    {
+      "source": "README.md",
+      "destination": "README.md"
+    },
+    {
+      "source": "release/public/NOTICE",
+      "destination": "NOTICE"
+    },
+    {
+      "source": "LICENSE",
+      "destination": "LICENSE"
+    }
+  ]
+}

@@ -1,0 +1,570 @@
+name: release artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact RC or final-candidate version already declared in package.json (for example, 0.5.0-rc.1 or 0.5.0)
+        required: true
+        type: string
+      publish:
+        description: Publish the verified artifact-only tag and GitHub Release. RCs are prereleases; final versions also require host evidence.
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-artifact-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Full cross-platform validation
+    uses: ./.github/workflows/validate.yml
+
+  build:
+    name: Build verified public artifact
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: public-release
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: ${{ steps.release.outputs.artifact_name }}
+      release_kind: ${{ steps.release.outputs.release_kind }}
+      source_sha: ${{ steps.release.outputs.source_sha }}
+      version: ${{ steps.release.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the exact source revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          check-latest: false
+
+      - name: Reject non-public reachable history and metadata
+        run: npm run security:publication
+
+      - name: Assert protected ref and release version
+        id: release
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          EXPECTED_SHA: ${{ github.sha }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ inputs.publish }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+          REF_TYPE: ${{ github.ref_type }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo 'Checked-out commit does not match the workflow event SHA.' >&2
+            exit 1
+          fi
+          if [[ "$REF_PROTECTED" != 'true' ]]; then
+            echo 'Release artifacts may be built only from a ref protected by a GitHub ruleset or protection rule.' >&2
+            exit 1
+          fi
+
+          if [[ "$REF_TYPE" != 'branch' || "$REF_NAME" != "$REPOSITORY_DEFAULT_BRANCH" ]]; then
+            echo 'Release candidates must be constructed from the protected default branch.' >&2
+            exit 1
+          fi
+
+          if [[ "$DISPATCH_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.([1-9][0-9]*)$ ]]; then
+            release_kind='rc'
+            version="$DISPATCH_VERSION"
+            require_host_evidence='false'
+          elif [[ "$DISPATCH_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            version="$DISPATCH_VERSION"
+            if [[ "$PUBLISH" == 'true' ]]; then
+              release_kind='final'
+              require_host_evidence='true'
+            else
+              release_kind='final-candidate'
+              require_host_evidence='false'
+            fi
+          else
+            echo 'Manual builds and publications require an exact RC (0.5.0-rc.1) or final version (0.5.0).' >&2
+            exit 1
+          fi
+
+          GITHUB_API_URL="$GITHUB_API_URL" GITHUB_TOKEN="$GITHUB_TOKEN" REPOSITORY="$REPOSITORY" \
+            REPOSITORY_DEFAULT_BRANCH="$REPOSITORY_DEFAULT_BRANCH" EXPECTED_SHA="$EXPECTED_SHA" \
+            node --input-type=module <<'NODE'
+          const branch = encodeURIComponent(process.env.REPOSITORY_DEFAULT_BRANCH);
+          const response = await fetch(
+            `${process.env.GITHUB_API_URL}/repos/${process.env.REPOSITORY}/branches/${branch}`,
+            {
+              headers: {
+                accept: 'application/vnd.github+json',
+                authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                'x-github-api-version': '2022-11-28'
+              }
+            }
+          );
+          if (!response.ok) {
+            throw new Error(`cannot verify protected default-branch head: GitHub API returned ${response.status}`);
+          }
+          const current = await response.json();
+          if (current.protected !== true) {
+            throw new Error('the repository default branch is not protected');
+          }
+          if (current.commit?.sha !== process.env.EXPECTED_SHA) {
+            throw new Error('release construction must use the exact current protected default-branch HEAD');
+          }
+          NODE
+
+          VERSION="$version" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const packageManifest = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (packageManifest.version !== process.env.VERSION) {
+            throw new Error(
+              `release version ${process.env.VERSION} does not match package.json version ${String(packageManifest.version)}`
+            );
+          }
+          NODE
+
+          artifact_name="codex-buddy-reviewer-${version}"
+          {
+            echo "version=$version"
+            echo "release_kind=$release_kind"
+            echo "require_host_evidence=$require_host_evidence"
+            echo "source_sha=$EXPECTED_SHA"
+            echo "artifact_name=$artifact_name"
+            echo "artifact_root=$RUNNER_TEMP/$artifact_name"
+            echo "tarball=$RUNNER_TEMP/$artifact_name.tar.gz"
+            echo "distribution_root=$RUNNER_TEMP/$artifact_name-distribution"
+            echo "distribution_bundle=$RUNNER_TEMP/$artifact_name-distribution.bundle"
+            echo "distribution_receipt=$RUNNER_TEMP/$artifact_name-distribution.json"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and verify the positive public artifact
+        env:
+          ARTIFACT_ROOT: ${{ steps.release.outputs.artifact_root }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          node scripts/build-public-plugin.mjs \
+            --output "$ARTIFACT_ROOT" \
+            --source-commit "$EXPECTED_SHA" \
+            --json
+          node scripts/verify-public-plugin.mjs --input "$ARTIFACT_ROOT" --json
+
+          ARTIFACT_ROOT="$ARTIFACT_ROOT" EXPECTED_SHA="$EXPECTED_SHA" EXPECTED_VERSION="$EXPECTED_VERSION" \
+            node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          import path from 'node:path';
+
+          const root = process.env.ARTIFACT_ROOT;
+          const release = JSON.parse(await readFile(path.join(root, 'release-manifest.json'), 'utf8'));
+          const packageManifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+          const pluginManifest = JSON.parse(await readFile(path.join(root, '.codex-plugin', 'plugin.json'), 'utf8'));
+          if (release.source_commit !== process.env.EXPECTED_SHA) {
+            throw new Error('public artifact source commit does not match the workflow event SHA');
+          }
+          if (release.version !== process.env.EXPECTED_VERSION
+              || packageManifest.version !== process.env.EXPECTED_VERSION
+              || pluginManifest.version !== process.env.EXPECTED_VERSION) {
+            throw new Error('public artifact version does not match the asserted release version');
+          }
+          NODE
+
+      - name: Install pinned Gitleaks and recheck the source revision
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+          GITLEAKS_ENABLE_SUMMARY: false
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_VERSION: 8.30.1
+
+      - name: Reject credentials in the exact built public artifact
+        env:
+          ARTIFACT_ROOT: ${{ steps.release.outputs.artifact_root }}
+        run: |
+          set -euo pipefail
+          gitleaks dir "$ARTIFACT_ROOT" --no-banner --redact=100 --log-level=warn
+
+      - name: Validate artifact-bound host evidence for a final release
+        if: steps.release.outputs.require_host_evidence == 'true'
+        env:
+          ARTIFACT_ROOT: ${{ steps.release.outputs.artifact_root }}
+          HOST_EVIDENCE_V2_BUNDLE_GZIP_B64: ${{ secrets.HOST_EVIDENCE_V2_BUNDLE_GZIP_B64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$HOST_EVIDENCE_V2_BUNDLE_GZIP_B64" ]]; then
+            echo 'Final releases require the HOST_EVIDENCE_V2_BUNDLE_GZIP_B64 public-release environment secret.' >&2
+            exit 1
+          fi
+          umask 077
+          host_bundle="$RUNNER_TEMP/host-evidence-v2-bundle.json"
+          host_bundle_secret="$HOST_EVIDENCE_V2_BUNDLE_GZIP_B64"
+          unset HOST_EVIDENCE_V2_BUNDLE_GZIP_B64
+          printf '%s' "$host_bundle_secret" \
+            | node scripts/verify-host-e2e.mjs decode-bundle-secret --output "$host_bundle"
+          unset host_bundle_secret
+
+          node scripts/verify-host-e2e.mjs validate-bundle \
+            --artifact "$ARTIFACT_ROOT" \
+            --bundle "$host_bundle" \
+            --json
+
+      - name: Create deterministic tarball
+        env:
+          ARTIFACT_NAME: ${{ steps.release.outputs.artifact_name }}
+          ARTIFACT_ROOT: ${{ steps.release.outputs.artifact_root }}
+          TARBALL: ${{ steps.release.outputs.tarball }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$ARTIFACT_ROOT" != "$RUNNER_TEMP/$ARTIFACT_NAME" ]]; then
+            echo 'Artifact root does not match its asserted release name.' >&2
+            exit 1
+          fi
+          create_tarball() {
+            local destination="$1"
+            tar \
+              --sort=name \
+              --format=ustar \
+              --mtime='@0' \
+              --owner=0 \
+              --group=0 \
+              --numeric-owner \
+              --mode='u+rwX,go+rX,go-w' \
+              -C "$RUNNER_TEMP" \
+              -cf - "$ARTIFACT_NAME" | gzip --no-name --best > "$destination"
+          }
+
+          create_tarball "$TARBALL"
+          verification_tarball="$RUNNER_TEMP/$ARTIFACT_NAME.rebuilt.tar.gz"
+          create_tarball "$verification_tarball"
+          cmp --silent "$TARBALL" "$verification_tarball"
+
+          (
+            cd "$RUNNER_TEMP"
+            sha256sum "$(basename "$TARBALL")" > "$(basename "$TARBALL").sha256"
+          )
+
+      - name: Re-extract and reverify the tarball
+        env:
+          ARTIFACT_NAME: ${{ steps.release.outputs.artifact_name }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_VERSION: ${{ steps.release.outputs.version }}
+          TARBALL: ${{ steps.release.outputs.tarball }}
+        run: |
+          set -euo pipefail
+
+          extracted_root="$RUNNER_TEMP/reextracted"
+          mkdir "$extracted_root"
+          tar --extract --gzip --file "$TARBALL" --directory "$extracted_root" \
+            --no-same-owner --no-same-permissions
+          reextracted_artifact="$extracted_root/$ARTIFACT_NAME"
+          node scripts/verify-public-plugin.mjs --input "$reextracted_artifact" --json
+
+          REEXTRACTED_ARTIFACT="$reextracted_artifact" EXPECTED_SHA="$EXPECTED_SHA" \
+            EXPECTED_VERSION="$EXPECTED_VERSION" node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          import path from 'node:path';
+
+          const release = JSON.parse(
+            await readFile(path.join(process.env.REEXTRACTED_ARTIFACT, 'release-manifest.json'), 'utf8')
+          );
+          if (release.source_commit !== process.env.EXPECTED_SHA
+              || release.version !== process.env.EXPECTED_VERSION) {
+            throw new Error('re-extracted artifact identity does not match the asserted release');
+          }
+          NODE
+
+      - name: Construct and verify the artifact-only distribution tag
+        env:
+          ARTIFACT_ROOT: ${{ steps.release.outputs.artifact_root }}
+          DISTRIBUTION_BUNDLE: ${{ steps.release.outputs.distribution_bundle }}
+          DISTRIBUTION_RECEIPT: ${{ steps.release.outputs.distribution_receipt }}
+          DISTRIBUTION_ROOT: ${{ steps.release.outputs.distribution_root }}
+        run: |
+          set -euo pipefail
+
+          node scripts/build-distribution-commit.mjs \
+            --artifact "$ARTIFACT_ROOT" \
+            --output "$DISTRIBUTION_ROOT" \
+            --policy-root "$GITHUB_WORKSPACE" \
+            --json > "$DISTRIBUTION_RECEIPT"
+
+          tag_ref="$(DISTRIBUTION_RECEIPT="$DISTRIBUTION_RECEIPT" node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const receipt = JSON.parse(await readFile(process.env.DISTRIBUTION_RECEIPT, 'utf8'));
+          if (typeof receipt.tag_ref !== 'string' || !receipt.tag_ref.startsWith('refs/tags/v')) {
+            throw new Error('distribution receipt has an invalid tag reference');
+          }
+          process.stdout.write(receipt.tag_ref);
+          NODE
+          )"
+          git -C "$DISTRIBUTION_ROOT" bundle create "$DISTRIBUTION_BUNDLE" "$tag_ref"
+          git -C "$DISTRIBUTION_ROOT" bundle verify "$DISTRIBUTION_BUNDLE"
+
+          (
+            cd "$RUNNER_TEMP"
+            sha256sum "$(basename "$DISTRIBUTION_BUNDLE")" > "$(basename "$DISTRIBUTION_BUNDLE").sha256"
+          )
+
+      - name: Upload the verified release candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.release.outputs.artifact_name }}
+          path: |
+            ${{ steps.release.outputs.tarball }}
+            ${{ steps.release.outputs.tarball }}.sha256
+            ${{ steps.release.outputs.distribution_bundle }}
+            ${{ steps.release.outputs.distribution_bundle }}.sha256
+            ${{ steps.release.outputs.distribution_receipt }}
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 14
+
+  attest:
+    name: Attest verified release subjects
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: public-release
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download the verified release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/release-candidate
+
+      - name: Generate provenance for the release subjects
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: |
+            ${{ runner.temp }}/release-candidate/${{ needs.build.outputs.artifact_name }}.tar.gz
+            ${{ runner.temp }}/release-candidate/${{ needs.build.outputs.artifact_name }}-distribution.bundle
+            ${{ runner.temp }}/release-candidate/${{ needs.build.outputs.artifact_name }}-distribution.json
+
+  publish:
+    name: Publish artifact-only tag and GitHub Release
+    if: inputs.publish
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: public-release
+    permissions:
+      contents: write
+    steps:
+      - name: Download the verified release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/release-candidate
+
+      - name: Reverify and publish the exact candidate
+        env:
+          ARTIFACT_NAME: ${{ needs.build.outputs.artifact_name }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_KIND: ${{ needs.build.outputs.release_kind }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          candidate="$RUNNER_TEMP/release-candidate"
+          tarball="$candidate/$ARTIFACT_NAME.tar.gz"
+          bundle="$candidate/$ARTIFACT_NAME-distribution.bundle"
+          receipt="$candidate/$ARTIFACT_NAME-distribution.json"
+          tag="v$VERSION"
+          tag_ref="refs/tags/$tag"
+
+          (cd "$candidate" && sha256sum --check "$ARTIFACT_NAME.tar.gz.sha256")
+          (cd "$candidate" && sha256sum --check "$ARTIFACT_NAME-distribution.bundle.sha256")
+
+          RECEIPT="$receipt" EXPECTED_SOURCE_SHA="$SOURCE_SHA" EXPECTED_TAG="$tag" \
+            EXPECTED_TAG_REF="$tag_ref" EXPECTED_VERSION="$VERSION" node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const receipt = JSON.parse(await readFile(process.env.RECEIPT, 'utf8'));
+          const expectedKeys = [
+            'artifact_content_sha256', 'branch_ref', 'commit', 'file_count',
+            'release_manifest_sha256', 'schema_version', 'source_commit',
+            'source_commit_epoch', 'tag', 'tag_object', 'tag_ref', 'tree', 'version'
+          ];
+          if (JSON.stringify(Object.keys(receipt).sort()) !== JSON.stringify(expectedKeys)) {
+            throw new Error('distribution receipt has an unexpected schema');
+          }
+          if (receipt.schema_version !== '1' || receipt.branch_ref !== 'refs/heads/distribution'
+              || !Number.isSafeInteger(receipt.file_count) || receipt.file_count < 1
+              || !Number.isSafeInteger(receipt.source_commit_epoch) || receipt.source_commit_epoch < 0) {
+            throw new Error('distribution receipt has invalid structural fields');
+          }
+          if (receipt.tag !== process.env.EXPECTED_TAG || receipt.tag_ref !== process.env.EXPECTED_TAG_REF) {
+            throw new Error('distribution receipt does not match the requested release tag');
+          }
+          if (receipt.version !== process.env.EXPECTED_VERSION
+              || receipt.source_commit !== process.env.EXPECTED_SOURCE_SHA) {
+            throw new Error('distribution receipt does not match the requested version and source commit');
+          }
+          for (const field of ['tag_object', 'commit', 'tree', 'source_commit']) {
+            if (!/^[0-9a-f]{40}$/u.test(receipt[field])) {
+              throw new Error(`distribution receipt contains an invalid ${field}`);
+            }
+          }
+          for (const field of ['release_manifest_sha256', 'artifact_content_sha256']) {
+            if (!/^[0-9a-f]{64}$/u.test(receipt[field])) {
+              throw new Error(`distribution receipt contains an invalid ${field}`);
+            }
+          }
+          NODE
+
+          default_branch="$(gh repo view "$REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')"
+          current_source_sha="$(gh api "repos/$REPOSITORY/branches/$default_branch" --jq '.commit.sha')"
+          if [[ "$current_source_sha" != "$SOURCE_SHA" ]]; then
+            echo 'The protected default branch moved after release construction. Publication refuses stale source.' >&2
+            exit 1
+          fi
+
+          verify_attestation() {
+            gh attestation verify "$1" \
+              --repo "$REPOSITORY" \
+              --signer-workflow "$REPOSITORY/.github/workflows/release.yml" \
+              --source-digest "$SOURCE_SHA" \
+              --source-ref "refs/heads/$default_branch" \
+              --deny-self-hosted-runners
+          }
+          verify_attestation "$tarball"
+          verify_attestation "$bundle"
+          verify_attestation "$receipt"
+
+          repository="$RUNNER_TEMP/distribution-publish"
+          git init --quiet --initial-branch=distribution "$repository"
+          git -C "$repository" fetch --quiet "$bundle" "$tag_ref:$tag_ref"
+          git -C "$repository" fsck --full --strict --no-reflogs --unreachable
+
+          RECEIPT="$receipt" REPOSITORY_ROOT="$repository" TAG_REF="$tag_ref" node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { readFileSync } from 'node:fs';
+          const receipt = JSON.parse(readFileSync(process.env.RECEIPT, 'utf8'));
+          const git = (...args) => execFileSync('git', ['-C', process.env.REPOSITORY_ROOT, ...args], { encoding: 'utf8' }).trim();
+          if (git('rev-parse', process.env.TAG_REF) !== receipt.tag_object
+              || git('rev-parse', `${process.env.TAG_REF}^{commit}`) !== receipt.commit) {
+            throw new Error('downloaded distribution bundle does not match its verified receipt');
+          }
+          NODE
+
+          expected_tag_object="$(RECEIPT="$receipt" node --input-type=module -e "import {readFileSync} from 'node:fs'; process.stdout.write(JSON.parse(readFileSync(process.env.RECEIPT, 'utf8')).tag_object)")"
+          remote_tag_object="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)"
+          if [[ -n "$remote_tag_object" && "$remote_tag_object" != "$expected_tag_object" ]]; then
+            echo 'The release tag already exists with a different object. Publication refuses to overwrite it.' >&2
+            exit 1
+          fi
+
+          if [[ -z "$remote_tag_object" ]]; then
+            gh auth setup-git
+            git -C "$repository" remote add origin "${GITHUB_SERVER_URL}/${REPOSITORY}.git"
+            if ! git -C "$repository" push --porcelain origin "$tag_ref:$tag_ref"; then
+              remote_tag_object="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)"
+              if [[ "$remote_tag_object" != "$expected_tag_object" ]]; then
+                echo 'Tag publication failed and exact remote reconciliation did not prove success.' >&2
+                exit 1
+              fi
+            fi
+          fi
+
+          remote_tag_object="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')"
+          if [[ "$remote_tag_object" != "$expected_tag_object" ]]; then
+            echo 'Published tag object does not match the verified distribution receipt.' >&2
+            exit 1
+          fi
+
+          release_title="Codex Buddy Reviewer $tag"
+          release_notes='Verified artifact-only Codex Buddy Reviewer release. Install this exact tag and verify the attached checksums and GitHub provenance attestation.'
+          expected_prerelease='false'
+          release_flags=()
+          if [[ "$RELEASE_KIND" == 'rc' ]]; then
+            expected_prerelease='true'
+            release_flags+=(--prerelease --latest=false)
+          elif [[ "$RELEASE_KIND" != 'final' ]]; then
+            echo 'Publication accepts only an RC prerelease or final release kind.' >&2
+            exit 1
+          fi
+          expected_assets="$ARTIFACT_NAME-distribution.bundle
+          $ARTIFACT_NAME-distribution.bundle.sha256
+          $ARTIFACT_NAME-distribution.json
+          $ARTIFACT_NAME.tar.gz
+          $ARTIFACT_NAME.tar.gz.sha256"
+
+          verify_existing_release() {
+            local release_json="$RUNNER_TEMP/existing-release.json"
+            if ! gh release view "$tag" --repo "$REPOSITORY" \
+              --json assets,body,isDraft,isPrerelease,name > "$release_json" 2>/dev/null; then
+              return 1
+            fi
+            RELEASE_JSON="$release_json" EXPECTED_ASSETS="$expected_assets" \
+              EXPECTED_NOTES="$release_notes" EXPECTED_PRERELEASE="$expected_prerelease" \
+              EXPECTED_TITLE="$release_title" node --input-type=module <<'NODE'
+            import { readFile } from 'node:fs/promises';
+            const release = JSON.parse(await readFile(process.env.RELEASE_JSON, 'utf8'));
+            const actualAssets = release.assets.map((asset) => asset.name).sort();
+            const expectedAssets = process.env.EXPECTED_ASSETS.split('\n').map((value) => value.trim()).filter(Boolean).sort();
+            if (release.name !== process.env.EXPECTED_TITLE
+                || release.body !== process.env.EXPECTED_NOTES
+                || release.isDraft !== false
+                || release.isPrerelease !== (process.env.EXPECTED_PRERELEASE === 'true')
+                || JSON.stringify(actualAssets) !== JSON.stringify(expectedAssets)) {
+              throw new Error('existing GitHub Release metadata does not match the verified candidate');
+            }
+          NODE
+            local existing_assets="$RUNNER_TEMP/existing-release-assets"
+            mkdir "$existing_assets"
+            gh release download "$tag" --repo "$REPOSITORY" --dir "$existing_assets"
+            cmp --silent "$tarball" "$existing_assets/$ARTIFACT_NAME.tar.gz"
+            cmp --silent "$tarball.sha256" "$existing_assets/$ARTIFACT_NAME.tar.gz.sha256"
+            cmp --silent "$bundle" "$existing_assets/$ARTIFACT_NAME-distribution.bundle"
+            cmp --silent "$bundle.sha256" "$existing_assets/$ARTIFACT_NAME-distribution.bundle.sha256"
+            cmp --silent "$receipt" "$existing_assets/$ARTIFACT_NAME-distribution.json"
+          }
+
+          if gh release view "$tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            verify_existing_release
+          elif ! gh release create "$tag" \
+              "$tarball" \
+              "$tarball.sha256" \
+              "$bundle" \
+              "$bundle.sha256" \
+              "$receipt" \
+              --repo "$REPOSITORY" \
+              --verify-tag \
+              --title "$release_title" \
+              --notes "$release_notes" \
+              "${release_flags[@]}"; then
+            verify_existing_release
+          fi
