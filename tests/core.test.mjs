@@ -1217,6 +1217,7 @@ for arg in "$@"; do
   previous=$arg
 done
 printf '%s' "$prompt_file" > "$record_dir/prompt-path.txt"
+/bin/cat "$prompt_file" >/dev/null
 printf '%s\\n' '{"schema_version":"1","status":"no_findings","summary":"No defect found.","findings":[]}'
 `);
   await chmod(fakeGrok, 0o755);
@@ -1242,7 +1243,7 @@ printf '%s\\n' '{"schema_version":"1","status":"no_findings","summary":"No defec
   assert.notEqual(args[args.indexOf('--cwd') + 1], fixtureDir);
   assert.match(await readFile(path.join(fixtureDir, 'config.toml'), 'utf8'), /\[compat\.claude\][\s\S]*hooks = false/);
   const promptPath = await readFile(path.join(fixtureDir, 'prompt-path.txt'), 'utf8');
-  assert.equal(promptPath, '/dev/fd/0');
+  assert.equal(promptPath, '.grok-prompt.pipe');
   const isolatedHome = await readFile(path.join(fixtureDir, 'grok-home.txt'), 'utf8');
   await assert.rejects(access(isolatedHome));
 });

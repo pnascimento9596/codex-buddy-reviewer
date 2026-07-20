@@ -64,7 +64,7 @@ function grokInventory(overrides = {}) {
 
 test('Grok inference bridge keeps fixed shell source and provider argv separate', () => {
   const binary = '/tmp/Grok reviewer; literal/grok';
-  const args = ['--prompt-file', '/dev/fd/0', '--model', 'model with spaces'];
+  const args = ['--prompt-file', 'prompt.pipe', '--model', 'model with spaces'];
   const fifoPath = '/tmp/Grok reviewer; literal/prompt.pipe';
   assert.deepEqual(buildGrokInferenceProcess(binary, args, { platform: 'linux', fifoPath }), {
     command: '/bin/sh',
@@ -80,8 +80,12 @@ exec 3<&0
 "$cat_bin" <&3 > "$fifo" &
 producer=$!
 exec 3<&-
-"$@" < "$fifo"
+"$@" < /dev/null
 consumer_status=$?
+if [ "$consumer_status" -ne 0 ]; then
+  "$rm_bin" -f "$fifo"
+  exit "$consumer_status"
+fi
 wait "$producer"
 producer_status=$?
 "$rm_bin" -f "$fifo"
@@ -109,7 +113,7 @@ test('Grok inference bridge rejects a failed prompt producer even when the consu
 }, async () => {
   const fixture = await temporaryDirectory('codex-buddy-grok-producer-failure-');
   const consumer = path.join(fixture, 'valid-empty-consumer.sh');
-  await writeFile(consumer, '#!/bin/sh\nprintf success\\n\n', { mode: 0o700 });
+  await writeFile(consumer, '#!/bin/sh\n/bin/cat prompt.pipe >/dev/null\nprintf success\\n\n', { mode: 0o700 });
   const inference = buildGrokInferenceProcess(consumer, [], {
     platform: process.platform,
     fifoPath: path.join(fixture, 'prompt.pipe'),
@@ -120,7 +124,76 @@ test('Grok inference bridge rejects a failed prompt producer even when the consu
       cwd: fixture,
       input: 'bounded packet',
       timeoutMs: 5_000
-    })
+    }),
+    /exited with code 1/
+  );
+});
+
+test('Grok inference bridge terminates a blocked prompt producer after consumer failure', {
+  skip: process.platform === 'win32',
+  timeout: 5_000
+}, async () => {
+  const fixture = await temporaryDirectory('codex-buddy-grok-consumer-failure-');
+  const consumer = path.join(fixture, 'failing-consumer.sh');
+  await writeFile(consumer, '#!/bin/sh\nexit 7\n', { mode: 0o700 });
+  const inference = buildGrokInferenceProcess(consumer, [], {
+    platform: process.platform,
+    fifoPath: path.join(fixture, 'prompt.pipe')
+  });
+  await assert.rejects(
+    runProcess(inference.command, inference.args, {
+      cwd: fixture,
+      input: 'bounded packet',
+      timeoutMs: 2_000
+    }),
+    /exited with code 7/
+  );
+});
+
+test('Grok inference bridge returns consumer failure after the prompt producer completes', {
+  skip: process.platform === 'win32',
+  timeout: 5_000
+}, async () => {
+  const fixture = await temporaryDirectory('codex-buddy-grok-drained-failure-');
+  const consumer = path.join(fixture, 'drained-failing-consumer.mjs');
+  await writeFile(consumer, `import { readFileSync, writeFileSync } from 'node:fs';
+readFileSync('prompt.pipe');
+writeFileSync('prompt-drained.txt', 'drained');
+setTimeout(() => process.exit(7), 100);
+`);
+  const inference = buildGrokInferenceProcess(process.execPath, [consumer], {
+    platform: process.platform,
+    fifoPath: path.join(fixture, 'prompt.pipe')
+  });
+  await assert.rejects(
+    runProcess(inference.command, inference.args, {
+      cwd: fixture,
+      input: 'bounded packet',
+      timeoutMs: 2_000
+    }),
+    /exited with code 7/
+  );
+  assert.equal(await readFile(path.join(fixture, 'prompt-drained.txt'), 'utf8'), 'drained');
+});
+
+test('Grok inference bridge rejects consumer success without opening the prompt FIFO', {
+  skip: process.platform === 'win32',
+  timeout: 10_000
+}, async () => {
+  const fixture = await temporaryDirectory('codex-buddy-grok-unread-prompt-');
+  const consumer = path.join(fixture, 'unread-success-consumer.sh');
+  await writeFile(consumer, '#!/bin/sh\nprintf success\\n\n', { mode: 0o700 });
+  const inference = buildGrokInferenceProcess(consumer, [], {
+    platform: process.platform,
+    fifoPath: path.join(fixture, 'prompt.pipe')
+  });
+  await assert.rejects(
+    runProcess(inference.command, inference.args, {
+      cwd: fixture,
+      input: 'bounded packet',
+      timeoutMs: 250
+    }),
+    /exceeded its 250 ms deadline/
   );
 });
 
@@ -459,9 +532,9 @@ printf '%s\\n' '{"text":"{\\"schema_version\\":\\"1\\",\\"status\\":\\"no_findin
   assert.equal(args[args.indexOf('--tools') + 1], '');
   assert.equal(args[args.indexOf('--deny') + 1], '*');
   assert.match(args[args.indexOf('--disallowed-tools') + 1], /(?:^|,)Agent(?:,|$)/);
-  assert.equal(args[args.indexOf('--prompt-file') + 1], '/dev/fd/0');
+  assert.equal(args[args.indexOf('--prompt-file') + 1], '.grok-prompt.pipe');
   assert.equal(args[args.indexOf('--json-schema') + 1], JSON.stringify(REVIEW_RESULT_SCHEMA));
-  assert.equal(await readFile(path.join(fixture, 'prompt-path.txt'), 'utf8'), '/dev/fd/0');
+  assert.equal(await readFile(path.join(fixture, 'prompt-path.txt'), 'utf8'), '.grok-prompt.pipe');
   assert.equal(await readFile(path.join(fixture, 'named-prompt.txt'), 'utf8'), 'absent');
   assert.equal(await readFile(path.join(fixture, 'received-prompt.txt'), 'utf8'), 'bounded packet');
 });
@@ -578,7 +651,7 @@ if [ "$1" = "inspect" ]; then
   printf '%s\\n' '${JSON.stringify(grokInventory())}'
   exit 0
 fi
-/bin/cat /dev/fd/0 >/dev/null
+/bin/cat .grok-prompt.pipe >/dev/null
 printf '%s\\n' '${JSON.stringify({
     text: JSON.stringify(reviewResult()),
     stopReason: 'EndTurn',
@@ -647,7 +720,7 @@ if [ "$1" = "inspect" ]; then
   printf '%s\\n' '${JSON.stringify(grokInventory())}'
   exit 0
 fi
-/bin/cat /dev/fd/0 >/dev/null
+/bin/cat .grok-prompt.pipe >/dev/null
 printf '%s\\n' 'not-json'
 `);
 

@@ -23,6 +23,7 @@ const GROK_POSIX_BRIDGE_BINARIES = Object.freeze([
   '/usr/bin/mkfifo',
   '/bin/rm'
 ]);
+const GROK_POSIX_PROMPT_FIFO = '.grok-prompt.pipe';
 const GROK_POSIX_BRIDGE_SCRIPT = `fifo=$1
 mkfifo_bin=$2
 cat_bin=$3
@@ -33,8 +34,12 @@ exec 3<&0
 "$cat_bin" <&3 > "$fifo" &
 producer=$!
 exec 3<&-
-"$@" < "$fifo"
+"$@" < /dev/null
 consumer_status=$?
+if [ "$consumer_status" -ne 0 ]; then
+  "$rm_bin" -f "$fifo"
+  exit "$consumer_status"
+fi
 wait "$producer"
 producer_status=$?
 "$rm_bin" -f "$fifo"
@@ -208,13 +213,14 @@ export async function reviewWithGrok({
   try {
     tempRun = await createProviderTempRun({ root, provider: 'grok' });
     tempDir = tempRun.directory;
-    // Grok requires --prompt-file. POSIX /dev/fd/0 lets it reopen inherited
-    // stdin without leaving a named plaintext prompt after a non-catchable crash.
-    // Windows has no portable equivalent, so it retains the private temporary
-    // file and relies on the adapter's bounded cleanup path.
+    // Grok requires --prompt-file. POSIX uses a private relative FIFO so the
+    // provider opens exactly one reader while the supervised producer supplies
+    // stdin without materializing prompt bytes. Windows has no portable
+    // equivalent, so it retains the private temporary file and relies on the
+    // adapter's bounded cleanup path.
     const promptFile = process.platform === 'win32'
       ? path.join(tempDir, 'review-prompt.txt')
-      : '/dev/fd/0';
+      : GROK_POSIX_PROMPT_FIFO;
     const isolatedHome = path.join(tempDir, 'home');
     const grokHome = path.join(tempDir, 'grok-home');
     const authPath = grokAuthPath ?? path.join(os.homedir(), '.grok', 'auth.json');
@@ -381,7 +387,7 @@ sessions = false
     try {
       const inferenceTimeoutMs = remainingTimeout('inference');
       const inference = buildGrokInferenceProcess(binary, args, {
-        fifoPath: path.join(tempDir, '.grok-prompt.pipe')
+        fifoPath: path.join(tempDir, GROK_POSIX_PROMPT_FIFO)
       });
       result = await runProcess(inference.command, inference.args, {
         cwd: tempDir,
