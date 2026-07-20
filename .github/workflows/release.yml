@@ -481,7 +481,25 @@ jobs:
           NODE
 
           expected_tag_object="$(RECEIPT="$receipt" node --input-type=module -e "import {readFileSync} from 'node:fs'; process.stdout.write(JSON.parse(readFileSync(process.env.RECEIPT, 'utf8')).tag_object)")"
-          remote_tag_object="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)"
+          lookup_remote_tag_object() {
+            local response
+            if response="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null)"; then
+              if [[ ! "$response" =~ ^[0-9a-f]{40}$ ]]; then
+                echo 'The remote release tag returned an invalid object identity.' >&2
+                return 1
+              fi
+              printf '%s' "$response"
+              return 0
+            fi
+            if jq -e '(.status | tostring) == "404" and .message == "Not Found"' \
+                <<<"$response" >/dev/null 2>&1; then
+              return 0
+            fi
+            echo 'The remote release tag lookup failed without proving absence.' >&2
+            return 1
+          }
+
+          remote_tag_object="$(lookup_remote_tag_object)"
           if [[ -n "$remote_tag_object" && "$remote_tag_object" != "$expected_tag_object" ]]; then
             echo 'The release tag already exists with a different object. Publication refuses to overwrite it.' >&2
             exit 1
@@ -491,7 +509,7 @@ jobs:
             gh auth setup-git
             git -C "$repository" remote add origin "${GITHUB_SERVER_URL}/${REPOSITORY}.git"
             if ! git -C "$repository" push --porcelain origin "$tag_ref:$tag_ref"; then
-              remote_tag_object="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)"
+              remote_tag_object="$(lookup_remote_tag_object)"
               if [[ "$remote_tag_object" != "$expected_tag_object" ]]; then
                 echo 'Tag publication failed and exact remote reconciliation did not prove success.' >&2
                 exit 1
@@ -499,7 +517,7 @@ jobs:
             fi
           fi
 
-          remote_tag_object="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')"
+          remote_tag_object="$(lookup_remote_tag_object)"
           if [[ "$remote_tag_object" != "$expected_tag_object" ]]; then
             echo 'Published tag object does not match the verified distribution receipt.' >&2
             exit 1

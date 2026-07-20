@@ -32,6 +32,16 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+test('release publication accepts only a proven missing remote tag as absence', async () => {
+  const workflow = await readFile(path.join(projectRoot, '.github', 'workflows', 'release.yml'), 'utf8');
+  assert.match(workflow, /lookup_remote_tag_object\(\) \{/);
+  assert.match(workflow, /if response="\$\(gh api .* --jq '\.object\.sha' 2>\/dev\/null\)"; then/);
+  assert.match(workflow, /\(\.status \| tostring\) == "404" and \.message == "Not Found"/);
+  assert.match(workflow, /lookup failed without proving absence/);
+  assert.equal((workflow.match(/remote_tag_object="\$\(lookup_remote_tag_object\)"/g) ?? []).length, 3);
+  assert.doesNotMatch(workflow, /\.object\.sha(?: \/\/ empty)?' 2>\/dev\/null \|\| true/);
+});
+
 test.after(async () => {
   await Promise.all(temporaryPaths.map((item) => rm(item, { recursive: true, force: true })));
 });
