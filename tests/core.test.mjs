@@ -987,9 +987,16 @@ test('subprocess timeout escalation kills signal-resistant process-group descend
   const script = path.join(root, 'parent.mjs');
   const harness = path.join(root, 'harness.mjs');
   const pidFile = path.join(root, 'descendant.pid');
+  const terminationFile = path.join(root, 'terminated-at.txt');
   await writeFile(script, `
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+let terminationRecorded = false;
+process.on('SIGTERM', () => {
+  if (terminationRecorded) return;
+  terminationRecorded = true;
+  writeFileSync(process.argv[3], String(Date.now()));
+});
 const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'], {
   stdio: 'ignore'
 });
@@ -998,14 +1005,24 @@ setInterval(() => {}, 1000);
 `);
   await writeFile(harness, `
 import { runProcess } from ${JSON.stringify(new URL('../src/process.mjs', import.meta.url).href)};
-await runProcess(process.execPath, [process.argv[2], process.argv[3]], { timeoutMs: 300 }).catch(() => {});
+await runProcess(process.execPath, [process.argv[2], process.argv[3], process.argv[4]], { timeoutMs: 1_000 }).catch(() => {});
 `);
   let descendantPid = null;
   try {
-    const started = Date.now();
-    const harnessResult = await runProcess(process.execPath, [harness, script, pidFile], { timeoutMs: 5_000 });
+    const harnessResult = await runProcess(
+      process.execPath,
+      [harness, script, pidFile, terminationFile],
+      { timeoutMs: 8_000 }
+    );
+    const completedAt = Date.now();
     assert.equal(harnessResult.code, 0);
-    assert.equal(Date.now() - started >= 2_000, true, 'short-lived harness must stay alive for SIGKILL escalation');
+    const terminatedAt = Number(await readFile(terminationFile, 'utf8'));
+    assert.equal(Number.isSafeInteger(terminatedAt), true, 'provider must record graceful termination');
+    assert.equal(
+      completedAt - terminatedAt >= 1_800,
+      true,
+      'short-lived harness must stay alive for the fixed SIGKILL escalation window'
+    );
     descendantPid = Number(await readFile(pidFile, 'utf8'));
     let gone = false;
     for (let attempt = 0; attempt < 20; attempt += 1) {

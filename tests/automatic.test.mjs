@@ -32,6 +32,7 @@ import {
 } from '../src/summary-claim-guard.mjs';
 
 const temporaryPaths = [];
+const CONCURRENT_STATE_VISIBILITY_TIMEOUT_MS = 10_000;
 const reviewEvidence = (evidence, options = {}) => reviewEvidenceImpl(evidence, {
   platform: 'linux',
   ...options
@@ -2051,12 +2052,16 @@ test('summary consent disable commits visibly, then waits for an issued summary 
       disableSettled = true;
       return value;
     });
-  await waitFor(
-    async () => !(await readSummaryClaimGuardConsent({ root, dataDir: modeDataDir })).enabled,
-    'summary consent revocation to become visible'
-  );
-  assert.equal(disableSettled, false);
-  releaseReview();
+  try {
+    await waitFor(
+      async () => !(await readSummaryClaimGuardConsent({ root, dataDir: modeDataDir })).enabled,
+      'summary consent revocation to become visible',
+      CONCURRENT_STATE_VISIBILITY_TIMEOUT_MS
+    );
+    assert.equal(disableSettled, false);
+  } finally {
+    releaseReview();
+  }
   const [stopped, disabled] = await Promise.all([stopping, disabling]);
   assert.equal(stopped.result.status, 'no_findings');
   assert.equal(disabled.enabled, false);
@@ -2325,7 +2330,8 @@ test('mode disable commits visibly, then waits for an issued provider capability
   try {
     await waitFor(
       async () => !(await readMode({ root, dataDir: modeDataDir })).enabled,
-      'mode disable to become visible'
+      'mode disable to become visible',
+      CONCURRENT_STATE_VISIBILITY_TIMEOUT_MS
     );
     assert.equal(disableSettled, false);
   } finally {
