@@ -294,7 +294,8 @@ export async function reviewEvidence(evidence, options) {
   }
   options.onProviderDispatch?.();
   const response = await dispatchProviderReview(approvedRequest, {
-    platform: options.platform ?? process.platform
+    platform: options.platform ?? process.platform,
+    signal: options.signal
   });
 
   let raw;

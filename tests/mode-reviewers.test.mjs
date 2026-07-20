@@ -185,6 +185,12 @@ test('mode CLI parses primary and secondary connections and documents clearing',
     secondaryEffort: 'high'
   });
   assert.equal(parseModeArgs(['enable', '--single-reviewer']).singleReviewer, true);
+  assert.equal(parseModeArgs(['enable', '--continuous-review']).continuousReview, true);
+  assert.equal(parseModeArgs(['enable', '--no-continuous-review']).continuousReview, false);
+  assert.throws(
+    () => parseModeArgs(['enable', '--continuous-review', '--no-continuous-review']),
+    /cannot be combined/
+  );
   assert.throws(
     () => parseModeArgs(['enable', '--single-reviewer', '--also-provider', 'grok']),
     /cannot be combined/
@@ -196,4 +202,7 @@ test('mode CLI parses primary and secondary connections and documents clearing',
   assert.match(output.help, /Primary connection/);
   assert.match(output.help, /second independent reviewer connection/);
   assert.match(output.help, /--single-reviewer/);
+  assert.match(output.help, /--continuous-review/);
+  assert.match(output.help, /remains final-only/);
+  assert.match(output.help, /intermediate change evidence/);
 });

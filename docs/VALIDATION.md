@@ -1,6 +1,6 @@
 # Validation Record
 
-Date: 2026-07-19
+Date: 2026-07-20
 
 This document records the current evidence state for `v0.5.0-rc.1`. It distinguishes implemented contracts from tests that have actually run, independent-review outcomes and limitations, real Windows evidence, installation state, and the manual Codex host gate. It does not treat source inspection, a skipped platform test, or an older release result as current proof.
 
@@ -90,11 +90,11 @@ Automation does not claim to prove command-menu discovery, visible no-argument t
 
 ## Current validation status
 
-The focused implementation lanes have run syntax checks, diff checks, public-boundary tests, host-evidence tests, doctor tests, provider-adapter tests, dual-review aggregation and lifecycle tests, capability tests, secret-scanner tests, and host-independent Windows helper tests while the branch is still changing. The final integrated working-tree `npm test` pass on 2026-07-19 completed 585 tests with 570 passes, 15 intentional platform skips, and 0 failures in 219.4 seconds. The portable validation passed with 72 syntax-checked modules, all five public pets, all five deterministic evaluation cases, a 114-file isolated positive release boundary, and every public CLI help path. Official Codex plugin validation and both skill validators passed. Workflow lint, `git diff --check`, the repository-wide no-em-dash scan, and the public literal-personal-path scan passed.
+The integrated continuous-review working tree passed the complete local `npm test` run on 2026-07-20: 687 tests, 669 passes, 18 intentional platform skips, and 0 failures in 248.8 seconds. Earlier complete runs exposed a real executable-entrypoint defect and an outdated test harness that enabled continuous review without the new purpose-specific consent. The worker input boundary was separated, the harness now records explicit consent, their targeted regressions passed, and the complete suite passed after both corrections. Focused tests also cover exact-key adoption, stale cancellation, atomic foreground takeover, bounded worker lifetime, no-change cost suppression, two-generation limits, per-connection circuits, dual-review partial results, all-open circuits, durable receipt validation, private retention, and compact visible output.
 
-The complete Gitleaks gate scanned all 8 commits and approximately 1.69 MB of reachable history, then approximately 14.29 MB of the current directory including untracked candidate files, with no findings. The privacy benchmark reported an ordinary no-match p95 of 4.11 ms and a protected-excerpt match p95 of 1.34 ms on Node 22.22.3. FFmpeg independently decoded every pixel in all five WebP atlases as `1536x2288` ARGB images without error. The artifact-only distribution suite passed 14 of 14 tests. The focused Windows provider-egress privacy lane and adjacent automatic, manual, doctor, live-evaluation, and provider-registry regressions passed 190 of 190 tests with 0 failures in 193.9 seconds. These are exact local working-tree development signals, not an exact committed-head, real Windows, Codex host, or GitHub Actions release record.
+Portable validation passed with 81 syntax-checked modules, all five public pets, all five deterministic evaluation cases, a 123-file isolated positive release boundary, and every public CLI help path. Both Buddy skills and the Codex plugin validator passed. `git diff --check`, the repository-wide no-em-dash scan, and the public literal-personal-path scan passed. Gitleaks scanned all 12 reachable commits and approximately 2.10 MB of history, then approximately 14.67 MB of the current directory including untracked candidate files, with no findings.
 
-RepoPrompt context gathering completed against the release-focused file set, but its Oracle review did not return within the bounded wait and is not counted as a verdict. The final complete-file Grok 4.5 high review passed. The broad Claude Opus 4.8 high review abstained because its evidence was incomplete, so it is not counted as an all-clear. A fresh whole-repository Deep Security Scan, real Codex host observations, and an exact-head GitHub Actions run remain release gates. No Ollama/GLM model review is used for the final independent-review phase; Ollama remains a supported product adapter.
+These are exact local working-tree development signals, not an exact committed-head, real Windows, Codex host, or GitHub Actions release record. At this record's freeze point, final RepoPrompt context review, fresh Grok 4.5 high review, fresh Claude Opus 4.8 high review, protected GitHub Actions, and protected RC publication remain pending. A fresh whole-repository Codex Deep Security Scan and manual five-pet host observations are intentionally deferred and are not public RC launch gates. No Ollama or GLM model review is used for the final independent-review phase; Ollama remains a supported product adapter.
 
 ### Security-workbench status
 
@@ -122,7 +122,7 @@ The prior `v0.4.0` RC completed a 240-test local suite, plugin/skill validators,
 
 ## Final evidence to append at exact head
 
-Before promotion or merge, replace this pre-final status with:
+Before stable promotion, replace this pre-final status with:
 
 - exact branch head and complete dirty/committed diff identity;
 - complete test totals and every validator command/result;

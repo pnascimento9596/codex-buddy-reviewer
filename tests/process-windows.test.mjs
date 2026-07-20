@@ -479,6 +479,33 @@ test('Windows deadline terminates a detached provider descendant tree', {
   }
 });
 
+test('Windows AbortSignal cancellation terminates the whole provider Job', {
+  skip: process.platform !== 'win32'
+}, async () => {
+  const helperOptions = await runtimeHelperOptions();
+  const root = await temporaryDirectory('codex-buddy-windows-abort-');
+  const pidFile = path.join(root, 'pids.json');
+  const controller = new AbortController();
+  let pids = {};
+  const running = runWindowsJobProcess(process.execPath, [
+    path.join(fixtures, 'process-tree-provider.mjs'), pidFile, 'wait'
+  ], { ...helperOptions, timeoutMs: 10_000, signal: controller.signal });
+  try {
+    pids = await waitForJson(pidFile);
+    controller.abort('PRIVATE_ABORT_REASON');
+    await assert.rejects(running, (error) => {
+      assert.equal(error.kind, 'cancelled');
+      assert.equal(error.code, 'ABORT_ERR');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE_ABORT_REASON/);
+      return true;
+    });
+    for (const pid of Object.values(pids)) assert.equal(await processIsGone(pid), true, `${pid} survived`);
+  } finally {
+    await running.catch(() => {});
+    await forceFixtureCleanup(Object.values(pids));
+  }
+});
+
 test('Windows output limits terminate the whole provider Job', {
   skip: process.platform !== 'win32'
 }, async () => {

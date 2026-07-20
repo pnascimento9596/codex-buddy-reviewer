@@ -606,6 +606,8 @@ function validateStoredPlan(record, suppliedDigest) {
     reviewersForMode(plan.mode_before);
     validateReviewerConfiguration(plan.desired_mode);
     reviewersForMode(plan.desired_mode);
+    validatePlannedContinuousReview(plan.mode_before, 'prior mode');
+    validatePlannedContinuousReview(plan.desired_mode, 'desired mode');
   } catch (error) {
     setupFailure(`stored plan reviewer configuration is invalid: ${error.message}`);
   }
@@ -632,8 +634,24 @@ function modeComparable(mode) {
     secondary_effort: mode.secondary_effort,
     min_confidence: mode.min_confidence,
     max_patch_bytes: mode.max_patch_bytes,
-    timeout_ms: mode.timeout_ms
+    timeout_ms: mode.timeout_ms,
+    continuous_review_enabled: mode.continuous_review_enabled,
+    continuous_review_consented_at: mode.continuous_review_consented_at
   };
+}
+
+function validatePlannedContinuousReview(mode, label) {
+  if (typeof mode.continuous_review_enabled !== 'boolean') {
+    throw new Error(`${label} continuous review choice is invalid`);
+  }
+  const consent = mode.continuous_review_consented_at;
+  const milliseconds = Date.parse(consent ?? '');
+  const canonicalConsent = typeof consent === 'string'
+    && Number.isFinite(milliseconds)
+    && new Date(milliseconds).toISOString() === consent;
+  if (mode.continuous_review_enabled ? !canonicalConsent : consent !== null) {
+    throw new Error(`${label} continuous review consent is invalid`);
+  }
 }
 
 function packageComparable(value) {
@@ -800,7 +818,7 @@ function choosePetAction(pet) {
   return { action: 'none', preexisting: true };
 }
 
-function desiredMode(mode, options) {
+function desiredMode(mode, options, plannedAt) {
   const secondaryOverrides = [
     options.secondaryProvider,
     options.secondaryModel,
@@ -831,6 +849,11 @@ function desiredMode(mode, options) {
     secondaryEffort = options.secondaryEffort
       ?? (secondaryProviderChanged ? providerDefaultEffort(secondaryProvider) : mode.secondary_effort);
   }
+  const continuousReviewEnabled = options.continuousReview
+    ?? (mode.enabled ? mode.continuous_review_enabled : false);
+  const continuousReviewConsentedAt = continuousReviewEnabled
+    ? (options.continuousReview === true ? plannedAt : mode.continuous_review_consented_at)
+    : null;
   const desired = validateReviewerConfiguration({
     enabled: true,
     provider,
@@ -841,8 +864,11 @@ function desiredMode(mode, options) {
     secondary_effort: secondaryEffort,
     min_confidence: options.minConfidence ?? mode.min_confidence,
     max_patch_bytes: options.maxPatchBytes ?? mode.max_patch_bytes,
-    timeout_ms: options.timeoutMs ?? mode.timeout_ms
+    timeout_ms: options.timeoutMs ?? mode.timeout_ms,
+    continuous_review_enabled: continuousReviewEnabled,
+    continuous_review_consented_at: continuousReviewConsentedAt
   });
+  validatePlannedContinuousReview(desired, 'desired mode');
   reviewersForMode(desired);
   return desired;
 }
@@ -857,7 +883,9 @@ function modeRequiresChange(mode, desired) {
     || mode.secondary_effort !== desired.secondary_effort
     || mode.min_confidence !== desired.min_confidence
     || mode.max_patch_bytes !== desired.max_patch_bytes
-    || mode.timeout_ms !== desired.timeout_ms;
+    || mode.timeout_ms !== desired.timeout_ms
+    || mode.continuous_review_enabled !== desired.continuous_review_enabled
+    || mode.continuous_review_consented_at !== desired.continuous_review_consented_at;
 }
 
 function assertNoUnresolvedTransactions(transactionState) {
@@ -889,14 +917,15 @@ export async function createSetupPlan(options = {}) {
   assertNoUnresolvedTransactions(transactionState);
   const mode = await readMode({ root: workspaceRoot, dataDir: options.dataDir });
   const petChoice = choosePetAction(petState.pets[0]);
-  const desired = desiredMode(mode, options);
+  const createdAt = new Date(nowMs).toISOString();
+  const desired = desiredMode(mode, options, createdAt);
   const modeAction = modeRequiresChange(mode, desired) ? 'enable' : 'none';
   const planId = options.planId ?? `${nowMs}-${randomUUID()}`;
   if (!PLAN_ID_PATTERN.test(planId)) setupFailure('invalid generated plan id');
   const body = {
     schema_version: '1',
     plan_id: planId,
-    created_at: new Date(nowMs).toISOString(),
+    created_at: createdAt,
     expires_at: new Date(nowMs + ttlMs).toISOString(),
     workspace_root: workspaceRoot,
     codex_home: petState.codex_home,
@@ -1043,6 +1072,8 @@ async function applyModeStep(plan, options) {
     minConfidence: plan.desired_mode.min_confidence,
     maxPatchBytes: plan.desired_mode.max_patch_bytes,
     timeoutMs: plan.desired_mode.timeout_ms,
+    continuousReview: plan.desired_mode.continuous_review_enabled,
+    continuousReviewConsentedAt: plan.desired_mode.continuous_review_consented_at ?? undefined,
     expectedRevision: plan.mode_before.config_revision
   });
 }
@@ -1245,6 +1276,8 @@ async function rollbackModeStep(plan, options) {
     minConfidence: before.min_confidence,
     maxPatchBytes: before.max_patch_bytes,
     timeoutMs: before.timeout_ms,
+    continuousReview: before.continuous_review_enabled,
+    continuousReviewConsentedAt: before.continuous_review_consented_at ?? undefined,
     expectedRevision: expectedModeAfter(plan).config_revision
   });
 }

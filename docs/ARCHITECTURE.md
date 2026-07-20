@@ -26,31 +26,32 @@ Module decomposition is more urgent than adding a language. The largest modules 
 ## Automatic v0.5 path
 
 ```mermaid
-flowchart LR
+flowchart TD
     U["User enables workspace mode"] --> S["UserPromptSubmit"]
     S --> B["Budgeted stable private baseline tree"]
-    B --> W["Codex worker turn"]
-    W --> T["Stop plus final worker summary"]
-    T --> L["Turn lock and durable-state recovery"]
-    L --> F["Budgeted stable private final tree"]
-    F --> D["Shared privacy kernel and observed delta"]
-    D --> K["Deterministic review key and durable attempt"]
-    K --> X{"Short mode and summary authorization"}
-    X -->|closed| G["Atomic batch of one or two exact-bound egress capabilities"]
-    G --> R["Ordered reviewers run concurrently outside configuration locks"]
-    X -->|open| E["Fail-open degraded event"]
-    R --> V["Strict validation per reviewer"]
-    V --> J["Deterministic attributed aggregation"]
-    J --> P["Write-once terminal receipt with reviewer runs"]
-    P --> O["Sequenced immutable pet event"]
-    P --> A["Separate companion presentation and XP"]
-    P --> C["Single Stop continuation"]
-    C --> Q["Combined worker summary and Buddy addendum"]
+    B --> W["Detached bounded checkpoint worker"]
+    B --> C["Codex worker turn"]
+    C --> M["Repository mutations"]
+    M --> W
+    W --> D["Confirmed stable exact checkpoint"]
+    D --> E["Privacy-filtered diff and grounding"]
+    E --> R["One or two independent reviewer lanes"]
+    R --> P["Write-once full private receipt"]
+    C --> T["Stop plus final worker summary"]
+    T --> F["Exact final checkpoint and review key"]
+    P --> X{"Exact receipt matches final key?"}
+    F --> X
+    X -->|yes| A["Adopt receipt"]
+    X -->|no| G["Exact final fallback review"]
+    A --> V["Deterministic compact presentation"]
+    G --> V
+    V --> O["Sequenced event plus one Stop continuation"]
+    O --> Q["Worker summary plus at most 3 Buddy sentences"]
 ```
 
 ## Snapshot contract
 
-Each enabled root turn gets a private snapshot directory under `PLUGIN_DATA`. Capture:
+Each enabled root turn gets a private checkpoint directory under `PLUGIN_DATA`. A snapshot is repository state, not an image of the screen. Capture:
 
 1. resolves the canonical Git root;
 2. creates a private Git index and object directory;
@@ -62,51 +63,61 @@ Each enabled root turn gets a private snapshot directory under `PLUGIN_DATA`. Ca
 8. writes a tree and repeats the entire capture;
 9. aborts unless the two signatures, status, and `HEAD` agree.
 
-The Stop path captures a final tree in the same private object store and diffs the two trees. This survives a `HEAD` commit during the turn and excludes unchanged pre-existing dirty content. It does not establish exclusive actor provenance in a concurrently edited worktree.
+The detached worker and Stop path capture later checkpoints in the same private object domain and diff them from the baseline. Worker capture, final Stop capture, and snapshot cleanup share a per-turn activity lease, and the worker rechecks ownership after acquiring it. An atomic Stop takeover therefore cannot race cleanup against an in-flight capture or let a superseded worker recreate deleted objects. A full signature digest binds tree, `HEAD`, index/worktree status, ignored and excluded evidence, and other capture identity needed for freshness. Reviewers receive the bounded privacy-filtered evidence, not the opaque snapshot digest as a substitute for code and never pixels or UI state. This survives a `HEAD` commit during the turn and excludes unchanged pre-existing dirty content. It does not establish exclusive actor provenance in a concurrently edited worktree.
 
 ## Deterministic identity and state machine
 
 The review key is a SHA-256 of canonical JSON containing:
 
 ```text
-session_id
-turn_id
+opaque session key
+opaque turn key
 canonical repository root
-baseline tree hash
-final tree hash
-hash(last_assistant_message)
+full baseline snapshot digest
+full final snapshot digest
+exact evidence digest
 ordered primary and optional secondary provider/model/effort descriptors
 prompt, policy, and result-schema versions
 confidence threshold
 patch budget
 summary-claim guard enabled state, policy, consent revision, provider, and model
+hash(last_assistant_message), only when the summary guard is enabled
 ```
 
 State is:
 
 ```text
-no receipt
-  -> unique-claim turn lock
-  -> recover receipt or compute bounded evidence
+durable baseline
+  -> detached worker claim
+  -> debounce and confirm stable checkpoint
+  -> compute bounded evidence and exact review key
   -> mode-locked authorization and per-reviewer circuit checks
-  -> publish durable attempt marker immediately before provider-capable calls
+  -> publish generation attempt marker before provider-capable calls
   -> atomically issue one capability per executable configured reviewer
-  -> run one or two ordered reviewer lanes concurrently, with no retries or fallback
+  -> run one or two ordered reviewer lanes concurrently
+  -> cancel if exact checkpoint is superseded
   -> validate each lane independently and aggregate without a synthesis model
   -> atomically published write-once terminal receipt
        findings | no_findings | abstain
        provider_unavailable | circuit_open | staged local failure
+  -> continue watching until Stop or two speculative generations
+  -> Stop computes final exact review key
+  -> adopt only exact matching receipt, otherwise exact final fallback
   -> continuation prepared
   -> random-token delivery claim
   -> stdout write callback completed
   -> continuation observed by stop_hook_active
 ```
 
-The turn lock spans the full Stop lifecycle, and UserPromptSubmit baseline publication uses that same lease, so a late Start cannot publish after Stop terminalizes the turn. A provider-lane lease serializes provider-capable turns without making the mode file itself the long-running mutex. Under short mode and, when applicable, summary-consent locks, Buddy checks the exact revision and each configured reviewer circuit, writes one attempt fence, and atomically issues one durable single-use egress capability for every executable reviewer lane. Batch issuance either publishes every lane capability or publishes none. Each capability independently binds the workspace/session/turn/review identities; its provider/model/effort/timeout and configuration digest; exact prompt bytes and digest; response-schema digest; optional summary-consent revision and packet digest; and bounded issue/spend/execution deadlines. The locks are then released before the capabilities are durably consumed and the reviewers start concurrently.
+The detached worker starts only after the baseline is durable. Filesystem notifications are latency hints; exact repository polling and double capture remain authoritative because Codex does not expose every edit operation through a portable hook. The worker can launch at most two stable speculative generations, periodically revalidates mode while idle, and has a strict six-hour absolute lifetime. A newer exact checkpoint or worker expiry cancels the provider execution domain without penalizing its circuit, and that result is not published as the turn result. There is no persistent reviewer conversation or cross-turn model memory.
+
+The turn lock spans the full Stop lifecycle, and UserPromptSubmit baseline publication uses that same lease, so a late Start cannot publish after Stop terminalizes the turn. Stop atomically takes ownership when the detached worker has not yet fenced a provider attempt. Once an exact active review key or durable attempt fence can exist, Stop preserves the conservative wait and no-replay boundary. A provider-lane lease serializes provider-capable turns without making the mode file itself the long-running mutex. Under short mode and, when applicable, summary-consent locks, Buddy checks the exact revision and each configured reviewer circuit, writes one attempt fence, and atomically issues one durable single-use egress capability for every executable reviewer lane. Batch issuance either publishes every lane capability or publishes none. Each capability independently binds the workspace/session/turn/review identities; its provider/model/effort/timeout and configuration digest; exact prompt bytes and digest; response-schema digest; optional summary-consent revision and packet digest; and bounded issue/spend/execution deadlines. The locks are then released before the capabilities are durably consumed and the reviewers start concurrently.
 
 Mode or summary-consent mutation commits its new revision while holding its short lock, snapshots capabilities authorized by the prior revision, releases the lock, and drains only those exact capabilities. The command returns only after positive settlement; elapsed deadlines or a dead owner process do not manufacture a successful drain. This is intentionally availability-conservative after an ambiguous crash. A surviving attempt marker still prevents provider replay, and a surviving unresolved capability can make a later mutation time out until a positive supervisor/recovery protocol exists. Three consecutive real failures open a workspace/provider+model circuit for 30 minutes; each reviewer has its own circuit, and an open circuit never redirects work to another connection. Only actual executor entry affects a circuit, while local evidence/persistence failures and no-change turns do not.
 
-One successful lane is sufficient to publish a partial dual-reviewer result. The failed or open lane stays attributed in `reviewer_runs`, and Buddy never invents a replacement reviewer. If neither configured lane succeeds, Buddy preserves the worker result and publishes a degraded terminal state. Successful results are combined locally and deterministically: findings and comments keep source receipts, duplicates use grounded identity keys, ordering is risk-first with stable source order, and no third model synthesizes the output. The Stop continuation is issued after the terminal receipt is durable. Delivery moves `prepared -> claimed(token, lease) -> stdout_written -> observed`; a live claim suppresses duplicates, while a later retry reconstructs the continuation from the receipt without rerunning a provider. The stdout callback proves only that the hook process wrote its response, not that the host consumed it. Outbox publication is bounded, immutable, sequenced, attributed, and best-effort.
+One successful lane is sufficient to publish a partial dual-reviewer result. The failed or open lane stays attributed in `reviewer_runs`, and Buddy never invents a replacement reviewer. If neither configured lane succeeds, Buddy preserves the worker result and publishes a degraded terminal state. Successful results are combined locally and deterministically: findings and comments keep source receipts, duplicates use grounded identity keys, ordering is risk-first with stable source order, and no third model synthesizes the output.
+
+The full structured result remains in the bounded private receipt. Presentation deterministically selects at most three sentences and 700 characters for a single-paragraph transcript addendum and matching `review_completed.detail`. The Stop continuation is issued after the terminal receipt is durable. Delivery moves `prepared -> claimed(token, lease) -> stdout_written -> observed`; a live claim suppresses duplicates, while a later retry reconstructs the continuation from the receipt without rerunning a provider. The stdout callback proves only that the hook process wrote its response, not that the host consumed it. Outbox publication is bounded, immutable, sequenced, attributed, and best-effort.
 
 ## Capture budgets, TTL, and privacy fragments
 
@@ -123,8 +134,13 @@ Deleted files remain reviewable when their old bytes are complete, bounded, text
 ## Failure behavior
 
 - Disabled mode, nested agent, non-review continuation: silent no-op.
+- Continuous mode disabled, missing consent, unsupported platform, or summary guard enabled: no speculative provider work; ordinary exact Stop review remains available.
+- Background launch or filesystem watcher failure: fail open to the exact Stop review. The watcher is never the correctness authority.
 - Missing baseline: explicit abstention; never fall back to the whole worktree.
 - Unstable snapshot: fail-open system message; no egress.
+- Repository mutation during a speculative call: cancel the superseded provider execution and never present its findings as current.
+- Two speculative generations consumed: stop background provider work and leave the exact final fallback available.
+- Exact Stop receipt ready: adopt it. Exact attempt still ambiguous: do not duplicate it.
 - Excluded or incomplete evidence: validator prevents clean assurance.
 - One of two reviewers fails, times out, returns invalid output, or has an open circuit: publish the successful lane as an attributed partial result; do not retry or substitute a provider.
 - Every configured reviewer fails or is unavailable: terminal degraded receipt and event; worker result remains intact.
@@ -137,12 +153,14 @@ Provider lifecycle containment is platform-specific. POSIX execution owns one su
 Plugin-native responsibilities:
 
 - consent and mode state;
-- exact turn-window snapshotting;
+- exact repository checkpointing and continuous stable-generation monitoring;
 - independent review and validation;
 - attributed reviewer receipts, per-reviewer circuits, and event outbox;
-- one audited transcript continuation.
+- one audited compact transcript continuation.
 
-The optional summary-claim advisory has its own purpose-specific consent, primary provider/model binding, consent revision, bounded sanitized packet, and exact UTF-16 offsets. Even when two reviewers are configured, only the ordered primary can receive this separately consented packet; the secondary always receives technical evidence only. Before issuance, Buddy assesses the exact transmitted packet with the bounded secret scanner, exact excluded-path references, and high-risk path policy; an unsafe or incomplete assessment issues technical-only capabilities instead. The short summary-consent lock is held only through exact packet construction and atomic capability issuance; revocation drains every non-null summary capability at or below the revoked revision before its command returns. The returned advisory is validated independently. Invalid advisory output becomes advisory abstention without invalidating an otherwise valid technical envelope. Advisory fields cannot express a code severity, path, line, impact, or finding, so they cannot be promoted into the technical channel. Since both outputs come from one inference, this is a structural and validation guarantee rather than a claim that the optional summary packet can never influence the model's technical output or that its local preflight is universal semantic DLP.
+The native Codex pet provides persistent sprite animation and host-owned Running and Ready state. Public plugin APIs do not let Buddy put arbitrary text in the native pet bubble. If the exact final review is pending, the outbox detail is `Code review and suggestions are in progress.` A separate renderer may display that event, but no renderer is required for review correctness.
+
+The optional summary-claim advisory has its own purpose-specific consent, primary provider/model binding, consent revision, bounded sanitized packet, and exact UTF-16 offsets. Even when two reviewers are configured, only the ordered primary can receive this separately consented packet; the secondary always receives technical evidence only. Because that packet does not exist until Stop, an enabled summary guard disables speculative background review for the turn and uses the exact final Stop request. Before issuance, Buddy assesses the exact transmitted packet with the bounded secret scanner, exact excluded-path references, and high-risk path policy; an unsafe or incomplete assessment issues technical-only capabilities instead. The short summary-consent lock is held only through exact packet construction and atomic capability issuance; revocation drains every non-null summary capability at or below the revoked revision before its command returns. The returned advisory is validated independently. Invalid advisory output becomes advisory abstention without invalidating an otherwise valid technical envelope. Advisory fields cannot express a code severity, path, line, impact, or finding, so they cannot be promoted into the technical channel. Since both outputs come from one inference, this is a structural and validation guarantee rather than a claim that the optional summary packet can never influence the model's technical output or that its local preflight is universal semantic DLP.
 
 ## Reviewer adapter boundary
 
@@ -151,7 +169,7 @@ The registry exposes four adapter IDs: `claude`, `grok`, `ollama`, and `opencode
 - `claude` invokes the authenticated Claude Code CLI directly with safe mode, a static reviewer-only system prompt that replaces dynamic per-machine default sections, no tools, no MCP configuration, no session persistence, an explicit response schema, and a disposable working directory. This is the supported route for a Claude Max subscription. Authentication and administrator-managed Claude policy remain external boundaries.
 - `grok` invokes the authenticated Grok CLI directly through its existing isolated bridge.
 - `ollama` invokes Ollama directly for either local models or Ollama Cloud models. The process runs from a private Buddy-owned, workspace-attributed temporary directory instead of the reviewed repository, preventing ordinary cwd-based project configuration discovery. Existing allowlisted home-profile and `OLLAMA_HOST` inputs are preserved so Ollama authentication and connection behavior do not change. This boundary is not a filesystem, credential, process, or network sandbox. Local models receive the response schema through Ollama structured output. Cloud models use JSON transport followed by the same strict local result validation because Ollama Cloud does not accept the full schema transport.
-- `opencode` invokes a pure, disposable, deny-all OpenCode agent. The model must use `provider/model` form. Buddy projects only that selected provider entry from the OpenCode auth store into the disposable environment, disables external skills, project configuration, plugins, MCP, sharing, tools, and ambient provider credentials, and then validates the returned JSON locally. This is the supported route for ChatGPT Pro through OpenCode OpenAI OAuth and for a Kimi model exposed by a configured OpenCode provider connection.
+- `opencode` invokes a pure, disposable, deny-all OpenCode agent. The model must use `provider/model` form. Buddy projects only that selected provider entry from the OpenCode auth store into the disposable environment, disables external skills, project configuration, plugins, MCP, sharing, tools, and ambient provider credentials, and then validates the returned JSON locally. Supported routed examples include ChatGPT Plus/Pro OAuth, SuperGrok, API-backed Kimi or Moonshot, and Ollama Cloud when each exact provider/model is already configured in OpenCode. These are routed connections, not extra native Buddy adapters. Claude Pro or Max is intentionally excluded from this route and must use Buddy's direct Claude Code adapter.
 
 Direct Codex CLI and direct Kimi CLI adapters are intentionally unsupported. They remain outside the registry until each can prove strict no-tools and no-inherited-context execution while preserving the intended subscription authentication. Buddy does not extract subscription credentials or forward the full OpenCode auth inventory.
 

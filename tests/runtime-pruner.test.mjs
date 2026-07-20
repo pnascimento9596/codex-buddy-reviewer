@@ -24,8 +24,41 @@ async function fixture() {
   return { runtimeDataDir, root, turnDir };
 }
 
+function preReviewState(overrides = {}) {
+  return {
+    schema_version: '1',
+    generation: 0,
+    speculative_launches: 0,
+    worker_nonce: null,
+    worker_state: 'idle',
+    active_generation: null,
+    active_review_key: null,
+    ready_review_key: null,
+    final_requested: false,
+    final_review_key: null,
+    updated_at: '2020-01-01T00:00:00.000Z',
+    ...overrides
+  };
+}
+
+async function writeJson(file, value) {
+  await writeFile(file, `${JSON.stringify(value)}\n`);
+}
+
+async function writeSpeculativeAttempt(turnDir, reviewKey, generation = 1) {
+  const directory = path.join(turnDir, 'pre-review-attempts');
+  await mkdir(directory, { recursive: true });
+  await writeJson(path.join(directory, `${reviewKey}.json`), {
+    schema_version: '1',
+    review_key: reviewKey,
+    generation,
+    started_at: '2020-01-01T00:00:00.000Z'
+  });
+}
+
 test('stale baseline-only turns are terminalized before private objects are pruned', async () => {
   const { runtimeDataDir, root, turnDir } = await fixture();
+  await mkdir(path.join(turnDir, 'pre-review-snapshot', 'objects'), { recursive: true });
   await writeFile(path.join(turnDir, 'baseline.json'), `${JSON.stringify({
     snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
   })}\n`);
@@ -34,7 +67,27 @@ test('stale baseline-only turns are terminalized before private objects are prun
   const completed = JSON.parse(await readFile(path.join(turnDir, 'completed.json'), 'utf8'));
   assert.equal(completed.terminal_status, 'baseline_expired');
   await assert.rejects(lstat(path.join(turnDir, 'snapshot')));
+  await assert.rejects(lstat(path.join(turnDir, 'pre-review-snapshot')));
   await assert.rejects(lstat(path.join(turnDir, 'baseline.json')));
+});
+
+test('a residual pre-review snapshot is detected and pruned when it is the only cleanup artifact', async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  await rm(path.join(turnDir, 'snapshot'), { recursive: true });
+  await mkdir(path.join(turnDir, 'pre-review-snapshot', 'objects'), { recursive: true });
+  await writeJson(path.join(turnDir, 'completed.json'), {
+    schema_version: '1',
+    terminal_status: 'no_changes',
+    presentation_status: 'terminal',
+    completed_at: '2020-01-01T00:00:00.000Z'
+  });
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    root,
+    now: Date.parse('2020-01-03T00:00:00Z')
+  });
+  assert.equal(result.pruned, 1);
+  await assert.rejects(lstat(path.join(turnDir, 'pre-review-snapshot')));
 });
 
 test('stale provider attempts preserve at-most-once by becoming terminal before cleanup', async () => {
@@ -47,6 +100,174 @@ test('stale provider attempts preserve at-most-once by becoming terminal before 
   const completed = JSON.parse(await readFile(path.join(turnDir, 'completed.json'), 'utf8'));
   assert.equal(completed.terminal_status, 'prior_attempt_incomplete');
   assert.equal(completed.review_key, 'a'.repeat(64));
+});
+
+test('stale active pre-review state is terminalized and safely removed without signaling a worker', async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  const reviewKey = '1'.repeat(64);
+  await writeJson(path.join(turnDir, 'baseline.json'), {
+    snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+  });
+  await writeJson(path.join(turnDir, 'pre-review.json'), preReviewState({
+    generation: 1,
+    speculative_launches: 1,
+    worker_nonce: '2'.repeat(48),
+    worker_state: 'reviewing',
+    active_generation: 1,
+    active_review_key: reviewKey
+  }));
+  await writeSpeculativeAttempt(turnDir, reviewKey);
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    root,
+    now: Date.parse('2020-01-03T00:00:00.000Z')
+  });
+  assert.equal(result.pruned, 1);
+  const completed = JSON.parse(await readFile(path.join(turnDir, 'completed.json'), 'utf8'));
+  assert.equal(completed.terminal_status, 'prior_attempt_incomplete');
+  assert.equal(completed.review_key, reviewKey);
+  await assert.rejects(lstat(path.join(turnDir, 'pre-review.json')));
+  await assert.rejects(lstat(path.join(turnDir, 'pre-review-attempts')));
+  await assert.rejects(lstat(path.join(turnDir, 'snapshot')));
+  const replay = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    root,
+    now: Date.parse('2020-01-03T00:00:02.000Z')
+  });
+  assert.equal(replay.pruned, 0);
+});
+
+test('multiple receipt-less speculative attempts terminalize without guessing a review key', async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  await writeJson(path.join(turnDir, 'baseline.json'), {
+    snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+  });
+  await writeSpeculativeAttempt(turnDir, '3'.repeat(64), 1);
+  await writeSpeculativeAttempt(turnDir, '4'.repeat(64), 2);
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    root,
+    now: Date.parse('2020-01-03T00:00:00.000Z')
+  });
+  assert.equal(result.pruned, 1);
+  const completed = JSON.parse(await readFile(path.join(turnDir, 'completed.json'), 'utf8'));
+  assert.equal(completed.terminal_status, 'prior_attempt_incomplete');
+  assert.equal(Object.hasOwn(completed, 'review_key'), false);
+  await assert.rejects(lstat(path.join(turnDir, 'pre-review-attempts')));
+});
+
+test('terminalized turns remove valid residual pre-review artifacts through safe snapshot cleanup', async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  await writeJson(path.join(turnDir, 'completed.json'), {
+    schema_version: '1',
+    terminal_status: 'no_findings',
+    presentation_status: 'terminal',
+    completed_at: '2020-01-03T00:00:00.000Z'
+  });
+  await writeJson(path.join(turnDir, 'pre-review.json'), preReviewState());
+  await mkdir(path.join(turnDir, 'pre-review-attempts'));
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    root,
+    now: Date.parse('2020-01-03T00:00:01.000Z')
+  });
+  assert.equal(result.pruned, 1);
+  await lstat(path.join(turnDir, 'completed.json'));
+  await assert.rejects(lstat(path.join(turnDir, 'pre-review.json')));
+  await assert.rejects(lstat(path.join(turnDir, 'pre-review-attempts')));
+  await assert.rejects(lstat(path.join(turnDir, 'snapshot')));
+});
+
+test('unsafe or malformed pre-review artifacts make pruning ambiguous and non-destructive', async (t) => {
+  await t.test('symlinked state', async () => {
+    const { runtimeDataDir, root, turnDir } = await fixture();
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'buddy-pruner-pre-review-outside-'));
+    roots.push(outside);
+    const sentinel = path.join(outside, 'sentinel.json');
+    await writeFile(sentinel, '{"private":"preserved"}\n');
+    await writeJson(path.join(turnDir, 'baseline.json'), {
+      snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+    });
+    await symlink(sentinel, path.join(turnDir, 'pre-review.json'));
+
+    const result = await pruneWorkspaceTurns({
+      runtimeDataDir,
+      root,
+      now: Date.parse('2020-01-03T00:00:00.000Z')
+    });
+    assert.equal(result.ambiguous, 1);
+    assert.equal(await readFile(sentinel, 'utf8'), '{"private":"preserved"}\n');
+    await lstat(path.join(turnDir, 'baseline.json'));
+    await lstat(path.join(turnDir, 'snapshot'));
+    await assert.rejects(lstat(path.join(turnDir, 'completed.json')));
+  });
+
+  await t.test('malformed state', async () => {
+    const { runtimeDataDir, root, turnDir } = await fixture();
+    await writeJson(path.join(turnDir, 'baseline.json'), {
+      snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+    });
+    await writeFile(path.join(turnDir, 'pre-review.json'), '{not-json\n');
+
+    const result = await pruneWorkspaceTurns({
+      runtimeDataDir,
+      root,
+      now: Date.parse('2020-01-03T00:00:00.000Z')
+    });
+    assert.equal(result.ambiguous, 1);
+    await lstat(path.join(turnDir, 'baseline.json'));
+    await lstat(path.join(turnDir, 'snapshot'));
+    await assert.rejects(lstat(path.join(turnDir, 'completed.json')));
+  });
+
+  await t.test('symlinked attempt directory', async () => {
+    const { runtimeDataDir, root, turnDir } = await fixture();
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'buddy-pruner-attempts-outside-'));
+    roots.push(outside);
+    const sentinel = path.join(outside, 'sentinel.json');
+    await writeFile(sentinel, '{"private":"preserved"}\n');
+    await writeJson(path.join(turnDir, 'baseline.json'), {
+      snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+    });
+    await symlink(outside, path.join(turnDir, 'pre-review-attempts'));
+
+    const result = await pruneWorkspaceTurns({
+      runtimeDataDir,
+      root,
+      now: Date.parse('2020-01-03T00:00:00.000Z')
+    });
+    assert.equal(result.ambiguous, 1);
+    assert.equal(await readFile(sentinel, 'utf8'), '{"private":"preserved"}\n');
+    await lstat(path.join(turnDir, 'baseline.json'));
+    await lstat(path.join(turnDir, 'snapshot'));
+    await assert.rejects(lstat(path.join(turnDir, 'completed.json')));
+  });
+
+  await t.test('malformed attempt record', async () => {
+    const { runtimeDataDir, root, turnDir } = await fixture();
+    await writeJson(path.join(turnDir, 'baseline.json'), {
+      snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+    });
+    const reviewKey = '5'.repeat(64);
+    await mkdir(path.join(turnDir, 'pre-review-attempts'));
+    await writeJson(path.join(turnDir, 'pre-review-attempts', `${reviewKey}.json`), {
+      schema_version: '1',
+      review_key: reviewKey
+    });
+
+    const result = await pruneWorkspaceTurns({
+      runtimeDataDir,
+      root,
+      now: Date.parse('2020-01-03T00:00:00.000Z')
+    });
+    assert.equal(result.ambiguous, 1);
+    await lstat(path.join(turnDir, 'baseline.json'));
+    await lstat(path.join(turnDir, 'pre-review-attempts', `${reviewKey}.json`));
+    await assert.rejects(lstat(path.join(turnDir, 'completed.json')));
+  });
 });
 
 test('stale dead Stop claims are reconciled through the turn lease before pruning', async () => {
@@ -107,11 +328,16 @@ test('a live held Stop lease excludes pruning without mutating the turn', async 
 
 test('fresh, current, live, and unsafe turn state is never pruned', async () => {
   const { runtimeDataDir, root, turnDir } = await fixture();
+  const reviewKey = '6'.repeat(64);
   await writeFile(path.join(turnDir, 'baseline.json'), `${JSON.stringify({
     snapshot: { captured_at: '2020-01-03T00:00:00.000Z' }
   })}\n`);
+  await writeJson(path.join(turnDir, 'pre-review.json'), preReviewState());
+  await writeSpeculativeAttempt(turnDir, reviewKey);
   let result = await pruneWorkspaceTurns({ runtimeDataDir, root, now: Date.parse('2020-01-03T01:00:00Z') });
   assert.equal(result.pruned, 0);
+  await lstat(path.join(turnDir, 'pre-review.json'));
+  await lstat(path.join(turnDir, 'pre-review-attempts', `${reviewKey}.json`));
   result = await pruneWorkspaceTurns({
     runtimeDataDir, root, now: Date.parse('2020-01-05T00:00:00Z'), sessionId: 'session', turnId: 'turn'
   });
@@ -123,6 +349,24 @@ test('fresh, current, live, and unsafe turn state is never pruned', async () => 
   result = await pruneWorkspaceTurns({ runtimeDataDir, root, now: Date.parse('2020-01-05T00:00:00Z') });
   assert.equal(result.ambiguous, 1);
   assert.equal((await lstat(path.join(turnDir, 'snapshot'))).isSymbolicLink(), true);
+});
+
+test('an unsafe residual pre-review snapshot preserves every snapshot artifact', async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'buddy-pruner-pre-review-outside-'));
+  roots.push(outside);
+  await symlink(outside, path.join(turnDir, 'pre-review-snapshot'));
+  await writeFile(path.join(turnDir, 'baseline.json'), `${JSON.stringify({
+    snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+  })}\n`);
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    root,
+    now: Date.parse('2020-01-03T00:00:00Z')
+  });
+  assert.equal(result.ambiguous, 1);
+  await lstat(path.join(turnDir, 'snapshot'));
+  assert.equal((await lstat(path.join(turnDir, 'pre-review-snapshot'))).isSymbolicLink(), true);
 });
 
 test('unobserved automatic review content expires at 24 hours while its tombstone remains', async () => {

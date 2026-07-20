@@ -13,7 +13,7 @@ function result() {
   };
 }
 
-test('continuation exposes only bounded provider cleanup warnings', () => {
+test('continuation exposes only a bounded cleanup warning in the compact paragraph', () => {
   const review = result();
   const rendered = renderContinuation({
     reviewKey: 'a'.repeat(64),
@@ -41,16 +41,12 @@ test('continuation exposes only bounded provider cleanup warnings', () => {
   const lines = rendered.split('\n');
   const start = lines.findIndex((line) => line.endsWith('_START'));
   const payload = JSON.parse(lines[start + 1]);
-  assert.deepEqual(payload.operational_warnings, [{
-    source_index: 0,
-    provider: 'grok',
-    model: 'grok-4.5',
-    code: 'temporary_state_cleanup_failed'
-  }]);
+  assert.deepEqual(Object.keys(payload).sort(), ['review_key', 'schema_version', 'visible_review']);
+  assert.match(payload.visible_review, /cleanup of its private temporary state failed/u);
   assert.doesNotMatch(rendered, /SECRET|provider-prompt|cleanup_error|cleanup_path/);
 });
 
-test('continuation omits cleanup warnings after normal cleanup', () => {
+test('continuation omits cleanup warning text after normal cleanup', () => {
   const review = result();
   const rendered = renderContinuation({
     reviewKey: 'b'.repeat(64),
@@ -73,5 +69,5 @@ test('continuation omits cleanup warnings after normal cleanup', () => {
   const lines = rendered.split('\n');
   const start = lines.findIndex((line) => line.endsWith('_START'));
   const payload = JSON.parse(lines[start + 1]);
-  assert.deepEqual(payload.operational_warnings, []);
+  assert.doesNotMatch(payload.visible_review, /cleanup/u);
 });

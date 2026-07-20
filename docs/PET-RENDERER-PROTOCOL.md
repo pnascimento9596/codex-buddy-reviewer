@@ -2,7 +2,7 @@
 
 ## Status
 
-The producer writes immutable local JSON event files. Event schema v2 adds a workspace-monotonic sequence, companion presentation, and a separately validated summary advisory while preserving the v1 deterministic event-ID contract. New events never persist the worker summary. A headless local pull, acknowledgment, and retention module is available for an optional renderer. No standalone GUI, daemon, network listener, or native-pet control is part of this protocol.
+The producer writes immutable local JSON event files. Event schema v2 adds a workspace-monotonic sequence, companion presentation, and a separately validated summary advisory while preserving the v1 deterministic event-ID contract. New events never persist the worker summary. A headless local pull, acknowledgment, and retention module is available for an optional renderer. No standalone GUI, daemon, network listener, screen capture, or native-pet control is part of this protocol.
 
 ## Producer location and identity
 
@@ -52,6 +52,15 @@ Presentation states:
 
 These are renderer semantics, not direct commands to Codex's native fixed pet animation rows.
 
+Continuous review does not add a separate public event type. The ordinary lifecycle events carry the user-facing state:
+
+- `review_started` means an exact privacy-filtered repository generation entered review;
+- `turn_finished.detail` is exactly `Code review and suggestions are in progress.` when Stop is waiting for or finalizing the exact review;
+- `review_completed.detail` is the same compact paragraph used by the transcript continuation, with at most three sentences and 700 characters;
+- `review_degraded` reports bounded safe failure text without provider stderr.
+
+The full snapshot digest is used internally for freshness identity. It is not a screenshot and is not a substitute for the bounded code evidence reviewed by each configured model.
+
 ## Consumer protocol
 
 Consumer state is separate from producer files:
@@ -86,6 +95,7 @@ Allowed producer data:
 - validated findings/comments with allowlisted relative paths and line numbers;
 - provider/model labels;
 - deterministic review key.
+- one compact visible review paragraph, at most three sentences and 700 characters;
 - optional closed companion fields: pet ID label, personality, mood, XP, completed-review count, and static utterance;
 - optional independently validated summary advisory and exact summary quote/offset metadata.
 
@@ -102,7 +112,9 @@ Forbidden producer data:
 
 Every newly produced v2 event stores `worker_summary: null`. The `--include-worker-summary` option exists only for bounded local compatibility with a still-retained v1 event created by an older producer. It cannot cause a new event to store the summary. The projection closes and reconstructs every field rather than forwarding arbitrary stored properties. Terminal and bidi controls are escaped again at the adapter boundary.
 
-Consumers must render every string as untrusted text, never HTML or executable content. They cannot inject events, call a provider, alter review mode/evidence, or control the native Codex pet through this protocol.
+The compact `detail` is presentation, not the authoritative review record. The automatic private receipt retains the validated structured findings, comments, attribution, partial connection failures, and grounding needed for bounded crash recovery. Renderer consumers may receive the allowlisted bounded review projection while the event is retained, but must not infer that native pet speech contains it.
+
+Consumers must render every string as untrusted text, never HTML or executable content. They cannot inject events, call a provider, alter review mode/evidence, read the screen, or control the native Codex pet through this protocol. Public plugin APIs do not support arbitrary Buddy text inside the native pet bubble.
 
 ## Retention and restart behavior
 

@@ -114,3 +114,74 @@ test('expected mode revisions prevent stale setup writes under the mode lock', a
   assert.equal(current.enabled, true);
   assert.equal(current.config_revision, 1);
 });
+
+test('generic enable and toggle remain final-only until continuous review is explicitly authorized', async () => {
+  const options = await fixture();
+  const enabled = await changeMode({ ...options, action: 'enable' });
+  assert.equal(enabled.continuous_review_enabled, false);
+  assert.equal(enabled.continuous_review_consented_at, null);
+
+  const disabled = await changeMode({ ...options, action: 'toggle' });
+  assert.equal(disabled.enabled, false);
+  assert.equal(disabled.continuous_review_enabled, false);
+  assert.equal(disabled.continuous_review_consented_at, null);
+
+  const toggledOn = await changeMode({ ...options, action: 'toggle' });
+  assert.equal(toggledOn.enabled, true);
+  assert.equal(toggledOn.continuous_review_enabled, false);
+  assert.equal(toggledOn.continuous_review_consented_at, null);
+});
+
+test('explicit continuous review records canonical purpose-specific consent and final-only clears it', async () => {
+  const options = await fixture();
+  const enabled = await changeMode({ ...options, action: 'enable', continuousReview: true });
+  assert.equal(enabled.continuous_review_enabled, true);
+  const consentMilliseconds = Date.parse(enabled.continuous_review_consented_at);
+  assert.equal(Number.isFinite(consentMilliseconds), true);
+  assert.equal(new Date(consentMilliseconds).toISOString(), enabled.continuous_review_consented_at);
+
+  const finalOnly = await changeMode({
+    ...options,
+    action: 'enable',
+    continuousReview: false,
+    expectedRevision: enabled.config_revision
+  });
+  assert.equal(finalOnly.enabled, true);
+  assert.equal(finalOnly.continuous_review_enabled, false);
+  assert.equal(finalOnly.continuous_review_consented_at, null);
+});
+
+test('legacy v2 and ambiguous v3 policy records migrate final-only', async () => {
+  for (const policyVersion of ['2', '3']) {
+    const options = await fixture();
+    const current = await readMode(options);
+    const file = modeFile(options.root, options.dataDir);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `${JSON.stringify({
+      ...current,
+      policy_version: policyVersion,
+      enabled: true,
+      continuous_review_enabled: true,
+      continuous_review_consented_at: '2026-07-20T00:00:00.000Z'
+    })}\n`, { mode: 0o600 });
+
+    const migrated = await readMode(options);
+    assert.equal(migrated.policy_version, '4');
+    assert.equal(migrated.enabled, true);
+    assert.equal(migrated.continuous_review_enabled, false);
+    assert.equal(migrated.continuous_review_consented_at, null);
+  }
+});
+
+test('enabled continuous mode rejects missing, malformed, or noncanonical consent timestamps', async () => {
+  for (const consent of [null, 'not-a-date', '2026-07-20T00:00:00Z']) {
+    const options = await fixture();
+    const current = await changeMode({ ...options, action: 'enable', continuousReview: true });
+    const file = modeFile(options.root, options.dataDir);
+    await writeFile(file, `${JSON.stringify({
+      ...current,
+      continuous_review_consented_at: consent
+    })}\n`, { mode: 0o600 });
+    await assert.rejects(readMode(options), /continuous review (?:consent|requires explicit consent)/);
+  }
+});

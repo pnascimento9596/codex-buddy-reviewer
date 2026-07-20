@@ -58,6 +58,8 @@ test('setup CLI keeps plan options separate from immutable apply and rollback id
   });
   assert.equal(parseSetupArgs(['plan', '--provider', 'opencode']).provider, 'opencode');
   assert.equal(parseSetupArgs(['plan', '--single-reviewer']).singleReviewer, true);
+  assert.equal(parseSetupArgs(['plan', '--continuous-review']).continuousReview, true);
+  assert.equal(parseSetupArgs(['plan', '--no-continuous-review']).continuousReview, false);
   assert.equal(parseSetupArgs([
     'apply', '--plan-id', 'plan-1', '--plan-digest', 'a'.repeat(64)
   ]).action, 'apply');
@@ -66,6 +68,16 @@ test('setup CLI keeps plan options separate from immutable apply and rollback id
       'apply', '--plan-id', 'plan-1', '--plan-digest', 'a'.repeat(64), '--provider', 'grok'
     ]),
     /--provider is only valid for setup plan/
+  );
+  assert.throws(
+    () => parseSetupArgs(['plan', '--continuous-review', '--no-continuous-review']),
+    /cannot be combined/
+  );
+  assert.throws(
+    () => parseSetupArgs([
+      'apply', '--plan-id', 'plan-1', '--plan-digest', 'a'.repeat(64), '--continuous-review'
+    ]),
+    /only valid for setup plan/
   );
   assert.throws(
     () => parseSetupArgs(['plan', '--plan-id', 'plan-1']),
@@ -190,6 +202,9 @@ test('setup applies the pet first, enables review last, and rolls both back safe
   });
   assert.equal(plan.manual_host_steps.some((step) => /hook trust/i.test(step)), true);
   assert.equal(plan.manual_host_steps.some((step) => /\/pet/i.test(step)), true);
+  assert.equal(plan.desired_mode.continuous_review_enabled, false);
+  assert.equal(plan.desired_mode.continuous_review_consented_at, null);
+  assert.match(renderSetupCommand({ action: 'plan', result: plan }), /Continuous review: OFF \(final-only\)/);
 
   const applied = await applySetupPlan(setupOptions(fixture, {
     planId: plan.plan_id,
@@ -198,6 +213,10 @@ test('setup applies the pet first, enables review last, and rolls both back safe
   assert.equal(applied.outcome, 'applied');
   assert.equal(applied.pet_result.action, 'installed');
   assert.equal((await readMode({ root: plan.workspace_root, dataDir: fixture.dataDir })).enabled, true);
+  assert.equal(
+    (await readMode({ root: plan.workspace_root, dataDir: fixture.dataDir })).continuous_review_enabled,
+    false
+  );
   const target = path.join(fixture.codexHome, 'pets', 'buddy-byte');
   assert.deepEqual(await readFile(path.join(target, 'spritesheet.webp')), fixture.sprite);
   assert.deepEqual((await planFiles(fixture.dataDir, plan.plan_id)).sort(), [
@@ -365,9 +384,16 @@ test('rollback never removes a preexisting exact unowned pet', async () => {
 test('setup and rollback preserve an already-enabled matching review mode without revision churn', async () => {
   const fixture = await fixtureCatalog();
   const workspaceRoot = await realpath(fixture.workspace);
-  const before = await changeMode({ root: workspaceRoot, dataDir: fixture.dataDir, action: 'enable' });
+  const before = await changeMode({
+    root: workspaceRoot,
+    dataDir: fixture.dataDir,
+    action: 'enable',
+    continuousReview: true
+  });
   const plan = await createSetupPlan(setupOptions(fixture));
   assert.equal(plan.steps.find((step) => step.kind === 'review').action, 'none');
+  assert.equal(plan.desired_mode.continuous_review_enabled, true);
+  assert.equal(plan.desired_mode.continuous_review_consented_at, before.continuous_review_consented_at);
   const applied = await applySetupPlan(setupOptions(fixture, {
     planId: plan.plan_id,
     planDigest: plan.plan_digest
@@ -379,6 +405,35 @@ test('setup and rollback preserve an already-enabled matching review mode withou
   }));
   assert.equal(rolledBack.mode_result.config_revision, before.config_revision);
   assert.equal((await readMode({ root: workspaceRoot, dataDir: fixture.dataDir })).enabled, true);
+});
+
+test('setup explicitly binds continuous consent and rollback restores disabled final-only state', async () => {
+  const fixture = await fixtureCatalog();
+  const plan = await createSetupPlan(setupOptions(fixture, {
+    continuousReview: true,
+    nowMs: Date.parse('2026-07-20T12:34:56.000Z')
+  }));
+  assert.equal(plan.desired_mode.continuous_review_enabled, true);
+  assert.equal(plan.desired_mode.continuous_review_consented_at, '2026-07-20T12:34:56.000Z');
+  assert.match(renderSetupCommand({ action: 'plan', result: plan }), /Continuous review: ON/);
+
+  await applySetupPlan(setupOptions(fixture, {
+    planId: plan.plan_id,
+    planDigest: plan.plan_digest,
+    nowMs: Date.parse('2026-07-20T12:35:00.000Z')
+  }));
+  const applied = await readMode({ root: plan.workspace_root, dataDir: fixture.dataDir });
+  assert.equal(applied.continuous_review_enabled, true);
+  assert.equal(applied.continuous_review_consented_at, '2026-07-20T12:34:56.000Z');
+
+  await rollbackSetupPlan(setupOptions(fixture, {
+    planId: plan.plan_id,
+    planDigest: plan.plan_digest
+  }));
+  const restored = await readMode({ root: plan.workspace_root, dataDir: fixture.dataDir });
+  assert.equal(restored.enabled, false);
+  assert.equal(restored.continuous_review_enabled, false);
+  assert.equal(restored.continuous_review_consented_at, null);
 });
 
 test('setup preserves an unchanged ordered two-reviewer mode without revision churn', async () => {
@@ -407,7 +462,9 @@ test('setup preserves an unchanged ordered two-reviewer mode without revision ch
     secondary_effort: 'xhigh',
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
-    timeout_ms: 480_000
+    timeout_ms: 480_000,
+    continuous_review_enabled: false,
+    continuous_review_consented_at: null
   });
   assert.deepEqual(plan.desired_mode, {
     enabled: true,
@@ -419,7 +476,9 @@ test('setup preserves an unchanged ordered two-reviewer mode without revision ch
     secondary_effort: 'xhigh',
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
-    timeout_ms: 480_000
+    timeout_ms: 480_000,
+    continuous_review_enabled: false,
+    continuous_review_consented_at: null
   });
 
   const applied = await applySetupPlan(setupOptions(fixture, {
@@ -443,6 +502,7 @@ test('setup applies both planned reviewer connections and rollback restores the 
     dataDir: fixture.dataDir,
     action: 'enable',
     provider: 'claude',
+    continuousReview: true,
     secondaryProvider: 'grok',
     secondaryModel: 'grok-4.5',
     secondaryEffort: 'xhigh'
@@ -465,7 +525,9 @@ test('setup applies both planned reviewer connections and rollback restores the 
     secondary_effort: 'high',
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
-    timeout_ms: 480_000
+    timeout_ms: 480_000,
+    continuous_review_enabled: true,
+    continuous_review_consented_at: before.continuous_review_consented_at
   });
   assert.match(renderSetupCommand({ action: 'plan', result: plan }), /Primary review connection: opencode/);
   assert.match(renderSetupCommand({ action: 'plan', result: plan }), /Secondary review connection: ollama/);
@@ -479,6 +541,8 @@ test('setup applies both planned reviewer connections and rollback restores the 
     [applied.provider, applied.model, applied.effort],
     ['opencode', 'openai/gpt-5.6', 'medium']
   );
+  assert.equal(applied.continuous_review_enabled, true);
+  assert.equal(applied.continuous_review_consented_at, before.continuous_review_consented_at);
   assert.deepEqual(
     [applied.secondary_provider, applied.secondary_model, applied.secondary_effort],
     ['ollama', 'qwen3-coder:cloud', 'high']
@@ -497,6 +561,8 @@ test('setup applies both planned reviewer connections and rollback restores the 
     [restored.secondary_provider, restored.secondary_model, restored.secondary_effort],
     [before.secondary_provider, before.secondary_model, before.secondary_effort]
   );
+  assert.equal(restored.continuous_review_enabled, true);
+  assert.equal(restored.continuous_review_consented_at, before.continuous_review_consented_at);
 });
 
 test('setup can explicitly clear a secondary reviewer and restores it on rollback', async () => {

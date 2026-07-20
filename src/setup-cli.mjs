@@ -18,6 +18,8 @@ Options:
   --also-model <id>            Plan only: secondary model (default: adapter-specific)
   --also-effort <level>        Plan only: secondary reasoning effort (default: high)
   --single-reviewer            Plan only: clear the secondary reviewer connection
+  --continuous-review          Plan only: authorize bounded intermediate review evidence
+  --no-continuous-review       Plan only: use final-only Stop review
   --confidence <0..1>          Plan only: publication threshold
   --max-patch-bytes <n>        Plan only: sanitized patch cap
   --timeout-seconds <n>        Plan only: reviewer deadline, at most 480 seconds
@@ -46,6 +48,8 @@ export function parseSetupArgs(argv) {
     if (arg === '--help' || arg === '-h') options.help = true;
     else if (arg === '--json') options.json = true;
     else if (arg === '--single-reviewer') options.singleReviewer = true;
+    else if (arg === '--continuous-review') options.continuousReview = true;
+    else if (arg === '--no-continuous-review') options.continuousReview = false;
     else if (values.has(arg)) {
       const value = args[index + 1];
       if (value === undefined || value.startsWith('--')) throw new Error(`${arg} requires a value`);
@@ -79,6 +83,7 @@ export function parseSetupArgs(argv) {
     ['--also-model', options.secondaryModel],
     ['--also-effort', options.secondaryEffort],
     ['--single-reviewer', options.singleReviewer],
+    ['--continuous-review/--no-continuous-review', options.continuousReview],
     ['--confidence', options.minConfidence],
     ['--max-patch-bytes', options.maxPatchBytes],
     ['--timeout-seconds', options.timeoutMs],
@@ -109,6 +114,9 @@ export function parseSetupArgs(argv) {
     || options.secondaryEffort !== undefined
   )) {
     throw new Error('--single-reviewer cannot be combined with --also-provider, --also-model, or --also-effort');
+  }
+  if (args.includes('--continuous-review') && args.includes('--no-continuous-review')) {
+    throw new Error('--continuous-review and --no-continuous-review cannot be combined');
   }
   if (['apply', 'rollback'].includes(action) && (!options.planId || !options.planDigest)) {
     throw new Error(`setup ${action} requires --plan-id and --plan-digest`);
@@ -152,6 +160,7 @@ export async function runSetupCommand(argv, dependencies = {}) {
         secondaryModel: options.secondaryModel,
         secondaryEffort: options.secondaryEffort,
         singleReviewer: options.singleReviewer,
+        continuousReview: options.continuousReview,
         minConfidence: options.minConfidence,
         maxPatchBytes: options.maxPatchBytes,
         timeoutMs: options.timeoutMs,
@@ -181,6 +190,7 @@ export function renderSetupCommand(output) {
     return `Buddy setup plan created\nPlan ID: ${output.result.plan_id}\nPlan digest: ${output.result.plan_digest}\n`
       + `Expires: ${output.result.expires_at}\nPet: ${output.result.pet_id}\n`
       + `Primary review connection: ${primary}\nSecondary review connection: ${secondary}\n`
+      + `Continuous review: ${output.result.desired_mode.continuous_review_enabled ? 'ON' : 'OFF (final-only)'}\n`
       + 'Review the plan, then pass its exact ID and digest to setup apply.\n';
   }
   const steps = output.result.manual_host_steps ?? [];

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import test from 'node:test';
 
-import { readHookInput } from '../hooks/lib/hook-input.mjs';
+import { readHookInput, readJsonObjectInput } from '../hooks/lib/hook-input.mjs';
 import { createHookOutputGuard } from '../src/hook-transport.mjs';
 
 test('hook stdin accepts one bounded identity object and fails closed on malformed input', async () => {
@@ -24,6 +24,23 @@ test('hook stdin accepts one bounded identity object and fails closed on malform
   await assert.rejects(
     readHookInput(Readable.from([Buffer.alloc(33)]), 32),
     /exceeded 32 bytes/
+  );
+});
+
+test('private worker stdin accepts a bounded identity object without hook-only fields', async () => {
+  const fixture = {
+    cwd: '/tmp/workspace',
+    session_id: 'session',
+    turn_id: 'turn',
+    worker_nonce: 'a'.repeat(48)
+  };
+  assert.deepEqual(
+    await readJsonObjectInput(Readable.from([Buffer.from(JSON.stringify(fixture))])),
+    fixture
+  );
+  await assert.rejects(
+    readJsonObjectInput(Readable.from([Buffer.from('[]')])),
+    /must be one JSON object/
   );
 });
 

@@ -33,6 +33,10 @@
       "destination": "scripts/buddy-hook.mjs"
     },
     {
+      "source": "scripts/buddy-pre-review-worker.mjs",
+      "destination": "scripts/buddy-pre-review-worker.mjs"
+    },
+    {
       "source": "scripts/buddy-live-eval.mjs",
       "destination": "scripts/buddy-live-eval.mjs"
     },

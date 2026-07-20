@@ -327,7 +327,8 @@ export async function reviewWithOpenCode({
   run = runProcess,
   cleanupImpl = rm,
   ambient = process.env,
-  monotonicNow = () => performance.now()
+  monotonicNow = () => performance.now(),
+  signal
 }) {
   if (!responseSchema || typeof responseSchema !== 'object' || Array.isArray(responseSchema)) {
     throw new TypeError('OpenCode review requires an explicit response schema');
@@ -433,13 +434,16 @@ export async function reviewWithOpenCode({
           input: prompt,
           protectFromParentDeath: true,
           timeoutMs: inferenceTimeoutMs,
-          maxOutputBytes: MAX_OUTPUT_BYTES
+          maxOutputBytes: MAX_OUTPUT_BYTES,
+          signal
         });
       } catch (error) {
         if (error instanceof ProviderFailure) throw error;
         throw providerFailure({
           provider: 'opencode', model: resolvedModel, stage: 'inference',
-          failureCode: processFailureCode(error), durationMs: elapsed(), cause: error
+          failureCode: error?.kind === 'cancelled' ? 'cancelled' : processFailureCode(error),
+          durationMs: elapsed(), cause: error,
+          safeMessage: error?.kind === 'cancelled' ? 'The provider review was cancelled.' : undefined
         });
       }
 

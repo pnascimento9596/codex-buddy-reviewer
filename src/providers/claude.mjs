@@ -143,7 +143,8 @@ export async function reviewWithClaude({
   platform = process.platform,
   runProcessImpl = runProcess,
   cleanupImpl = rm,
-  monotonicNow = () => performance.now()
+  monotonicNow = () => performance.now(),
+  signal
 }) {
   if (!plainObject(responseSchema)) {
     throw new TypeError('Claude review requires an explicit response schema');
@@ -218,12 +219,15 @@ export async function reviewWithClaude({
         input: prompt,
         protectFromParentDeath: true,
         timeoutMs: remaining,
-        maxOutputBytes: MAX_OUTPUT_BYTES
+        maxOutputBytes: MAX_OUTPUT_BYTES,
+        signal
       });
     } catch (error) {
       throw providerFailure({
         provider: 'claude', model, stage: 'inference',
-        failureCode: processFailureCode(error), durationMs: elapsed(), cause: error
+        failureCode: error?.kind === 'cancelled' ? 'cancelled' : processFailureCode(error),
+        durationMs: elapsed(), cause: error,
+        safeMessage: error?.kind === 'cancelled' ? 'The provider review was cancelled.' : undefined
       });
     }
 

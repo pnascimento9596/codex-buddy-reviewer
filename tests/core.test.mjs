@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { access, chmod, copyFile, readFile, stat, mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
@@ -918,6 +919,73 @@ test('subprocess runner treats early stdin close as a controlled process result'
   assert.equal(result.code, 0);
 });
 
+test('subprocess runner rejects an already-aborted dispatch without launching a provider', async () => {
+  const controller = new AbortController();
+  controller.abort('PRIVATE_ABORT_REASON');
+  await assert.rejects(
+    runProcess('definitely-not-a-real-buddy-provider', [], {
+      timeoutMs: 5_000,
+      signal: controller.signal
+    }),
+    (error) => {
+      assert.equal(error.name, 'AbortError');
+      assert.equal(error.kind, 'cancelled');
+      assert.equal(error.code, 'ABORT_ERR');
+      assert.equal(error.message, 'definitely-not-a-real-buddy-provider was cancelled');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE_ABORT_REASON/);
+      return true;
+    }
+  );
+});
+
+test('AbortSignal cancellation kills the supervised provider process tree', {
+  skip: process.platform === 'win32',
+  timeout: 10_000
+}, async () => {
+  const root = await temporaryDirectory('codex-buddy-abort-group-');
+  const provider = path.join(root, 'provider.mjs');
+  const providerPidFile = path.join(root, 'provider.pid');
+  const descendantPidFile = path.join(root, 'descendant.pid');
+  await writeFile(provider, `
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+process.on('SIGTERM', () => {});
+const descendant = spawn(process.execPath, [
+  '-e',
+  'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'
+], { stdio: 'inherit' });
+writeFileSync(process.argv[2], String(process.pid));
+writeFileSync(process.argv[3], String(descendant.pid));
+setInterval(() => {}, 1000);
+`);
+  const controller = new AbortController();
+  const running = runProcess(process.execPath, [provider, providerPidFile, descendantPidFile], {
+    timeoutMs: 8_000,
+    signal: controller.signal
+  });
+  const deadline = Date.now() + 3_000;
+  while (!existsSync(providerPidFile) || !existsSync(descendantPidFile)) {
+    if (Date.now() >= deadline) throw new Error('provider tree did not start before cancellation');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const providerPid = Number(await readFile(providerPidFile, 'utf8'));
+  const descendantPid = Number(await readFile(descendantPidFile, 'utf8'));
+  controller.abort();
+  await assert.rejects(running, (error) => {
+    assert.equal(error.name, 'AbortError');
+    assert.equal(error.kind, 'cancelled');
+    assert.equal(error.code, 'ABORT_ERR');
+    return true;
+  });
+  for (const pid of [providerPid, descendantPid]) {
+    assert.throws(
+      () => process.kill(pid, 0),
+      (error) => error?.code === 'ESRCH',
+      `cancelled provider process ${pid} must be gone before rejection`
+    );
+  }
+});
+
 test('subprocess natural exit force-kills in-group descendants before resolving', {
   skip: process.platform === 'win32'
 }, async () => {
@@ -1106,7 +1174,12 @@ test('real hook entrypoint emits one object and acknowledges a local-only Stop c
   const canonicalRoot = await resolveRepositoryRoot(root);
   const modeDataDir = await temporaryDirectory('codex-buddy-hook-mode-');
   const runtimeDataDir = await temporaryDirectory('codex-buddy-hook-runtime-');
-  await changeMode({ root: canonicalRoot, action: 'enable', dataDir: modeDataDir });
+  await changeMode({
+    root: canonicalRoot,
+    action: 'enable',
+    dataDir: modeDataDir,
+    continuousReview: true
+  });
   const identity = { session_id: 'entrypoint-session', turn_id: 'entrypoint-turn', cwd: canonicalRoot };
   const environment = {
     ...process.env,
@@ -1131,6 +1204,29 @@ test('real hook entrypoint emits one object and acknowledges a local-only Stop c
   assert.equal(startOutput.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   if (process.platform === 'win32') {
     assert.match(startOutput.hookSpecificOutput.additionalContext, /disabled on Windows/);
+  } else {
+    const preReviewFile = path.join(
+      runtimeDataDir,
+      'turns',
+      workspaceKey(canonicalRoot),
+      opaqueKey(identity.session_id),
+      opaqueKey(identity.turn_id),
+      'pre-review.json'
+    );
+    let workerClaimed = false;
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      try {
+        const state = JSON.parse(await readFile(preReviewFile, 'utf8'));
+        if (state.worker_state !== 'starting') {
+          workerClaimed = true;
+          break;
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(workerClaimed, true, 'detached pre-review worker must claim its durable state');
   }
 
   const stopped = await invoke({

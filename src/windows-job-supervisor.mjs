@@ -86,6 +86,21 @@ function checkedTimeout(value) {
   return value;
 }
 
+function assertAbortSignal(signal) {
+  if (signal === undefined) return;
+  if (!(signal instanceof AbortSignal)) {
+    throw containmentError('Windows process cancellation signal must be an AbortSignal', {
+      kind: 'invalid_arguments', stage: 'arguments'
+    });
+  }
+}
+
+function cancellationError(command) {
+  return containmentError(`${command} was cancelled`, {
+    kind: 'cancelled', stage: 'wait_process', code: 'ABORT_ERR'
+  });
+}
+
 export function quoteWindowsArgument(value) {
   if (typeof value !== 'string' || value.includes('\0')) {
     throw new TypeError('Windows command arguments must be strings without NUL bytes');
@@ -438,9 +453,12 @@ export async function runWindowsJobProcess(command, args, options = {}) {
     maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
     acceptedExitCodes = [0],
     encoding = 'utf8',
+    signal,
     helperManifestFile = DEFAULT_HELPER_MANIFEST,
     helperRoot = DEFAULT_HELPER_ROOT
   } = options;
+  assertAbortSignal(signal);
+  if (signal?.aborted) throw cancellationError(command);
   checkedTimeout(timeoutMs);
   if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1) {
     throw containmentError('Windows maximum output bytes must be a positive safe integer', {
@@ -458,6 +476,7 @@ export async function runWindowsJobProcess(command, args, options = {}) {
     manifestFile: helperManifestFile,
     helperRoot
   });
+  if (signal?.aborted) throw cancellationError(command);
   const { token, pipeName } = createWindowsJobControlCredentials();
   const server = net.createServer({ allowHalfOpen: false });
   server.maxConnections = 1;
@@ -498,6 +517,7 @@ export async function runWindowsJobProcess(command, args, options = {}) {
       if (escalation) clearTimeout(escalation);
       process.removeListener('SIGINT', onSigint);
       process.removeListener('SIGTERM', onSigterm);
+      signal?.removeEventListener('abort', onAbort);
       control?.destroy();
       server.close();
     };
@@ -536,6 +556,7 @@ export async function runWindowsJobProcess(command, args, options = {}) {
     );
     const onSigint = () => cancelForSignal('SIGINT');
     const onSigterm = () => cancelForSignal('SIGTERM');
+    const onAbort = () => cancel(cancellationError(command), 'caller');
 
     const maybeFinish = () => {
       if (!childClosed) return;
@@ -731,6 +752,8 @@ export async function runWindowsJobProcess(command, args, options = {}) {
 
     process.once('SIGINT', onSigint);
     process.once('SIGTERM', onSigterm);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
     deadline = setTimeout(() => {
       timedOut = true;
       cancel(containmentError(`${command} exceeded its ${timeoutMs} ms deadline`, {

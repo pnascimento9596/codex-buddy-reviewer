@@ -11,7 +11,9 @@ Use Codex's native floating pet as Buddy's persistent animated presence:
 
 The host persists pet selection, position, size, and open state. During the task, the native pet derives animation from Codex task status: active review remains Running; completed unread output becomes Ready.
 
-With one or two configured reviewers, Buddy publishes local `review_started` events for each executable provider/model lane and one `review_completed` event containing ordered attributed outcomes. A partial result keeps the failed or open lane visible instead of substituting a provider. The companion mood and XP derive from the durable aggregate completion, not from a claim that every reviewer succeeded.
+With one or two configured reviewers, Buddy can begin reviewing stable privacy-filtered repository generations while Codex is still implementing. It publishes local `review_started` events for executable review work and one final `review_completed` event containing ordered attributed outcomes. A partial result keeps the failed or open lane visible instead of substituting a provider. The companion mood and XP derive from the durable exact aggregate completion, not from a speculative generation or a claim that every reviewer succeeded.
+
+Buddy does not watch the screen. The pet remains correct across terminal sizes, desktop layouts, and collapsed updates because review freshness comes from exact private Git checkpoint digests. A snapshot here means repository state, not pixels.
 
 ## Supported boundary
 
@@ -23,7 +25,7 @@ The plugin cannot currently:
 - add new semantic animation-state names;
 - push arbitrary pet speech bubbles or tray messages.
 
-Those actions are private host behavior, not public plugin APIs. Buddy will not patch the app bundle, call private Electron IPC, or use UI automation as a product dependency.
+Those actions are private host behavior, not public plugin APIs. Buddy will not patch the app bundle, call private Electron IPC, or use UI automation as a product dependency. When the exact final result is pending, the transcript/outbox can say `Code review and suggestions are in progress.` The native pet itself continues to communicate only through host-owned animation and Running/Ready task state unless an optional external renderer is used.
 
 ## Packaged companions
 
@@ -102,4 +104,4 @@ Every checked-in sheet is a lossless transparent WebP with the exact V2 dimensio
 
 ## Richer renderer decision
 
-v0.5 intentionally ships no sidecar, GUI process, or network listener. If speech bubbles, finding drill-down, reviewer-specific animations, or delayed background reviews become non-negotiable, a later separately reviewed adapter can consume the versioned outbox protocol. Evidence, consent, provider calls, receipts, and validation must remain in the plugin. See `docs/decisions/0001-no-renderer-sidecar-for-v0.5.md`.
+v0.5 intentionally ships no sidecar, GUI process, or network listener. Continuous review runs inside a bounded detached lifecycle worker and does not require a renderer. If native-like speech bubbles, finding drill-down, or reviewer-specific animation become non-negotiable, a later separately reviewed adapter can consume the versioned outbox protocol. Evidence, consent, provider calls, receipts, and validation must remain in the plugin. See `docs/decisions/0001-no-renderer-sidecar-for-v0.5.md`.

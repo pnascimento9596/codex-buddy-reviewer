@@ -33,6 +33,7 @@ import {
   privacyFragmentFingerprints
 } from './privacy-fragments.mjs';
 import { scanSecretMaterial } from './secret-scan.mjs';
+import { canonicalJson } from './state.mjs';
 
 const DEFAULT_MAX_SNAPSHOT_FILE_BYTES = 64 * 1024 * 1024;
 const MAX_GIT_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -374,6 +375,18 @@ function snapshotSignature(snapshot) {
     line_counts: snapshot.line_counts,
     status_hash: snapshot.status_hash
   }));
+}
+
+export function turnSnapshotDigest(snapshot) {
+  return snapshotSignature(snapshot);
+}
+
+export function turnEvidenceDigest(evidence) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    throw new TypeError('turn evidence must be one object');
+  }
+  const { review_id: _reviewId, captured_at: _capturedAt, ...stable } = evidence;
+  return sha256(canonicalJson(stable));
 }
 
 async function captureOnce({ root, objectDir, workDir, maxFileBytes, privacySalt }) {
