@@ -19,10 +19,15 @@ import {
   providerResult
 } from '../src/provider-contract.mjs';
 import { approveProviderReviewRequest } from '../src/provider-registry.mjs';
-import { buildGrokProviderEnvironment, reviewWithGrok } from '../src/providers/grok.mjs';
+import {
+  buildGrokInferenceProcess,
+  buildGrokProviderEnvironment,
+  reviewWithGrok
+} from '../src/providers/grok.mjs';
 import { buildOllamaProviderEnvironment, reviewWithOllama } from '../src/providers/ollama.mjs';
 import { REVIEW_RESULT_SCHEMA } from '../src/review-schema.mjs';
 import { canonicalJson } from '../src/state.mjs';
+import { runProcess } from '../src/process.mjs';
 
 const temporaryPaths = [];
 
@@ -56,6 +61,68 @@ function grokInventory(overrides = {}) {
     ...overrides
   };
 }
+
+test('Grok inference bridge keeps fixed shell source and provider argv separate', () => {
+  const binary = '/tmp/Grok reviewer; literal/grok';
+  const args = ['--prompt-file', '/dev/fd/0', '--model', 'model with spaces'];
+  const fifoPath = '/tmp/Grok reviewer; literal/prompt.pipe';
+  assert.deepEqual(buildGrokInferenceProcess(binary, args, { platform: 'linux', fifoPath }), {
+    command: '/bin/sh',
+    args: [
+      '-c',
+      `fifo=$1
+mkfifo_bin=$2
+cat_bin=$3
+rm_bin=$4
+shift 4
+"$mkfifo_bin" "$fifo" || exit 125
+exec 3<&0
+"$cat_bin" <&3 > "$fifo" &
+producer=$!
+exec 3<&-
+"$@" < "$fifo"
+consumer_status=$?
+wait "$producer"
+producer_status=$?
+"$rm_bin" -f "$fifo"
+cleanup_status=$?
+if [ "$producer_status" -ne 0 ]; then exit "$producer_status"; fi
+if [ "$cleanup_status" -ne 0 ]; then exit "$cleanup_status"; fi
+exit "$consumer_status"`,
+      'buddy-grok-stdin-bridge',
+      fifoPath,
+      '/usr/bin/mkfifo',
+      '/bin/cat',
+      '/bin/rm',
+      binary,
+      ...args
+    ]
+  });
+  assert.deepEqual(buildGrokInferenceProcess(binary, args, { platform: 'win32' }), {
+    command: binary,
+    args
+  });
+});
+
+test('Grok inference bridge rejects a failed prompt producer even when the consumer succeeds', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const fixture = await temporaryDirectory('codex-buddy-grok-producer-failure-');
+  const consumer = path.join(fixture, 'valid-empty-consumer.sh');
+  await writeFile(consumer, '#!/bin/sh\nprintf success\\n\n', { mode: 0o700 });
+  const inference = buildGrokInferenceProcess(consumer, [], {
+    platform: process.platform,
+    fifoPath: path.join(fixture, 'prompt.pipe'),
+    catBinary: '/usr/bin/false'
+  });
+  await assert.rejects(
+    runProcess(inference.command, inference.args, {
+      cwd: fixture,
+      input: 'bounded packet',
+      timeoutMs: 5_000
+    })
+  );
+});
 
 test.after(async () => {
   await Promise.all(temporaryPaths.map((item) => rm(item, { recursive: true, force: true })));
@@ -610,7 +677,7 @@ test('Grok reports a missing executable with a stable safe failure code', async 
       root: fixture,
       prompt: 'packet',
       timeoutMs: 5_000,
-      grokBin: path.join(fixture, 'does-not-exist'),
+      grokBin: path.join(fixture, process.platform === 'win32' ? 'does-not-exist.exe' : 'does-not-exist'),
       grokAuthPath: authPath,
       responseSchema: REVIEW_RESULT_SCHEMA
     }),

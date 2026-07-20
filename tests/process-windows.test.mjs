@@ -5,6 +5,7 @@ import { access, copyFile, mkdtemp, mkdir, readFile, realpath, rm, symlink, writ
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { runProcess } from '../src/process.mjs';
 import {
@@ -19,7 +20,7 @@ import {
   validateWindowsJobHelperClose
 } from '../src/windows-job-supervisor.mjs';
 
-const repositoryRoot = path.resolve(new URL('..', import.meta.url).pathname);
+const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 const windowsSource = path.join(repositoryRoot, 'native', 'windows', 'job-supervisor.c');
 const windowsSupervisorSource = path.join(repositoryRoot, 'src', 'windows-job-supervisor.mjs');
 const initialManifest = path.join(repositoryRoot, 'native', 'windows', 'helpers.json');

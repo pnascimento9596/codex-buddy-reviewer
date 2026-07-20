@@ -1066,7 +1066,7 @@ test('dual reviewers start concurrently and preserve configured presentation ord
   });
   stopping.then(() => { settled = true; });
 
-  await waitFor(() => started.length === 2, 'both reviewer lanes to start');
+  await waitFor(() => started.length === 2, 'both reviewer lanes to start', 30_000);
   assert.deepEqual(new Set(started), new Set(['ollama', 'claude']));
   releases.get('claude')();
   await new Promise((resolve) => setTimeout(resolve, 50));

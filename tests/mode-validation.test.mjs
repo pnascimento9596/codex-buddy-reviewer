@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { changeMode, modeFile, readMode } from '../src/mode.mjs';
+import { changeMode, modeFile, readMode, resolveRepositoryRoot } from '../src/mode.mjs';
+import { runProcess } from '../src/process.mjs';
 
 const temporaryPaths = [];
 
@@ -17,6 +18,13 @@ async function fixture() {
   temporaryPaths.push(root);
   return { root: path.join(root, 'workspace'), dataDir: path.join(root, 'state') };
 }
+
+test('repository roots use the host filesystem canonical path form', async () => {
+  const options = await fixture();
+  await mkdir(options.root, { recursive: true });
+  await runProcess('git', ['init', '--quiet'], { cwd: options.root });
+  assert.equal(await resolveRepositoryRoot(options.root), await realpath(options.root));
+});
 
 test('mode accepts bounded model identifiers and closed reasoning efforts', async () => {
   const options = await fixture();

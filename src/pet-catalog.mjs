@@ -553,7 +553,7 @@ async function assertSafeTransactionPathAncestors(intent, petsRoot) {
 }
 
 async function syncFile(file) {
-  const handle = await open(file, 'r');
+  const handle = await open(file, 'r+');
   try {
     await handle.sync();
   } finally {

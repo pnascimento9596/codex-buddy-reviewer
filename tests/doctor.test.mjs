@@ -14,6 +14,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { explicitProviderCheck, parseDoctorArgs } from '../src/doctor-cli.mjs';
 import { runDoctor } from '../src/doctor.mjs';
@@ -26,7 +27,7 @@ import {
 import { workspaceKey } from '../src/state.mjs';
 import { summaryClaimGuardConsentFile } from '../src/summary-claim-guard.mjs';
 
-const repositoryRoot = path.resolve(new URL('..', import.meta.url).pathname);
+const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 const temporaryPaths = [];
 
 test('doctor CLI keeps provider use explicit and bounds its deadline', () => {

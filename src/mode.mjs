@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { realpath } from 'node:fs/promises';
 import {
   drainEgressCapabilities,
   snapshotActiveEgressCapabilities
@@ -155,7 +156,7 @@ function validateMode(mode, root, options = {}) {
 
 export async function resolveRepositoryRoot(cwd = process.cwd()) {
   const result = await runProcess('git', ['rev-parse', '--show-toplevel'], { cwd, timeoutMs: 30_000 });
-  return result.stdout.trim();
+  return realpath(result.stdout.trim());
 }
 
 export function modeFile(root, dataDir) {

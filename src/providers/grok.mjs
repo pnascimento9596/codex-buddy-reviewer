@@ -17,6 +17,31 @@ const GROK_INERT_BUILTIN_AGENTS = Object.freeze([
   'general-purpose',
   'plan'
 ]);
+const GROK_POSIX_BRIDGE_BINARIES = Object.freeze([
+  '/bin/sh',
+  '/bin/cat',
+  '/usr/bin/mkfifo',
+  '/bin/rm'
+]);
+const GROK_POSIX_BRIDGE_SCRIPT = `fifo=$1
+mkfifo_bin=$2
+cat_bin=$3
+rm_bin=$4
+shift 4
+"$mkfifo_bin" "$fifo" || exit 125
+exec 3<&0
+"$cat_bin" <&3 > "$fifo" &
+producer=$!
+exec 3<&-
+"$@" < "$fifo"
+consumer_status=$?
+wait "$producer"
+producer_status=$?
+"$rm_bin" -f "$fifo"
+cleanup_status=$?
+if [ "$producer_status" -ne 0 ]; then exit "$producer_status"; fi
+if [ "$cleanup_status" -ne 0 ]; then exit "$cleanup_status"; fi
+exit "$consumer_status"`;
 
 function isExactInertBuiltinAgentInventory(value) {
   if (!Array.isArray(value)) return false;
@@ -49,6 +74,42 @@ async function resolveGrokBin(explicit) {
   } catch {
     return 'grok';
   }
+}
+
+export function buildGrokInferenceProcess(binary, args, {
+  platform = process.platform,
+  fifoPath,
+  shellBinary = GROK_POSIX_BRIDGE_BINARIES[0],
+  catBinary = GROK_POSIX_BRIDGE_BINARIES[1],
+  mkfifoBinary = GROK_POSIX_BRIDGE_BINARIES[2],
+  rmBinary = GROK_POSIX_BRIDGE_BINARIES[3]
+} = {}) {
+  if (typeof binary !== 'string' || binary.length === 0) {
+    throw new TypeError('Grok binary must be non-empty text');
+  }
+  if (!Array.isArray(args) || !args.every((argument) => typeof argument === 'string')) {
+    throw new TypeError('Grok arguments must be an array of text');
+  }
+  if (platform === 'win32') {
+    return Object.freeze({ command: binary, args: Object.freeze([...args]) });
+  }
+  if (typeof fifoPath !== 'string' || !path.isAbsolute(fifoPath)) {
+    throw new TypeError('Grok POSIX bridge FIFO must be an absolute path');
+  }
+  return Object.freeze({
+    command: shellBinary,
+    args: Object.freeze([
+      '-c',
+      GROK_POSIX_BRIDGE_SCRIPT,
+      'buddy-grok-stdin-bridge',
+      fifoPath,
+      mkfifoBinary,
+      catBinary,
+      rmBinary,
+      binary,
+      ...args
+    ])
+  });
 }
 
 export function buildGrokProviderEnvironment({
@@ -208,6 +269,19 @@ sessions = false
     remainingTimeout('preflight');
     const env = buildGrokProviderEnvironment({ isolatedHome, grokHome, authPath });
 
+    if (process.platform !== 'win32') {
+      try {
+        await Promise.all(GROK_POSIX_BRIDGE_BINARIES.map((file) => access(file, constants.X_OK)));
+      } catch (error) {
+        throw providerFailure({
+          provider: 'grok', model: resolvedModel, stage: 'preflight',
+          failureCode: 'isolation_failed', durationMs: elapsed(),
+          safeMessage: 'POSIX Grok prompt bridge is unavailable', cause: error
+        });
+      }
+      remainingTimeout('preflight');
+    }
+
     const inspections = [];
     const inspect = async () => {
       try {
@@ -306,7 +380,10 @@ sessions = false
     let result;
     try {
       const inferenceTimeoutMs = remainingTimeout('inference');
-      result = await runProcess(binary, args, {
+      const inference = buildGrokInferenceProcess(binary, args, {
+        fifoPath: path.join(tempDir, '.grok-prompt.pipe')
+      });
+      result = await runProcess(inference.command, inference.args, {
         cwd: tempDir,
         env,
         input: process.platform === 'win32' ? undefined : prompt,

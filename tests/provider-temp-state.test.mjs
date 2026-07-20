@@ -18,6 +18,7 @@ import test from 'node:test';
 import {
   cleanupProviderTempRun,
   createProviderTempRun,
+  providerTempIdentitiesMatch,
   providerTempParent,
   purgeWorkspaceProviderTempRuns,
   PROVIDER_TEMP_TREE_ENTRY_LIMIT,
@@ -49,6 +50,16 @@ function deterministicRandom(...bytes) {
 }
 
 const DEFAULT_ROOT = '/private/test/provider-temp-workspace';
+
+test('provider temporary identity requires positive stable creation time', () => {
+  const identity = { dev: 1n, ino: 2n, birthtimeNs: 3n };
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity }), true);
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, birthtimeNs: 4n }), false);
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, birthtimeNs: 0n }), false);
+  assert.equal(providerTempIdentitiesMatch({ ...identity, birthtimeNs: 0n }, identity), false);
+  assert.equal(providerTempIdentitiesMatch(identity, { dev: 1n, ino: 2n }), false);
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, ino: 5n }), false);
+});
 
 function createTempRun(options = {}) {
   return createProviderTempRun({
@@ -96,8 +107,8 @@ test('provider temporary runs use a private parent, minimal marker, and injected
     run_id: '11'.repeat(16),
     pid: 4321,
     created_at: new Date(createdAt).toISOString(),
-    workspace_key: workspaceKey(DEFAULT_ROOT),
-    workspace_sha256: createHash('sha256').update(DEFAULT_ROOT).digest('hex'),
+    workspace_key: workspaceKey(path.resolve(DEFAULT_ROOT)),
+    workspace_sha256: createHash('sha256').update(path.resolve(DEFAULT_ROOT)).digest('hex'),
     provider: 'claude'
   });
 
@@ -134,7 +145,11 @@ test('a new provider run removes only stale marked runs owned by a dead PID', as
     processAliveImpl: () => false,
     randomBytesImpl: deterministicRandom(0x31, 0x32)
   });
-  await assert.rejects(access(stale.directory));
+  if (process.platform === 'win32') {
+    await access(stale.directory);
+  } else {
+    await assert.rejects(access(stale.directory));
+  }
   await access(current.directory);
   await cleanupProviderTempRun(current);
 });
@@ -217,9 +232,14 @@ test('stale cleanup preserves live owners and preserves dead owners through the 
     processAliveImpl: (pid) => pid === 2468,
     randomBytesImpl: deterministicRandom(0x44)
   });
-  assert.equal(later.removed, 1);
+  assert.equal(later.removed, process.platform === 'win32' ? 0 : 1);
   await access(live.directory);
-  await assert.rejects(access(fresh.directory));
+  if (process.platform === 'win32') {
+    await access(fresh.directory);
+    await cleanupProviderTempRun(fresh);
+  } else {
+    await assert.rejects(access(fresh.directory));
+  }
   await cleanupProviderTempRun(live);
 });
 

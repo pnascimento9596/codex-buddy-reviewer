@@ -15,6 +15,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { readMode, changeMode } from '../src/mode.mjs';
 import { installPet, removePet } from '../src/pet-catalog.mjs';
@@ -29,7 +30,7 @@ import {
   SETUP_TERMINAL_RETENTION_MS
 } from '../src/setup.mjs';
 
-const repositoryRoot = path.resolve(new URL('..', import.meta.url).pathname);
+const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 const temporaryPaths = [];
 const definitions = [
   ['buddy-byte', 'Byte', 'public'],
