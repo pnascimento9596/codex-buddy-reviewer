@@ -51,14 +51,22 @@ function deterministicRandom(...bytes) {
 
 const DEFAULT_ROOT = '/private/test/provider-temp-workspace';
 
-test('provider temporary identity requires positive stable creation time', () => {
+test('provider temporary identity strengthens stable birth-time platforms without rejecting Linux filesystems', () => {
   const identity = { dev: 1n, ino: 2n, birthtimeNs: 3n };
-  assert.equal(providerTempIdentitiesMatch(identity, { ...identity }), true);
-  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, birthtimeNs: 4n }), false);
-  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, birthtimeNs: 0n }), false);
-  assert.equal(providerTempIdentitiesMatch({ ...identity, birthtimeNs: 0n }, identity), false);
-  assert.equal(providerTempIdentitiesMatch(identity, { dev: 1n, ino: 2n }), false);
-  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, ino: 5n }), false);
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity }, 'darwin'), true);
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, birthtimeNs: 4n }, 'darwin'), false);
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, birthtimeNs: 0n }, 'win32'), false);
+  assert.equal(providerTempIdentitiesMatch({ ...identity, birthtimeNs: 0n }, identity, 'freebsd'), false);
+
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, birthtimeNs: 4n }, 'linux'), true);
+  assert.equal(providerTempIdentitiesMatch(
+    { ...identity, birthtimeNs: 0n },
+    { ...identity, birthtimeNs: 0n },
+    'linux'
+  ), true);
+  assert.equal(providerTempIdentitiesMatch(identity, { dev: 1n, ino: 2n }, 'linux'), true);
+  assert.equal(providerTempIdentitiesMatch(identity, { ...identity, ino: 5n }, 'linux'), false);
+  assert.equal(providerTempIdentitiesMatch(identity, { ino: 2n }, 'linux'), false);
 });
 
 function createTempRun(options = {}) {
