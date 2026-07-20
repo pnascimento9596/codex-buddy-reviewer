@@ -428,7 +428,7 @@ printf '%s\\n' '{"text":"{\\"schema_version\\":\\"1\\",\\"status\\":\\"no_findin
       prompt: 'bounded packet',
       model: 'grok-4.5',
       effort: 'high',
-      timeoutMs: 5_000,
+      timeoutMs: 30_000,
       grokBin: fakeGrok,
       grokAuthPath: authPath,
       responseSchema: REVIEW_RESULT_SCHEMA
@@ -578,6 +578,7 @@ if [ "$1" = "inspect" ]; then
   printf '%s\\n' '${JSON.stringify(grokInventory())}'
   exit 0
 fi
+/bin/cat /dev/fd/0 >/dev/null
 printf '%s\\n' '${JSON.stringify({
     text: JSON.stringify(reviewResult()),
     stopReason: 'EndTurn',
@@ -646,6 +647,7 @@ if [ "$1" = "inspect" ]; then
   printf '%s\\n' '${JSON.stringify(grokInventory())}'
   exit 0
 fi
+/bin/cat /dev/fd/0 >/dev/null
 printf '%s\\n' 'not-json'
 `);
 
