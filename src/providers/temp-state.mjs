@@ -64,6 +64,10 @@ function hasStableCreationIdentity(stat) {
   return typeof stat?.birthtimeNs === 'bigint' && stat.birthtimeNs > 0n;
 }
 
+function requiresStableCreationIdentity(platform) {
+  return ['darwin', 'freebsd', 'win32'].includes(platform);
+}
+
 export function providerTempIdentitiesMatch(left, right, platform = process.platform) {
   if (typeof left?.dev !== 'bigint' || typeof left?.ino !== 'bigint'
       || typeof right?.dev !== 'bigint' || typeof right?.ino !== 'bigint'
@@ -74,7 +78,7 @@ export function providerTempIdentitiesMatch(left, right, platform = process.plat
   // the Unix epoch. Linux filesystems do not expose it consistently, so dev
   // and inode remain the portable identity there. Platforms with dependable
   // creation time get the stronger replacement check.
-  if (!['darwin', 'freebsd', 'win32'].includes(platform)) return true;
+  if (!requiresStableCreationIdentity(platform)) return true;
   return hasStableCreationIdentity(left)
     && hasStableCreationIdentity(right)
     && left.birthtimeNs === right.birthtimeNs;
@@ -119,6 +123,9 @@ async function secureParent(tempBase, platform = process.platform) {
   if (!before.isDirectory() || before.isSymbolicLink() || !ownedByCurrentUser(before)
       || (platform !== 'win32' && !exactMode(before, 0o700))) {
     throw new Error('Buddy provider temporary root is not a secured owned directory');
+  }
+  if (requiresStableCreationIdentity(platform) && !hasStableCreationIdentity(before)) {
+    throw new Error('Buddy provider temporary filesystem does not expose stable creation identity');
   }
   return { parent, identity: before };
 }
