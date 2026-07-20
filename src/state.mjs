@@ -101,7 +101,33 @@ async function syncParentDirectory(file) {
   }
 }
 
-export async function writePrivateJsonAtomic(file, value) {
+const WINDOWS_ATOMIC_RENAME_RETRY_CODES = new Set(['EACCES', 'EBUSY', 'EPERM']);
+const WINDOWS_ATOMIC_RENAME_RETRY_DELAYS_MS = Object.freeze([10, 20, 40, 80, 160]);
+
+async function renamePrivateJsonAtomic(source, destination, {
+  platform,
+  renameImpl,
+  pauseImpl
+}) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await renameImpl(source, destination);
+      return;
+    } catch (error) {
+      const retryable = platform === 'win32'
+        && WINDOWS_ATOMIC_RENAME_RETRY_CODES.has(error?.code)
+        && attempt < WINDOWS_ATOMIC_RENAME_RETRY_DELAYS_MS.length;
+      if (!retryable) throw error;
+      await pauseImpl(WINDOWS_ATOMIC_RENAME_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+}
+
+export async function writePrivateJsonAtomic(file, value, {
+  platform = process.platform,
+  renameImpl = rename,
+  pauseImpl = pause
+} = {}) {
   await ensurePrivateDirectory(path.dirname(file));
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
   let handle;
@@ -111,7 +137,7 @@ export async function writePrivateJsonAtomic(file, value) {
     await handle.sync();
     await handle.close();
     handle = null;
-    await rename(temporary, file);
+    await renamePrivateJsonAtomic(temporary, file, { platform, renameImpl, pauseImpl });
     await chmod(file, 0o600);
     await syncParentDirectory(file);
     return file;

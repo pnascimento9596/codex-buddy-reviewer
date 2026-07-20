@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstat, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -46,4 +46,81 @@ test('private JSON atomic and exclusive writes retain exact data and private mod
     assert.equal((await lstat(atomic)).mode & 0o777, 0o600);
     assert.equal((await lstat(exclusive)).mode & 0o777, 0o600);
   }
+});
+
+test('private JSON atomic replacement retries only bounded Windows sharing conflicts', async () => {
+  const directory = await temporaryDirectory();
+  for (const code of ['EACCES', 'EBUSY', 'EPERM']) {
+    const file = path.join(directory, `${code}.json`);
+    await writePrivateJsonAtomic(file, { revision: 1 });
+    let attempts = 0;
+    const pauses = [];
+    await writePrivateJsonAtomic(file, { revision: 2 }, {
+      platform: 'win32',
+      renameImpl: async (source, destination) => {
+        attempts += 1;
+        if (attempts < 3) {
+          assert.deepEqual(await readPrivateJson(destination), { revision: 1 });
+          throw Object.assign(new Error('synthetic sharing conflict'), { code });
+        }
+        await rename(source, destination);
+      },
+      pauseImpl: async (milliseconds) => { pauses.push(milliseconds); }
+    });
+    assert.equal(attempts, 3, code);
+    assert.deepEqual(pauses, [10, 20], code);
+    assert.deepEqual(await readPrivateJson(file), { revision: 2 }, code);
+  }
+
+  for (const { name, platform, code } of [
+    { name: 'non-Windows sharing conflict', platform: 'linux', code: 'EPERM' },
+    { name: 'non-Windows busy destination', platform: 'darwin', code: 'EBUSY' },
+    { name: 'missing Windows source', platform: 'win32', code: 'ENOENT' },
+    { name: 'cross-device Windows replacement', platform: 'win32', code: 'EXDEV' }
+  ]) {
+    const file = path.join(directory, `${name.replaceAll(' ', '-')}.json`);
+    await writePrivateJsonAtomic(file, { revision: 1 });
+    let rejectedAttempts = 0;
+    const rejectedPauses = [];
+    const expected = Object.assign(new Error(name), { code });
+    await assert.rejects(
+      writePrivateJsonAtomic(file, { revision: 3 }, {
+        platform,
+        renameImpl: async () => {
+          rejectedAttempts += 1;
+          throw expected;
+        },
+        pauseImpl: async (milliseconds) => { rejectedPauses.push(milliseconds); }
+      }),
+      (error) => error === expected
+    );
+    assert.equal(rejectedAttempts, 1, name);
+    assert.deepEqual(rejectedPauses, [], name);
+    assert.deepEqual(await readPrivateJson(file), { revision: 1 }, name);
+  }
+  assert.deepEqual((await readdir(directory)).filter((name) => name.startsWith('.')), []);
+});
+
+test('private JSON atomic replacement stops after its bounded Windows retry budget', async () => {
+  const directory = await temporaryDirectory();
+  const file = path.join(directory, 'atomic.json');
+  await writePrivateJsonAtomic(file, { revision: 1 });
+  let attempts = 0;
+  const pauses = [];
+  const expected = Object.assign(new Error('persistent sharing conflict'), { code: 'EPERM' });
+  await assert.rejects(
+    writePrivateJsonAtomic(file, { revision: 2 }, {
+      platform: 'win32',
+      renameImpl: async () => {
+        attempts += 1;
+        throw expected;
+      },
+      pauseImpl: async (milliseconds) => { pauses.push(milliseconds); }
+    }),
+    (error) => error === expected
+  );
+  assert.equal(attempts, 6);
+  assert.deepEqual(pauses, [10, 20, 40, 80, 160]);
+  assert.deepEqual(await readPrivateJson(file), { revision: 1 });
+  assert.deepEqual(await readdir(directory), ['atomic.json']);
 });

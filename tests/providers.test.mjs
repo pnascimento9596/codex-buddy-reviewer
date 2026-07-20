@@ -781,24 +781,39 @@ if [ "$1" = "inspect" ]; then
   exit 0
 fi
 : > "$record_dir/inference-started"
-sleep 0.5
+/bin/cat .grok-prompt.pipe >/dev/null
+sleep 2
 printf '%s\\n' '${JSON.stringify(reviewResult())}'
 `);
+  const fullBudget = await reviewWithGrok({
+    root: fixture,
+    prompt: 'packet',
+    timeoutMs: 5_000,
+    grokBin: fakeGrok,
+    grokAuthPath: authPath,
+    responseSchema: REVIEW_RESULT_SCHEMA,
+    monotonicNow: () => 0
+  });
+  assert.deepEqual(fullBudget.reviewPayload, reviewResult());
+  await Promise.all([
+    rm(inspected, { force: true }),
+    rm(path.join(fixture, 'inference-started'), { force: true })
+  ]);
   await assert.rejects(
     reviewWithGrok({
       root: fixture,
       prompt: 'packet',
-      timeoutMs: 1_000,
+      timeoutMs: 5_000,
       grokBin: fakeGrok,
       grokAuthPath: authPath,
       responseSchema: REVIEW_RESULT_SCHEMA,
-      monotonicNow: () => (existsSync(inspected) ? 900 : 0)
+      monotonicNow: () => (existsSync(inspected) ? 3_900 : 0)
     }),
     (error) => {
       assert.equal(error instanceof ProviderFailure, true);
       assert.equal(error.failureCode, 'deadline_exceeded');
       assert.equal(error.run.stage, 'inference');
-      assert.equal(error.run.duration_ms, 900);
+      assert.equal(error.run.duration_ms, 3_900);
       return true;
     }
   );
