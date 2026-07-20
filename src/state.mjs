@@ -66,24 +66,29 @@ export async function ensurePrivateStatePath(root, directory = root) {
 }
 
 export async function readPrivateJson(file) {
-  let handle;
-  try {
-    const details = await lstat(file);
-    if (details.isSymbolicLink() || !details.isFile()) {
-      throw new Error(`Buddy private-state file must be a regular non-symlink file: ${file}`);
+  const maximumIdentityAttempts = 3;
+  for (let attempt = 1; attempt <= maximumIdentityAttempts; attempt += 1) {
+    let handle;
+    try {
+      const details = await lstat(file);
+      if (details.isSymbolicLink() || !details.isFile()) {
+        throw new Error(`Buddy private-state file must be a regular non-symlink file: ${file}`);
+      }
+      handle = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+      const opened = await handle.stat();
+      if (!opened.isFile() || opened.dev !== details.dev || opened.ino !== details.ino) {
+        if (attempt < maximumIdentityAttempts) continue;
+        throw new Error(`Buddy private-state file changed while it was being opened: ${file}`);
+      }
+      return JSON.parse(await handle.readFile({ encoding: 'utf8' }));
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    } finally {
+      await handle?.close().catch(() => {});
     }
-    handle = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-    const opened = await handle.stat();
-    if (!opened.isFile() || opened.dev !== details.dev || opened.ino !== details.ino) {
-      throw new Error(`Buddy private-state file changed while it was being opened: ${file}`);
-    }
-    return JSON.parse(await handle.readFile({ encoding: 'utf8' }));
-  } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  } finally {
-    await handle?.close().catch(() => {});
   }
+  throw new Error(`Buddy private-state file identity could not be verified: ${file}`);
 }
 
 async function syncParentDirectory(file) {

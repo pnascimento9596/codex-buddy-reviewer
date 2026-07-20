@@ -2134,7 +2134,9 @@ test('baseline capture budget failure terminalizes the turn with zero provider e
   });
   assert.equal(stopped.skipped, 'duplicate');
   assert.equal(reviewCalls, 0);
-  const completed = (await filesBelow(runtimeDataDir)).find((file) => file.endsWith('/completed.json'));
+  const completed = (await filesBelow(runtimeDataDir)).find(
+    (file) => path.basename(file) === 'completed.json'
+  );
   const terminal = JSON.parse(await readFile(completed, 'utf8'));
   assert.equal(terminal.terminal_status, 'baseline_capture_error');
   assert.equal(JSON.stringify(terminal).includes('file_bytes'), false);
@@ -2181,7 +2183,9 @@ test('expired turn attempts terminalize before pruning and can never replay prov
   await captureTurnStart({ ...identity, hook_event_name: 'UserPromptSubmit', prompt: 'Change it' }, {
     modeDataDir, runtimeDataDir
   });
-  const baselineFile = (await filesBelow(runtimeDataDir)).find((file) => file.endsWith('/baseline.json'));
+  const baselineFile = (await filesBelow(runtimeDataDir)).find(
+    (file) => path.basename(file) === 'baseline.json'
+  );
   const baseline = JSON.parse(await readFile(baselineFile, 'utf8'));
   baseline.snapshot.captured_at = '2020-01-01T00:00:00.000Z';
   await writeFile(baselineFile, `${JSON.stringify(baseline, null, 2)}\n`);
@@ -2318,12 +2322,15 @@ test('mode disable commits visibly, then waits for an issued provider capability
     disableSettled = true;
     return mode;
   });
-  await waitFor(
-    async () => !(await readMode({ root, dataDir: modeDataDir })).enabled,
-    'mode disable to become visible'
-  );
-  assert.equal(disableSettled, false);
-  releaseReview();
+  try {
+    await waitFor(
+      async () => !(await readMode({ root, dataDir: modeDataDir })).enabled,
+      'mode disable to become visible'
+    );
+    assert.equal(disableSettled, false);
+  } finally {
+    releaseReview();
+  }
   const [stopResult, disabled] = await Promise.all([stopPromise, disablePromise]);
   assert.equal(stopResult.output.decision, 'block');
   assert.equal(disabled.enabled, false);
@@ -2382,7 +2389,9 @@ test('delivery tokens distinguish stdout transport flush from host observation',
   assert.match(first.deliveryToken, /^[0-9a-f]{48}$/);
   assert.equal(await markContinuationStdoutWritten(stop, '0'.repeat(48), { runtimeDataDir }), false);
   assert.equal(await markContinuationStdoutWritten(stop, first.deliveryToken, { runtimeDataDir }), true);
-  const completedFile = (await filesBelow(runtimeDataDir)).find((file) => file.endsWith('/completed.json'));
+  const completedFile = (await filesBelow(runtimeDataDir)).find(
+    (file) => path.basename(file) === 'completed.json'
+  );
   assert.equal(JSON.parse(await readFile(completedFile, 'utf8')).presentation_status, 'stdout_written');
 
   const duplicate = await reviewTurnStop(stop, {
@@ -2423,7 +2432,9 @@ test('a durable prior-attempt marker prevents provider replay after an interrupt
   await captureTurnStart({ ...identity, hook_event_name: 'UserPromptSubmit', prompt: 'Change it' }, {
     modeDataDir, runtimeDataDir
   });
-  const baselineFile = (await filesBelow(runtimeDataDir)).find((file) => file.endsWith('/baseline.json'));
+  const baselineFile = (await filesBelow(runtimeDataDir)).find(
+    (file) => path.basename(file) === 'baseline.json'
+  );
   assert.ok(baselineFile);
   await writeFile(path.join(path.dirname(baselineFile), 'attempt.json'), `${JSON.stringify({
     schema_version: '1', review_key: 'a'.repeat(64), started_at: new Date().toISOString()
@@ -2459,7 +2470,9 @@ test('a receipt from a prior attempt is replayed even when later Stop inputs wou
   await captureTurnStart({ ...identity, hook_event_name: 'UserPromptSubmit', prompt: 'Change it' }, {
     modeDataDir, runtimeDataDir
   });
-  const baselineFile = (await filesBelow(runtimeDataDir)).find((file) => file.endsWith('/baseline.json'));
+  const baselineFile = (await filesBelow(runtimeDataDir)).find(
+    (file) => path.basename(file) === 'baseline.json'
+  );
   assert.ok(baselineFile);
   const attemptedReviewKey = 'b'.repeat(64);
   await writeFile(path.join(path.dirname(baselineFile), 'attempt.json'), `${JSON.stringify({
@@ -2513,7 +2526,9 @@ test('a legacy receipt with a credential-shaped model is not replayed or echoed'
   await captureTurnStart({ ...identity, hook_event_name: 'UserPromptSubmit', prompt: 'Change it' }, {
     modeDataDir, runtimeDataDir
   });
-  const baselineFile = (await filesBelow(runtimeDataDir)).find((file) => file.endsWith('/baseline.json'));
+  const baselineFile = (await filesBelow(runtimeDataDir)).find(
+    (file) => path.basename(file) === 'baseline.json'
+  );
   assert.ok(baselineFile);
   const reviewKey = 'd'.repeat(64);
   await writeFile(path.join(path.dirname(baselineFile), 'attempt.json'), `${JSON.stringify({

@@ -9,7 +9,7 @@ import test from 'node:test';
 import { parseArgs, reviewEvidence as reviewEvidenceImpl, runReview } from '../src/cli.mjs';
 import { collectEvidence } from '../src/evidence.mjs';
 import { escapeDiagnosticLine, escapeTerminalControls, pathPolicy } from '../src/policy.mjs';
-import { changeMode } from '../src/mode.mjs';
+import { changeMode, resolveRepositoryRoot } from '../src/mode.mjs';
 import { buildReviewPrompt } from '../src/prompt.mjs';
 import { renderHuman } from '../src/render.mjs';
 import { runProcess } from '../src/process.mjs';
@@ -605,7 +605,9 @@ test('default receipt stores hashes and metadata but omits patch and stderr text
   assert.deepEqual(storedEvidence.excluded_paths, []);
   assert.doesNotMatch(JSON.stringify(storedEvidence), /\.env|receipt-path-must-not-persist/);
   assert.doesNotMatch(storedRunText, /sensitive diagnostic text/);
-  assert.equal((await stat(path.join(reviewDir, 'result.json'))).mode & 0o777, 0o600);
+  const resultDetails = await stat(path.join(reviewDir, 'result.json'));
+  assert.equal(resultDetails.isFile(), true);
+  if (process.platform !== 'win32') assert.equal(resultDetails.mode & 0o777, 0o600);
 });
 
 test('receipt persistence rejects a credential-shaped model before creating review state', async () => {
@@ -1084,7 +1086,7 @@ await runProcess(process.execPath, [process.argv[2], process.argv[3]], { timeout
 
 test('real hook entrypoint emits one object and acknowledges a local-only Stop continuation', async () => {
   const root = await makeRepository();
-  const canonicalRoot = (await git(root, ['rev-parse', '--show-toplevel'])).stdout.trim();
+  const canonicalRoot = await resolveRepositoryRoot(root);
   const modeDataDir = await temporaryDirectory('codex-buddy-hook-mode-');
   const runtimeDataDir = await temporaryDirectory('codex-buddy-hook-runtime-');
   await changeMode({ root: canonicalRoot, action: 'enable', dataDir: modeDataDir });

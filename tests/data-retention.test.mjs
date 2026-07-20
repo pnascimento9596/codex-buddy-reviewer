@@ -119,7 +119,7 @@ test('real workspace mode must be disabled before content can be purged', async 
   const dataDir = await temporaryDirectory('buddy-retention-mode-data-');
   const runtimeDataDir = await temporaryDirectory('buddy-retention-mode-runtime-');
   const providerTempBase = await temporaryDirectory('buddy-retention-mode-provider-');
-  const root = '/private/test/retention-mode-repository';
+  const root = path.resolve('/private/test/retention-mode-repository');
   const receipt = path.join(dataDir, 'reviews', workspaceKey(root), 'manual-review', 'result.json');
   await mkdir(path.dirname(receipt), { recursive: true });
   await writeFile(receipt, '{"private":"content"}\n');
@@ -146,7 +146,7 @@ test('include-settings removes the drained workspace egress registry through the
   const dataDir = await temporaryDirectory('buddy-retention-egress-data-');
   const runtimeDataDir = await temporaryDirectory('buddy-retention-egress-runtime-');
   const providerTempBase = await temporaryDirectory('buddy-retention-egress-provider-');
-  const root = '/private/test/retention-egress-repository';
+  const root = path.resolve('/private/test/retention-egress-repository');
   const egressDirectory = path.join(dataDir, 'egress', workspaceKey(root));
   await mkdir(egressDirectory, { recursive: true });
   await writeFile(path.join(egressDirectory, 'active.json'), `${JSON.stringify({
@@ -165,7 +165,7 @@ test('workspace purge removes content and legacy outbox state but retains conten
   const dataDir = await temporaryDirectory('buddy-retention-data-');
   const runtimeDataDir = await temporaryDirectory('buddy-retention-runtime-');
   const providerTempBase = await temporaryDirectory('buddy-retention-provider-');
-  const root = '/private/test/retention-repository';
+  const root = path.resolve('/private/test/retention-repository');
   const workspace = workspaceKey(root);
   const reviewKey = 'd'.repeat(64);
 
@@ -288,7 +288,7 @@ test('workspace purge refuses symlinked state ancestors without touching their d
   const runtimeDataDir = await temporaryDirectory('buddy-retention-link-runtime-');
   const providerTempBase = await temporaryDirectory('buddy-retention-link-provider-');
   const outside = await temporaryDirectory('buddy-retention-link-outside-');
-  const root = '/private/test/retention-link-repository';
+  const root = path.resolve('/private/test/retention-link-repository');
   const sentinel = path.join(outside, 'sentinel.txt');
   await writeFile(sentinel, 'must remain\n');
   await symlink(outside, path.join(dataDir, 'reviews'));
@@ -305,7 +305,7 @@ test('workspace purge recursively rejects a nested turn symlink before deleting 
   const runtimeDataDir = await temporaryDirectory('buddy-retention-nested-link-runtime-');
   const providerTempBase = await temporaryDirectory('buddy-retention-nested-link-provider-');
   const outside = await temporaryDirectory('buddy-retention-nested-link-outside-');
-  const root = '/private/test/retention-nested-link-repository';
+  const root = path.resolve('/private/test/retention-nested-link-repository');
   const workspace = workspaceKey(root);
   const manualReceipt = path.join(dataDir, 'reviews', workspace, 'manual-review', 'result.json');
   const turnWorkspace = path.join(runtimeDataDir, 'turns', workspace);
@@ -329,7 +329,7 @@ test('workspace purge preflights preserved settings before deleting review conte
   const runtimeDataDir = await temporaryDirectory('buddy-retention-setting-link-runtime-');
   const providerTempBase = await temporaryDirectory('buddy-retention-setting-link-provider-');
   const outside = await temporaryDirectory('buddy-retention-setting-link-outside-');
-  const root = '/private/test/retention-setting-link-repository';
+  const root = path.resolve('/private/test/retention-setting-link-repository');
   const workspace = workspaceKey(root);
   const manualReceipt = path.join(dataDir, 'reviews', workspace, 'manual', 'result.json');
   const presentationRoot = path.join(dataDir, 'presentation');

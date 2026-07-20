@@ -500,6 +500,18 @@ test('Windows output limits terminate the whole provider Job', {
   }
 });
 
+test('Windows Job treats an intentional early stdin close as a controlled process result', {
+  skip: process.platform !== 'win32'
+}, async () => {
+  const helperOptions = await runtimeHelperOptions();
+  const result = await runWindowsJobProcess(process.execPath, ['-e', 'process.exit(0)'], {
+    ...helperOptions,
+    input: 'x'.repeat(8 * 1024 * 1024),
+    timeoutMs: 10_000
+  });
+  assert.equal(result.code, 0);
+});
+
 test('Windows natural provider exit kills descendants instead of leaving stdout handles or work behind', {
   skip: process.platform !== 'win32'
 }, async () => {

@@ -438,7 +438,7 @@ test('symlink aliases of one Codex home share one ownership registry and lock do
   assert.equal(reconciled.action, 'already_installed');
   assert.equal(
     (await filesBelow(path.join(fixture.dataDir, 'pets', 'homes')))
-      .filter((file) => file.endsWith('/installed.json')).length,
+      .filter((file) => path.basename(file) === 'installed.json').length,
     1
   );
   await removePet('buddy-byte', alias);
@@ -607,7 +607,9 @@ test('pet status distinguishes installed, modified, and missing packages', async
 test('malformed registry backup paths are rejected before path operations', async () => {
   const fixture = await fixtureCatalog();
   await installPet('buddy-byte', fixture);
-  const registryFile = (await filesBelow(fixture.dataDir)).find((file) => file.endsWith('/installed.json'));
+  const registryFile = (await filesBelow(fixture.dataDir)).find(
+    (file) => path.basename(file) === 'installed.json'
+  );
   assert.ok(registryFile);
   const registry = JSON.parse(await readFile(registryFile, 'utf8'));
   const backupId = `1700000000000-00000000-0000-4000-8000-000000000000`;

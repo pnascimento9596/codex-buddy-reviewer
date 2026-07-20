@@ -261,7 +261,7 @@ function runResolvedProcess(command, args, options = {}) {
     child.stdin.on('error', (error) => {
       // A process may intentionally stop reading before a large prompt is fully
       // written. Its exit status remains the authoritative result in that case.
-      if (error.code !== 'EPIPE') {
+      if (!['EPIPE', 'EOF'].includes(error.code)) {
         forcedError = error;
         stopChild();
       }

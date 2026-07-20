@@ -129,8 +129,14 @@ async function replaceByteSprite(fixture, bytes) {
 
 async function transactionDirectories(dataDir) {
   const files = await filesBelow(dataDir);
+  const stepFiles = new Set([
+    '00-intent.json',
+    '10-filesystem-committed.json',
+    '20-registry-committed.json',
+    '30-complete.json'
+  ]);
   return [...new Set(files
-    .filter((file) => /\/(?:00-intent|10-filesystem-committed|20-registry-committed|30-complete)\.json$/.test(file))
+    .filter((file) => stepFiles.has(path.basename(file)))
     .map((file) => path.dirname(file)))].sort();
 }
 
@@ -178,7 +184,8 @@ await updatePet('buddy-byte', {
   assert.deepEqual(exit, { code: 91, signal: null }, stderr);
 
   const staleClaims = (await filesBelow(fixture.dataDir)).filter(
-    (file) => /installed\.json\.lock\/claim-.+\.json$/.test(file)
+    (file) => path.basename(path.dirname(file)) === 'installed.json.lock'
+      && /^claim-.+\.json$/.test(path.basename(file))
   );
   assert.equal(staleClaims.length, 1);
   await utimes(staleClaims[0], new Date(0), new Date(0));
@@ -228,7 +235,9 @@ test('install writes all immutable transaction steps and preserves registry sche
     '20-registry-committed.json',
     '30-complete.json'
   ]);
-  const registryFile = (await filesBelow(fixture.dataDir)).find((file) => file.endsWith('/installed.json'));
+  const registryFile = (await filesBelow(fixture.dataDir)).find(
+    (file) => path.basename(file) === 'installed.json'
+  );
   const registry = JSON.parse(await readFile(registryFile, 'utf8'));
   assert.equal(registry.schema_version, '1');
   assert.equal(registry.installed['buddy-byte'].spritesheet_sha256, hash(fixture.sprite));
@@ -444,7 +453,11 @@ test('transaction journals are isolated by canonical Codex home', async () => {
   const alternate = { ...fixture, codexHome: path.join(fixture.root, 'alternate-codex') };
   await installPet('buddy-byte', fixture);
   await installPet('buddy-byte', alternate);
-  const intentFiles = (await filesBelow(fixture.dataDir)).filter((file) => file.endsWith('/00-intent.json'));
-  const homeRoots = new Set(intentFiles.map((file) => file.split('/transactions/')[0]));
+  const intentFiles = (await filesBelow(fixture.dataDir)).filter(
+    (file) => path.basename(file) === '00-intent.json'
+  );
+  const homeRoots = new Set(intentFiles.map(
+    (file) => path.dirname(path.dirname(path.dirname(file)))
+  ));
   assert.equal(homeRoots.size, 2);
 });

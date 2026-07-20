@@ -717,7 +717,7 @@ export async function runWindowsJobProcess(command, args, options = {}) {
       stderrBytes = appendBounded(stderr, chunk, stderrBytes, maxOutputBytes, 'stderr', cancel);
     });
     child.stdin.on('error', (error) => {
-      if (error.code !== 'EPIPE') cancel(error, 'caller');
+      if (!['EPIPE', 'EOF'].includes(error.code)) cancel(error, 'caller');
     });
     child.on('error', (error) => finish(containmentError('Verified Windows Job Object helper failed to launch', {
       kind: 'containment_unavailable', stage: 'create_process', cause: error
