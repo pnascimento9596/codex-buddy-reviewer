@@ -213,6 +213,9 @@ async function harness(overrides = {}) {
       return { event };
     },
     withSnapshotActivity: async (_directory, callback) => callback(),
+    // Keep the harness independent of platform-specific fs.watch behavior.
+    // Mutation-monitor behavior is injected explicitly by the tests that need it.
+    createMutationMonitor: () => null,
     pause: async (milliseconds) => {
       pauses += 1;
       if (milliseconds > 0) await new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -676,6 +679,70 @@ test('aborts a stale provider batch without publishing a receipt', {
   assert.deepEqual(seed.circuitRecords, []);
   assert.equal(seed.writes.filter(({ file }) => file.includes('pre-review-attempts')).length, 1);
   assert.equal(seed.events.some((event) => ['review_completed', 'review_degraded'].includes(event.type)), false);
+});
+
+test('repository mutation events abort a stale provider batch before fallback polling', {
+  timeout: HANDSHAKE_TEST_TIMEOUT_MS
+}, async () => {
+  let providerSignal = null;
+  let revision = 0;
+  let waitCalls = 0;
+  let closed = false;
+  const mutationMonitor = {
+    get revision() {
+      return revision;
+    },
+    async wait(afterRevision, _timeoutMs, signal) {
+      waitCalls += 1;
+      assert.equal(afterRevision, revision);
+      assert.equal(signal.aborted, false);
+      revision += 1;
+      return revision;
+    },
+    close() {
+      closed = true;
+    }
+  };
+  const seed = await harness({
+    captures: [],
+    noFinalRequest: true,
+    review: async (reviewOptions) => {
+      providerSignal = reviewOptions.signal;
+      return new Promise((resolve, reject) => {
+        reviewOptions.signal.addEventListener('abort', () => {
+          const error = new Error('cancelled by repository mutation event');
+          error.failureCode = 'cancelled';
+          reject(error);
+        }, { once: true });
+      });
+    },
+    options: {
+      checkpointPollMs: 60_000,
+      createMutationMonitor: () => mutationMonitor
+    }
+  });
+  const values = [snapshot(seed.root, '1'), snapshot(seed.root, '1'), snapshot(seed.root, '2')];
+  let index = 0;
+  seed.options.captureSnapshot = async () => {
+    const value = values[index++];
+    if (index === 3) {
+      const current = seed.state();
+      seed.setState({
+        ...current,
+        final_requested: true,
+        final_review_key: 'f'.repeat(64)
+      });
+    }
+    return value;
+  };
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.skipped, 'superseded', result.error?.stack ?? JSON.stringify(result));
+  assert.equal(providerSignal.aborted, true);
+  assert.equal(waitCalls, 1);
+  assert.equal(closed, true);
+  assert.equal(seed.state().worker_state, 'superseded');
+  assert.equal(seed.writes.some(({ file }) => file.includes(`${path.sep}automatic-reviews${path.sep}`)), false);
+  assert.deepEqual(seed.circuitRecords, []);
 });
 
 test('runs at most two stable speculative generations', async () => {
