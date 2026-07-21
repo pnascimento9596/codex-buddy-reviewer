@@ -56,7 +56,16 @@ jobs:
           check-latest: false
 
       - name: Reject non-public reachable history and metadata
-        run: npm run security:publication
+        env:
+          PUBLICATION_ALLOWED_EMAIL: ${{ secrets.PUBLICATION_ALLOWED_EMAIL }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${PUBLICATION_ALLOWED_EMAIL:-}" ]]; then
+            node scripts/check-publication-boundary.mjs \
+              --allow-email "$PUBLICATION_ALLOWED_EMAIL"
+          else
+            npm run security:publication
+          fi
 
       - name: Assert protected ref and release version
         id: release

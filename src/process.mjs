@@ -24,6 +24,14 @@ function cancellationError(command) {
   return error;
 }
 
+function processContainmentError() {
+  const error = new Error('Buddy could not verify provider process containment cleanup');
+  error.name = 'ProcessContainmentError';
+  error.code = 'PROCESS_CONTAINMENT_FAILED';
+  error.kind = 'containment_failure';
+  return error;
+}
+
 function exactKeys(value, expected) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const actual = Object.keys(value).sort();
@@ -130,7 +138,8 @@ function runResolvedProcess(command, args, options = {}) {
     acceptedExitCodes = [0],
     encoding = 'utf8',
     protectFromParentDeath = process.platform !== 'win32',
-    signal
+    signal,
+    processGroupCleanupImpl = forceKillAndWaitForProcessGroup
   } = options;
 
   assertAbortSignal(signal);
@@ -178,6 +187,7 @@ function runResolvedProcess(command, args, options = {}) {
     let spawnErrorReceived = false;
     let groupKillIssued = false;
     let abortFailure = null;
+    let cleanupFailure = null;
 
     const forceKillOnce = () => {
       if (groupKillIssued) return;
@@ -266,7 +276,7 @@ function runResolvedProcess(command, args, options = {}) {
       process.removeListener('SIGINT', onSigint);
       process.removeListener('SIGTERM', onSigterm);
       signal?.removeEventListener('abort', onAbort);
-      if (error) reject(abortFailure ?? error);
+      if (error) reject(cleanupFailure ?? abortFailure ?? error);
       else resolve(result);
     };
 
@@ -326,12 +336,12 @@ function runResolvedProcess(command, args, options = {}) {
           // `close` proves its inherited pipes reached EOF, so do not signal or
           // probe that numeric group id again after the leader has closed.
           if (!supervisorResult) {
-            await forceKillAndWaitForProcessGroup(child, {
+            await processGroupCleanupImpl(child, {
               force: !groupKillIssued
             });
           }
-        } catch (error) {
-          forcedError = error;
+        } catch {
+          cleanupFailure = processContainmentError();
         }
       }
       const stdoutBuffer = Buffer.concat(stdout);
@@ -345,7 +355,9 @@ function runResolvedProcess(command, args, options = {}) {
         stdout: encoding === null ? stdoutBuffer : stdoutBuffer.toString(encoding),
         stderr: encoding === null ? stderrBuffer : stderrBuffer.toString(encoding)
       };
-      if (forcedError) {
+      if (cleanupFailure) {
+        finish(cleanupFailure);
+      } else if (forcedError) {
         finish(forcedError);
       } else if (timedOut) {
         finish(new Error(`${command} exceeded its ${timeoutMs} ms deadline`));

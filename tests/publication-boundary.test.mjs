@@ -102,19 +102,24 @@ async function rejectsWithCode(promise, code) {
   });
 }
 
-test('clean sanitized history with GitHub noreply identities passes', async () => {
+test('clean sanitized history with user and system GitHub noreply identities passes', async () => {
   const root = await fixture({
     'README.md': '# Public fixture\n',
     'src/index.mjs': 'export const ready = true;\n'
   });
+  await writeFile(path.join(root, 'README.md'), '# Public fixture updated\n');
+  await commit(root, noreply, 'GitHub merge fixture', {
+    committerName: 'GitHub',
+    committerEmail: 'noreply@github.com'
+  });
   const result = await checkPublicationBoundary({ root });
   assert.equal(result.ok, true);
   assert.equal(result.mode, 'history');
-  assert.equal(result.reachable_commits, 1);
+  assert.equal(result.reachable_commits, 2);
   assert.equal(result.reachable_refs, 1);
   assert.equal(result.annotated_tags_scanned, 0);
   assert.equal(result.tracked_files, 2);
-  assert.equal(result.text_files_scanned, 2);
+  assert.equal(result.text_files_scanned, 3);
 });
 
 test('reachable private identity fails even when HEAD uses noreply, while explicit safe identities are supported', async () => {

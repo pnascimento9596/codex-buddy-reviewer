@@ -5,7 +5,7 @@ const FAILURE_MESSAGE = Object.freeze({
   auth_unavailable: 'The configured provider authentication is unavailable.',
   deadline_exceeded: 'The provider exceeded its configured deadline.',
   output_limit_exceeded: 'The provider exceeded its configured output limit.',
-  isolation_failed: 'The provider isolation preflight failed closed.',
+  isolation_failed: 'The provider isolation boundary failed closed.',
   invalid_transport_envelope: 'The provider returned an invalid transport envelope.',
   invalid_review_json: 'The provider response was not valid review JSON.',
   invalid_review_schema: 'The provider response did not satisfy the review schema.',
@@ -117,6 +117,7 @@ export function processFailureCode(error) {
   if (error?.kind === 'output_limit') return 'output_limit_exceeded';
   if (new Set([
     'containment_unavailable',
+    'containment_failure',
     'helper_unavailable',
     'integrity_mismatch',
     'architecture_mismatch',
