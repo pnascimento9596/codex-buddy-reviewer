@@ -349,7 +349,8 @@ function pathTextViolation(text) {
 function isSafePublicationEmail(email, safeEmails) {
   const lower = email.toLowerCase();
   const domain = lower.slice(lower.lastIndexOf('@') + 1);
-  return GITHUB_NOREPLY.test(email) || domain === 'invalid' || domain.endsWith('.invalid')
+  return lower === 'noreply@github.com' || GITHUB_NOREPLY.test(email)
+    || domain === 'invalid' || domain.endsWith('.invalid')
     || safeEmails.has(lower);
 }
 
