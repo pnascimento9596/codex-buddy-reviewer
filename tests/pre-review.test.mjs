@@ -8,6 +8,8 @@ import { runPreReviewWorker, startTurnPreReview } from '../src/pre-review.mjs';
 
 const NONCE = 'a'.repeat(48);
 const CONSENTED_AT = '2026-07-20T00:00:00.000Z';
+const HARNESS_WORKER_LIFETIME_MS = 10_000;
+const HANDSHAKE_TEST_TIMEOUT_MS = 15_000;
 
 function mode(root, overrides = {}) {
   return {
@@ -218,6 +220,7 @@ async function harness(overrides = {}) {
     },
     debounceMs: 0,
     checkpointPollMs: 10,
+    workerLifetimeMs: HARNESS_WORKER_LIFETIME_MS,
     ...overrides.options
   };
   const input = {
@@ -353,7 +356,9 @@ test('all-open speculative circuits write an exact failure receipt without provi
   assert.equal(seed.events.some((event) => event.type === 'review_started'), false);
 });
 
-test('background start publication cannot delay consumed provider entry', async () => {
+test('background start publication cannot delay consumed provider entry', {
+  timeout: HANDSHAKE_TEST_TIMEOUT_MS
+}, async () => {
   let releaseEmission;
   let providerEnteredResolve;
   let emissionCalls = 0;
@@ -556,7 +561,9 @@ test('idle worker expires at its injected absolute deadline and releases final f
   assert.equal(seed.writes.some(({ file }) => file.includes(`${path.sep}automatic-reviews${path.sep}`)), false);
 });
 
-test('absolute expiry aborts an in-flight provider without penalizing its circuit', async () => {
+test('absolute expiry aborts an in-flight provider without penalizing its circuit', {
+  timeout: HANDSHAKE_TEST_TIMEOUT_MS
+}, async () => {
   let expireWorker;
   let providerSignal;
   const seed = await harness({
@@ -627,7 +634,9 @@ test('worker lifetime rejects an unbounded 24-hour configuration', async () => {
   );
 });
 
-test('aborts a stale provider batch without publishing a receipt', async () => {
+test('aborts a stale provider batch without publishing a receipt', {
+  timeout: HANDSHAKE_TEST_TIMEOUT_MS
+}, async () => {
   let providerSignal = null;
   const seed = await harness({
     captures: [],

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "review": "node scripts/buddy-review.mjs review",
-    "test": "node --test",
+    "test": "node --test --test-timeout=300000",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:assets": "node scripts/buddy-review.mjs pet list --json",
     "check:atlas-structure": "node scripts/validate-pet-atlases.mjs --json",
