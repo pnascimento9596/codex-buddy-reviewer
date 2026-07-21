@@ -1,0 +1,20 @@
+{
+  "schema_version": "1",
+  "protocol_version": "1",
+  "source": "native/windows/job-supervisor.c",
+  "build": {
+    "toolchain": "MSVC from a Visual Studio 2022 Native Tools command prompt",
+    "x64": "cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:bin\\win32-x64\\buddy-job-supervisor.exe native\\windows\\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT",
+    "arm64": "cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:bin\\win32-arm64\\buddy-job-supervisor.exe native\\windows\\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT"
+  },
+  "helpers": {
+    "win32-x64": {
+      "status": "unavailable",
+      "reason": "No reviewed, hash-pinned Windows x64 helper binary is packaged yet."
+    },
+    "win32-arm64": {
+      "status": "unavailable",
+      "reason": "No reviewed, hash-pinned Windows ARM64 helper binary is packaged yet."
+    }
+  }
+}

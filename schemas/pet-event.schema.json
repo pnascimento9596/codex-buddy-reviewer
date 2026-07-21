@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pnascimento9596/codex-buddy-reviewer/schemas/pet-event.schema.json",
+  "title": "Codex Buddy Pet Event",
+  "oneOf": [
+    { "$ref": "#/$defs/eventV1" },
+    { "$ref": "#/$defs/eventV2" }
+  ],
+  "$defs": {
+    "eventV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "event_type", "workspace_key", "session_key", "turn_key",
+        "review_key", "presentation_state", "payload", "event_id", "occurred_at"
+      ],
+      "properties": {
+        "schema_version": { "const": "1" },
+        "event_type": { "$ref": "#/$defs/eventType" },
+        "workspace_key": { "$ref": "#/$defs/workspaceKey" },
+        "session_key": { "$ref": "#/$defs/opaqueKey" },
+        "turn_key": { "$ref": "#/$defs/opaqueKey" },
+        "review_key": { "$ref": "#/$defs/reviewKey" },
+        "presentation_state": { "$ref": "#/$defs/presentationState" },
+        "payload": { "$ref": "#/$defs/payloadV1" },
+        "event_id": { "$ref": "#/$defs/eventId" },
+        "occurred_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "eventV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "event_type", "workspace_key", "session_key", "turn_key",
+        "review_key", "presentation_state", "payload", "sequence", "event_id", "occurred_at"
+      ],
+      "properties": {
+        "schema_version": { "const": "2" },
+        "event_type": { "$ref": "#/$defs/eventType" },
+        "workspace_key": { "$ref": "#/$defs/workspaceKey" },
+        "session_key": { "$ref": "#/$defs/opaqueKey" },
+        "turn_key": { "$ref": "#/$defs/opaqueKey" },
+        "review_key": { "$ref": "#/$defs/reviewKey" },
+        "presentation_state": { "$ref": "#/$defs/presentationState" },
+        "payload": { "$ref": "#/$defs/payloadV2" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "event_id": { "$ref": "#/$defs/eventId" },
+        "occurred_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "eventType": {
+      "enum": ["mode_changed", "turn_started", "turn_finished", "review_started", "review_completed", "review_degraded"]
+    },
+    "presentationState": {
+      "enum": ["idle", "working", "reviewing", "success", "findings", "abstain", "error"]
+    },
+    "workspaceKey": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "opaqueKey": { "type": "string", "pattern": "^[0-9a-f]{24}$" },
+    "reviewKey": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "eventId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "payloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headline", "detail", "worker_summary", "review"],
+      "properties": {
+        "headline": { "type": ["string", "null"], "maxLength": 240 },
+        "detail": { "type": ["string", "null"], "maxLength": 1600 },
+        "worker_summary": { "type": ["string", "null"], "maxLength": 4000 },
+        "review": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/review" }
+          ]
+        }
+      }
+    },
+    "payloadV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headline", "detail", "worker_summary", "review", "summary_advisory", "companion"],
+      "properties": {
+        "headline": { "type": ["string", "null"], "maxLength": 240 },
+        "detail": { "type": ["string", "null"], "maxLength": 1600 },
+        "worker_summary": { "type": ["string", "null"], "maxLength": 4000 },
+        "review": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/review" }
+          ]
+        },
+        "summary_advisory": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/summaryAdvisory" }
+          ]
+        },
+        "companion": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/companion" }
+          ]
+        },
+        "reviews": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "contains": {
+            "type": "object",
+            "required": ["status"],
+            "properties": { "status": { "const": "succeeded" } }
+          },
+          "minContains": 1,
+          "items": { "$ref": "#/$defs/reviewerOutcome" }
+        }
+      }
+    },
+    "reviewerOutcome": {
+      "oneOf": [
+        { "$ref": "#/$defs/successfulReviewerOutcome" },
+        { "$ref": "#/$defs/failedReviewerOutcome" }
+      ]
+    },
+    "successfulReviewerOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_index", "provider", "model", "status", "result", "failure"],
+      "properties": {
+        "source_index": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "status": { "const": "succeeded" },
+        "result": { "$ref": "#/$defs/reviewerResult" },
+        "failure": { "type": "null" }
+      }
+    },
+    "failedReviewerOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_index", "provider", "model", "status", "result", "failure"],
+      "properties": {
+        "source_index": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "status": { "enum": ["failed", "circuit_open"] },
+        "result": { "type": "null" },
+        "failure": { "$ref": "#/$defs/reviewerFailure" }
+      }
+    },
+    "reviewerFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "failure_code", "message"],
+      "properties": {
+        "stage": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 64 },
+        "failure_code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 64 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 240 }
+      }
+    },
+    "reviewerResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary", "findings", "comments"],
+      "properties": {
+        "status": { "enum": ["findings", "no_findings", "abstain"] },
+        "summary": { "type": "string", "maxLength": 800 },
+        "findings": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/finding" }
+        },
+        "comments": {
+          "type": "array",
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/comment" }
+        }
+      }
+    },
+    "summaryAdvisory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "advisory", "notes"],
+      "properties": {
+        "status": { "enum": ["notes", "no_notes", "abstain"] },
+        "advisory": { "type": "string", "maxLength": 800 },
+        "notes": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "confidence", "summary_start", "summary_end", "quote", "advice"],
+            "properties": {
+              "category": { "enum": ["unsupported_claim", "missing_verification", "overstatement", "scope_ambiguity"] },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "summary_start": { "type": "integer", "minimum": 0 },
+              "summary_end": { "type": "integer", "minimum": 1 },
+              "quote": { "type": "string", "maxLength": 600 },
+              "advice": { "type": "string", "maxLength": 800 }
+            }
+          }
+        }
+      }
+    },
+    "companion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pet_id", "personality", "mood", "xp", "completed_reviews", "utterance"],
+      "properties": {
+        "pet_id": { "type": "string", "maxLength": 64 },
+        "personality": { "enum": ["precise", "warm", "wry"] },
+        "mood": { "type": "string", "maxLength": 32 },
+        "xp": { "type": "integer", "minimum": 0 },
+        "completed_reviews": { "type": "integer", "minimum": 0 },
+        "utterance": { "type": "string", "maxLength": 180 }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary", "findings", "comments", "provider", "model"],
+      "properties": {
+        "status": { "enum": ["findings", "no_findings", "abstain"] },
+        "summary": { "type": "string", "maxLength": 1600 },
+        "findings": {
+          "type": "array",
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/finding" }
+        },
+        "comments": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/comment" }
+        },
+        "provider": { "type": ["string", "null"], "maxLength": 120 },
+        "model": { "type": ["string", "null"], "maxLength": 200 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "confidence", "title", "body", "path", "line_start", "line_end", "recommendation"],
+      "properties": {
+        "severity": { "enum": ["blocker", "high", "medium", "low"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "title": { "type": "string", "maxLength": 160 },
+        "body": { "type": "string", "maxLength": 1200 },
+        "path": { "type": "string", "maxLength": 500 },
+        "line_side": { "enum": ["new", "old"] },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "recommendation": { "type": "string", "maxLength": 1200 }
+      }
+    },
+    "comment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "confidence", "title", "body", "path", "line_start", "line_end", "recommendation"],
+      "properties": {
+        "category": { "enum": ["optimization", "reliability", "maintainability", "testing"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "title": { "type": "string", "maxLength": 160 },
+        "body": { "type": "string", "maxLength": 1200 },
+        "path": { "type": "string", "maxLength": 500 },
+        "line_side": { "enum": ["new", "old"] },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "recommendation": { "type": "string", "maxLength": 1200 }
+      }
+    }
+  }
+}

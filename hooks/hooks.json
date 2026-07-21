@@ -1,0 +1,27 @@
+{
+  "description": "Capture exact turn-window evidence and run an independent Buddy review when enabled.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/buddy-hook.mjs\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/buddy-hook.mjs\"",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

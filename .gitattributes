@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.webp -text
+*.png -text
+*.exe -text
+*.dll -text
+*.gz -text
+*.zip -text
+*.tar -text
+*.woff2 -text

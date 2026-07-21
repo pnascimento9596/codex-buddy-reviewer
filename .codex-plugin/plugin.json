@@ -1,0 +1,39 @@
+{
+  "name": "codex-buddy-reviewer",
+  "version": "0.5.0-rc.1",
+  "description": "One or two independent reviewers track exact Git changes in the background and finish with a compact Buddy review.",
+  "author": {
+    "name": "Paulo Nascimento",
+    "url": "https://github.com/pnascimento9596"
+  },
+  "homepage": "https://github.com/pnascimento9596/codex-buddy-reviewer",
+  "repository": "https://github.com/pnascimento9596/codex-buddy-reviewer",
+  "license": "Apache-2.0",
+  "keywords": [
+    "codex",
+    "code-review",
+    "independent-reviewer",
+    "claude",
+    "grok",
+    "ollama",
+    "opencode",
+    "buddy"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Buddy Reviewer",
+    "shortDescription": "Continuous independent review with an animated Buddy",
+    "longDescription": "Capture private exact Git checkpoints without screen access, run one or two isolated configured reviewers independently while Codex works, adopt only an exact final match, keep full attributed detail in a private local receipt, and append one compact grounded review paragraph through a safe Stop continuation.",
+    "developerName": "Paulo Nascimento",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/pnascimento9596/codex-buddy-reviewer",
+    "privacyPolicyURL": "https://github.com/pnascimento9596/codex-buddy-reviewer/blob/main/docs/PRIVACY.md",
+    "defaultPrompt": [
+      "Use $codex-buddy-reviewer:buddy-review to toggle automatic review for this workspace.",
+      "Use $codex-buddy-reviewer:review to run a one-shot review of my current changes."
+    ]
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pnascimento9596/codex-buddy-reviewer/schemas/review-result.schema.json",
+  "title": "Codex Buddy Review Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "summary", "findings"],
+  "properties": {
+    "schema_version": { "const": "2" },
+    "status": { "enum": ["findings", "no_findings", "abstain"] },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 1200 },
+    "findings": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "severity",
+          "confidence",
+          "title",
+          "body",
+          "impact",
+          "path",
+          "line_side",
+          "line_start",
+          "line_end",
+          "evidence",
+          "recommendation"
+        ],
+        "properties": {
+          "severity": { "enum": ["blocker", "high", "medium", "low"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "body": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "impact": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "path": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "line_side": { "enum": ["new", "old"] },
+          "line_start": { "type": "integer", "minimum": 1 },
+          "line_end": { "type": "integer", "minimum": 1 },
+          "evidence": { "type": "string", "minLength": 1, "maxLength": 1600 },
+          "recommendation": { "type": "string", "minLength": 1, "maxLength": 1600 }
+        }
+      }
+    },
+    "comments": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category",
+          "confidence",
+          "title",
+          "body",
+          "path",
+          "line_side",
+          "line_start",
+          "line_end",
+          "evidence",
+          "recommendation"
+        ],
+        "properties": {
+          "category": { "enum": ["optimization", "reliability", "maintainability", "testing"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "body": { "type": "string", "minLength": 1, "maxLength": 1600 },
+          "path": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "line_side": { "enum": ["new", "old"] },
+          "line_start": { "type": "integer", "minimum": 1 },
+          "line_end": { "type": "integer", "minimum": 1 },
+          "evidence": { "type": "string", "minLength": 1, "maxLength": 1600 },
+          "recommendation": { "type": "string", "minLength": 1, "maxLength": 1600 }
+        }
+      }
+    }
+  }
+}

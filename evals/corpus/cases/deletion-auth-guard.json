@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "id": "deletion-auth-guard",
+  "category": "deletion",
+  "description": "A deletion-only hunk removes the unauthenticated-user guard and must be grounded to the synthetic new-side anchor.",
+  "live_eligible": true,
+  "egress_expected": true,
+  "evidence": {
+    "schema_version": "1",
+    "review_id": "eval-deletion-auth-guard",
+    "captured_at": "2026-07-18T00:00:00.000Z",
+    "repository_root": "eval-fixture",
+    "head": "5555555555555555555555555555555555555555",
+    "scope": "turn",
+    "base": "4444444444444444444444444444444444444444",
+    "changed_paths": ["src/auth.js"],
+    "excluded_paths": [],
+    "sensitive_change_count": 0,
+    "ignored_change_count": 0,
+    "path_evidence": [
+      {
+        "path": "src/auth.js",
+        "disposition": "complete",
+        "patch_bytes": 220,
+        "transmitted": true,
+        "hunk_ranges": [{ "start": 1, "end": 1, "side": "new", "kind": "deletion" }]
+      }
+    ],
+    "incomplete_paths": [],
+    "hunk_ranges": { "src/auth.js": [{ "start": 1, "end": 1, "side": "new", "kind": "deletion" }] },
+    "status": "deterministic eval fixture",
+    "patch": "diff --git a/src/auth.js b/src/auth.js\nindex 5555555..6666666 100644\n--- a/src/auth.js\n+++ b/src/auth.js\n@@ -1,4 +1,3 @@\n export function canDelete(user) {\n-  if (!user) return false;\n   return user.role === 'admin';\n }\n",
+    "patch_hash": "58bc746577633262ef15e1dd90cadb2fe62eed63ef25364bb8848a68862f8063",
+    "patch_bytes": 220,
+    "truncated": false,
+    "line_counts": { "src/auth.js": 3 },
+    "old_line_counts": { "src/auth.js": 4 }
+  },
+  "expected": {
+    "allowed_statuses": ["findings"],
+    "min_findings": 1,
+    "max_findings": 5,
+    "provider_call": "required",
+    "required_anchors": [{ "path": "src/auth.js", "line_side": "new", "start": 1, "end": 1 }]
+  }
+}

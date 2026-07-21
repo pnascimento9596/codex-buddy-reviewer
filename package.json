@@ -1,0 +1,11 @@
+{
+  "name": "codex-buddy-reviewer",
+  "version": "0.5.0-rc.1",
+  "private": true,
+  "description": "Continuous exact-state code reviewer and persistent companion for OpenAI Codex",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0"
+}
