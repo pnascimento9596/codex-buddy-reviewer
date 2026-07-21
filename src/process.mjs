@@ -9,6 +9,21 @@ const SUPERVISOR_FILE = fileURLToPath(new URL('./process-supervisor.mjs', import
 const SUPERVISOR_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 const PROCESS_GROUP_CLEANUP_MS = 2_000;
 
+function assertAbortSignal(signal) {
+  if (signal === undefined) return;
+  if (!(signal instanceof AbortSignal)) {
+    throw new TypeError('process cancellation signal must be an AbortSignal');
+  }
+}
+
+function cancellationError(command) {
+  const error = new Error(`${command} was cancelled`);
+  error.name = 'AbortError';
+  error.code = 'ABORT_ERR';
+  error.kind = 'cancelled';
+  return error;
+}
+
 function exactKeys(value, expected) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const actual = Object.keys(value).sort();
@@ -94,6 +109,8 @@ async function forceKillAndWaitForProcessGroup(child, { force = true } = {}) {
 }
 
 export function runProcess(command, args, options = {}) {
+  assertAbortSignal(options.signal);
+  if (options.signal?.aborted) return Promise.reject(cancellationError(command));
   if (process.platform === 'win32') {
     return resolveExternalExecutable(command, {
       cwd: options.cwd ?? process.cwd(),
@@ -112,8 +129,12 @@ function runResolvedProcess(command, args, options = {}) {
     maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
     acceptedExitCodes = [0],
     encoding = 'utf8',
-    protectFromParentDeath = process.platform !== 'win32'
+    protectFromParentDeath = process.platform !== 'win32',
+    signal
   } = options;
+
+  assertAbortSignal(signal);
+  if (signal?.aborted) return Promise.reject(cancellationError(command));
 
   if (process.platform === 'win32' && protectFromParentDeath) {
     return runWindowsJobProcess(command, args, {
@@ -124,6 +145,7 @@ function runResolvedProcess(command, args, options = {}) {
       maxOutputBytes,
       acceptedExitCodes,
       encoding,
+      signal,
       helperManifestFile: options.windowsHelperManifestFile
         ?? process.env.CODEX_BUDDY_WINDOWS_HELPER_MANIFEST,
       helperRoot: options.windowsHelperRoot
@@ -155,6 +177,7 @@ function runResolvedProcess(command, args, options = {}) {
     let supervisorResult = null;
     let spawnErrorReceived = false;
     let groupKillIssued = false;
+    let abortFailure = null;
 
     const forceKillOnce = () => {
       if (groupKillIssued) return;
@@ -220,6 +243,11 @@ function runResolvedProcess(command, args, options = {}) {
     };
     const onSigint = () => cancelForSignal('SIGINT');
     const onSigterm = () => cancelForSignal('SIGTERM');
+    const onAbort = () => {
+      abortFailure ??= cancellationError(command);
+      forcedError ??= abortFailure;
+      stopChild();
+    };
 
     const finish = (error, result) => {
       if (settled) return;
@@ -237,7 +265,8 @@ function runResolvedProcess(command, args, options = {}) {
       }
       process.removeListener('SIGINT', onSigint);
       process.removeListener('SIGTERM', onSigterm);
-      if (error) reject(error);
+      signal?.removeEventListener('abort', onAbort);
+      if (error) reject(abortFailure ?? error);
       else resolve(result);
     };
 
@@ -269,8 +298,10 @@ function runResolvedProcess(command, args, options = {}) {
 
     process.once('SIGINT', onSigint);
     process.once('SIGTERM', onSigterm);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
 
-    child.on('error', (error) => finish(error));
+    child.on('error', (error) => finish(abortFailure ?? error));
     child.on('exit', () => {
       if (!supervised || supervisorResult || forcedError || timedOut) return;
       // `close` waits for every inherited copy of the supervisor's output

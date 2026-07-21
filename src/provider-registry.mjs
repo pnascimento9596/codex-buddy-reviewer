@@ -93,6 +93,9 @@ export function validateProviderEffort(provider, effort) {
 
 export function approveProviderReviewRequest(provider, options, approval = {}) {
   const entry = providerEntry(provider);
+  if (options && typeof options === 'object' && Object.hasOwn(options, 'signal')) {
+    throw new TypeError('Provider cancellation signal is dispatch-only and cannot be approved');
+  }
   const normalized = normalizeOptions(entry.definition, options);
   if (!approval || typeof approval !== 'object' || Array.isArray(approval)) {
     throw new TypeError('Provider request approval options must be an object');
@@ -122,7 +125,7 @@ export function dispatchProviderReview(approvedRequest, options = {}) {
   const normalized = normalizeOptions(entry.definition, approved);
   if (approved.provider === 'ollama') {
     const { effort, ...ollamaOptions } = normalized;
-    return entry.review({ ...ollamaOptions, think: effort });
+    return entry.review({ ...ollamaOptions, think: effort, signal: options.signal });
   }
-  return entry.review(normalized);
+  return entry.review({ ...normalized, signal: options.signal });
 }

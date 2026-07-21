@@ -1,7 +1,8 @@
-import { lstat, readdir, rm, stat } from 'node:fs/promises';
+import { lstat, readdir, rm, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { pruneExpiredOutboxEvents } from './outbox.mjs';
+import { MAX_SPECULATIVE_GENERATIONS, readPreReviewState } from './pre-review-state.mjs';
 
 import {
   acquireFileLease,
@@ -10,6 +11,7 @@ import {
   readPrivateJson,
   releaseFileLease,
   resolveRuntimeDataDir,
+  withFileLock,
   workspaceKey,
   writePrivateJsonExclusive
 } from './state.mjs';
@@ -17,6 +19,13 @@ import {
 export const DEFAULT_CONTENT_TTL_MS = 24 * 60 * 60_000;
 const DEFAULT_TTL_MS = DEFAULT_CONTENT_TTL_MS;
 const REVIEW_KEY_PATTERN = /^[0-9a-f]{64}$/;
+const SNAPSHOT_ACTIVITY_LOCK_TIMEOUT_MS = 120_000;
+const SPECULATIVE_ATTEMPT_KEYS = Object.freeze([
+  'generation',
+  'review_key',
+  'schema_version',
+  'started_at'
+]);
 
 async function regularFileOrMissing(file) {
   try {
@@ -37,6 +46,84 @@ async function safeJson(file) {
   } catch {
     return { kind: 'malformed', value: null };
   }
+}
+
+function validIsoTimestamp(value) {
+  if (typeof value !== 'string') return false;
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) && new Date(milliseconds).toISOString() === value;
+}
+
+function validSpeculativeAttempt(value, reviewKey) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const keys = Object.keys(value).sort();
+  return keys.length === SPECULATIVE_ATTEMPT_KEYS.length
+    && keys.every((key, index) => key === SPECULATIVE_ATTEMPT_KEYS[index])
+    && value.schema_version === '1'
+    && value.review_key === reviewKey
+    && Number.isSafeInteger(value.generation)
+    && value.generation >= 1
+    && validIsoTimestamp(value.started_at);
+}
+
+async function inspectPreReviewArtifacts(turnDir, receiptDirectory) {
+  const stateFile = path.join(turnDir, 'pre-review.json');
+  const stateKind = await regularFileOrMissing(stateFile);
+  if (stateKind === 'unsafe') return { safe: false };
+  if (stateKind === 'file') {
+    try {
+      await readPreReviewState(turnDir);
+    } catch {
+      return { safe: false };
+    }
+  }
+
+  const attemptsDirectory = path.join(turnDir, 'pre-review-attempts');
+  let directoryDetails;
+  try {
+    directoryDetails = await lstat(attemptsDirectory);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {
+        safe: true,
+        stateFile: stateKind === 'file' ? stateFile : null,
+        attemptsDirectory: null,
+        attemptFiles: [],
+        incompleteReviewKeys: []
+      };
+    }
+    throw error;
+  }
+  if (directoryDetails.isSymbolicLink() || !directoryDetails.isDirectory()) {
+    return { safe: false };
+  }
+
+  const attemptFiles = [];
+  const incompleteReviewKeys = new Set();
+  const entries = await readdir(attemptsDirectory, { withFileTypes: true });
+  if (entries.length > MAX_SPECULATIVE_GENERATIONS) return { safe: false };
+  for (const entry of entries) {
+    const match = entry.name.match(/^([0-9a-f]{64})\.json$/);
+    if (!match || entry.isSymbolicLink() || !entry.isFile()) return { safe: false };
+    const file = path.join(attemptsDirectory, entry.name);
+    const details = await lstat(file);
+    if (details.isSymbolicLink() || !details.isFile()) return { safe: false };
+    const attempt = await safeJson(file);
+    if (attempt.kind !== 'file' || !validSpeculativeAttempt(attempt.value, match[1])) {
+      return { safe: false };
+    }
+    const receiptKind = await regularFileOrMissing(path.join(receiptDirectory, entry.name));
+    if (receiptKind === 'unsafe') return { safe: false };
+    if (receiptKind === 'missing') incompleteReviewKeys.add(match[1]);
+    attemptFiles.push(file);
+  }
+  return {
+    safe: true,
+    stateFile: stateKind === 'file' ? stateFile : null,
+    attemptsDirectory,
+    attemptFiles,
+    incompleteReviewKeys: [...incompleteReviewKeys]
+  };
 }
 
 async function staleTimestamp(baselineFile, baseline, now, ttlMs) {
@@ -97,18 +184,72 @@ async function pruneUnclaimedReceipts(receiptDirectory, options) {
   return { pruned: candidates.length, ambiguous: 0 };
 }
 
-async function safeRemoveSnapshot(turnDir) {
-  const snapshotDir = path.join(turnDir, 'snapshot');
-  try {
-    const details = await lstat(snapshotDir);
-    if (details.isSymbolicLink() || !details.isDirectory()) return false;
-    await rm(snapshotDir, { recursive: true, force: true });
-  } catch (error) {
-    if (error.code !== 'ENOENT') return false;
+const SNAPSHOT_DIRECTORY_NAMES = Object.freeze(['snapshot', 'pre-review-snapshot']);
+
+async function safeSnapshotDirectories(turnDir) {
+  const directories = [];
+  for (const name of SNAPSHOT_DIRECTORY_NAMES) {
+    const directory = path.join(turnDir, name);
+    try {
+      const details = await lstat(directory);
+      if (details.isSymbolicLink() || !details.isDirectory()) return null;
+      directories.push(directory);
+    } catch (error) {
+      if (error.code !== 'ENOENT') return null;
+    }
   }
-  await rm(path.join(turnDir, 'baseline.json'), { force: true });
-  await rm(path.join(turnDir, 'attempt.json'), { force: true });
-  return true;
+  return directories;
+}
+
+async function safeRemoveSnapshot(turnDir, preReview) {
+  return withFileLock(path.join(turnDir, 'snapshot-activity'), async () => {
+    const snapshotDirectories = await safeSnapshotDirectories(turnDir);
+    if (snapshotDirectories === null) return false;
+    try {
+      for (const directory of snapshotDirectories) {
+        await rm(directory, { recursive: true, force: true });
+      }
+    } catch {
+      return false;
+    }
+    await rm(path.join(turnDir, 'baseline.json'), { force: true });
+    await rm(path.join(turnDir, 'attempt.json'), { force: true });
+    if (preReview.stateFile) await rm(preReview.stateFile, { force: true });
+    for (const file of preReview.attemptFiles) await rm(file, { force: true });
+    if (preReview.attemptsDirectory) {
+      try {
+        await rmdir(preReview.attemptsDirectory);
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }, {
+    timeoutMs: SNAPSHOT_ACTIVITY_LOCK_TIMEOUT_MS,
+    staleMs: SNAPSHOT_ACTIVITY_LOCK_TIMEOUT_MS
+  }).catch(() => false);
+}
+
+function incompleteAttemptReviewKey(attempt, preReview) {
+  const candidates = new Set(preReview.incompleteReviewKeys);
+  if (REVIEW_KEY_PATTERN.test(attempt?.review_key ?? '')) candidates.add(attempt.review_key);
+  return candidates.size === 1 ? [...candidates][0] : null;
+}
+
+function hasIncompleteAttempt(attempt, preReview) {
+  return Boolean(attempt) || preReview.incompleteReviewKeys.length > 0;
+}
+
+async function hasSnapshotArtifact(turnDir) {
+  for (const name of SNAPSHOT_DIRECTORY_NAMES) {
+    try {
+      await lstat(path.join(turnDir, name));
+      return true;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  return false;
 }
 
 async function pruneTurn(turnDir, options) {
@@ -135,25 +276,43 @@ async function pruneTurn(turnDir, options) {
     if ([baseline, attempt, completed].some((item) => ['unsafe', 'malformed'].includes(item.kind))) {
       return { outcome: 'ambiguous', receiptPruned: 0 };
     }
+    const preReview = await inspectPreReviewArtifacts(turnDir, options.receiptDirectory);
+    if (!preReview.safe) return { outcome: 'ambiguous', receiptPruned: 0 };
 
     const receipt = await pruneExpiredReceipt(completed.value, options);
     if (receipt.ambiguous) return { outcome: 'ambiguous', receiptPruned: 0 };
     if (!receipt.pruned && REVIEW_KEY_PATTERN.test(completed.value?.review_key ?? '')) {
       options.protectedReceiptKeys.add(completed.value.review_key);
     }
+    if (completed.value) {
+      const hasCleanupArtifacts = baseline.kind === 'file'
+        || attempt.kind === 'file'
+        || preReview.stateFile !== null
+        || preReview.attemptsDirectory !== null
+        || await hasSnapshotArtifact(turnDir);
+      if (!hasCleanupArtifacts) {
+        return {
+          outcome: receipt.pruned ? 'content_pruned' : 'empty',
+          receiptPruned: receipt.pruned ? 1 : 0
+        };
+      }
+      return await safeRemoveSnapshot(turnDir, preReview)
+        ? { outcome: 'pruned', receiptPruned: receipt.pruned ? 1 : 0 }
+        : { outcome: 'ambiguous', receiptPruned: receipt.pruned ? 1 : 0 };
+    }
     if (!baseline.value) {
       if (options.terminalizeIncomplete) {
-        if (!completed.value) {
-          const reviewKey = REVIEW_KEY_PATTERN.test(attempt.value?.review_key ?? '') ? attempt.value.review_key : null;
-          await writePrivateJsonExclusive(completedFile, {
-            schema_version: '1',
-            ...(reviewKey ? { review_key: reviewKey } : {}),
-            terminal_status: attempt.value ? 'prior_attempt_incomplete' : 'data_purged',
-            presentation_status: 'terminal',
-            completed_at: new Date(options.now).toISOString()
-          });
-        }
-        return await safeRemoveSnapshot(turnDir)
+        const reviewKey = incompleteAttemptReviewKey(attempt.value, preReview);
+        await writePrivateJsonExclusive(completedFile, {
+          schema_version: '1',
+          ...(reviewKey ? { review_key: reviewKey } : {}),
+          terminal_status: hasIncompleteAttempt(attempt.value, preReview)
+            ? 'prior_attempt_incomplete'
+            : 'data_purged',
+          presentation_status: 'terminal',
+          completed_at: new Date(options.now).toISOString()
+        });
+        return await safeRemoveSnapshot(turnDir, preReview)
           ? { outcome: 'pruned', receiptPruned: receipt.pruned ? 1 : 0 }
           : { outcome: 'ambiguous', receiptPruned: receipt.pruned ? 1 : 0 };
       }
@@ -163,17 +322,17 @@ async function pruneTurn(turnDir, options) {
       return { outcome: receipt.pruned ? 'content_pruned' : 'fresh', receiptPruned: receipt.pruned ? 1 : 0 };
     }
 
-    if (!completed.value) {
-      const reviewKey = REVIEW_KEY_PATTERN.test(attempt.value?.review_key ?? '') ? attempt.value.review_key : null;
-      await writePrivateJsonExclusive(completedFile, {
-        schema_version: '1',
-        ...(reviewKey ? { review_key: reviewKey } : {}),
-        terminal_status: attempt.value ? 'prior_attempt_incomplete' : 'baseline_expired',
-        presentation_status: 'terminal',
-        completed_at: new Date(options.now).toISOString()
-      });
-    }
-    return await safeRemoveSnapshot(turnDir)
+    const reviewKey = incompleteAttemptReviewKey(attempt.value, preReview);
+    await writePrivateJsonExclusive(completedFile, {
+      schema_version: '1',
+      ...(reviewKey ? { review_key: reviewKey } : {}),
+      terminal_status: hasIncompleteAttempt(attempt.value, preReview)
+        ? 'prior_attempt_incomplete'
+        : 'baseline_expired',
+      presentation_status: 'terminal',
+      completed_at: new Date(options.now).toISOString()
+    });
+    return await safeRemoveSnapshot(turnDir, preReview)
       ? { outcome: 'pruned', receiptPruned: receipt.pruned ? 1 : 0 }
       : { outcome: 'ambiguous', receiptPruned: receipt.pruned ? 1 : 0 };
   } finally {

@@ -13,7 +13,11 @@ import {
   supportedProviderIds,
   validateProviderEffort
 } from './provider-registry.mjs';
-import { parseReviewerOutput, validateReviewResult } from './result.mjs';
+import {
+  localReviewResultForEvidence,
+  parseReviewerOutput,
+  validateReviewResult
+} from './result.mjs';
 import { renderHuman } from './render.mjs';
 import { storeReceipt } from './store.mjs';
 import { escapeDiagnosticLine } from './policy.mjs';
@@ -22,7 +26,6 @@ import { renderPetCommand, runPetCommand } from './pet-cli.mjs';
 import { renderRendererCommand, runRendererCommand } from './renderer-cli.mjs';
 import {
   REVIEW_RESULT_SCHEMA,
-  REVIEW_SCHEMA_VERSION,
   REVIEW_WITH_SUMMARY_ADVISORY_SCHEMA,
   validateReviewWithSummaryAdvisoryEnvelope
 } from './review-schema.mjs';
@@ -209,36 +212,18 @@ export function prepareReviewRequest(evidence, options = {}) {
 }
 
 export async function reviewEvidence(evidence, options) {
-
-  const transmittedPaths = new Set(
-    (evidence.path_evidence ?? [])
-      .filter((item) => item.transmitted && item.disposition === 'complete')
-      .map((item) => item.path)
-  );
-  if (evidence.changed_paths.length === 0 || evidence.changed_paths.every((repoPath) => !transmittedPaths.has(repoPath))) {
-    const excludedCount = evidence.excluded_paths.length
-      + (evidence.sensitive_change_count ?? 0)
-      + (evidence.ignored_change_count ?? 0);
-    const incompleteCount = evidence.incomplete_paths?.length ?? 0;
-    const result = excludedCount || incompleteCount
-      ? {
-          schema_version: REVIEW_SCHEMA_VERSION, status: 'abstain',
-          summary: incompleteCount
-            ? 'No complete transmitted evidence was available for the observed changes.'
-            : 'All observed changes were excluded by privacy policy.',
-          findings: [], comments: []
-        }
-      : {
-          schema_version: REVIEW_SCHEMA_VERSION,
-          status: 'no_findings',
-          summary: 'No reviewable changes were observed in the selected scope.',
-          findings: [],
-          comments: []
-        };
+  const localResult = localReviewResultForEvidence(evidence);
+  if (localResult !== null) {
     const receiptDir = options.store
-      ? await storeReceipt({ evidence, result, provider: 'none', model: 'none', retainEvidence: options.retainEvidence })
+      ? await storeReceipt({
+          evidence,
+          result: localResult,
+          provider: 'none',
+          model: 'none',
+          retainEvidence: options.retainEvidence
+        })
       : null;
-    return { evidence, result, provider: 'none', model: 'none', receiptDir };
+    return { evidence, result: localResult, provider: 'none', model: 'none', receiptDir };
   }
 
   if (options.onProviderDispatch !== undefined && typeof options.onProviderDispatch !== 'function') {
@@ -294,7 +279,8 @@ export async function reviewEvidence(evidence, options) {
   }
   options.onProviderDispatch?.();
   const response = await dispatchProviderReview(approvedRequest, {
-    platform: options.platform ?? process.platform
+    platform: options.platform ?? process.platform,
+    signal: options.signal
   });
 
   let raw;

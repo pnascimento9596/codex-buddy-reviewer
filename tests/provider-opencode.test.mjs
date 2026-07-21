@@ -473,6 +473,37 @@ test('OpenCode maps process failures without retrying and cleans up temporary st
   await assert.rejects(access(configDir));
 });
 
+test('OpenCode forwards dispatch cancellation and cleans isolated temporary state', async () => {
+  const controller = new AbortController();
+  let workDir;
+  await assert.rejects(
+    reviewWithOpenCode({
+      root: '/private/repository',
+      prompt: 'packet',
+      model: 'openai/gpt-5.4',
+      responseSchema: REVIEW_RESULT_SCHEMA,
+      signal: controller.signal,
+      run: async (_command, _args, options) => {
+        workDir = options.cwd;
+        assert.equal(options.signal, controller.signal);
+        const error = new Error('PRIVATE cancellation diagnostic');
+        error.kind = 'cancelled';
+        error.code = 'ABORT_ERR';
+        throw error;
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof ProviderFailure, true);
+      assert.equal(error.failureCode, 'cancelled');
+      assert.equal(error.stage, 'inference');
+      assert.equal(error.message, 'The provider review was cancelled.');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE/);
+      return true;
+    }
+  );
+  await assert.rejects(access(workDir));
+});
+
 test('OpenCode preserves a validated outcome and reports only bounded cleanup status', async () => {
   const response = await reviewWithOpenCode({
     root: '/private/repository',

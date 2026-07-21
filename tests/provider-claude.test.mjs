@@ -288,6 +288,38 @@ test('Claude process failures are safe, single-shot, and clean the isolated dire
   await assert.rejects(access(isolatedCwd));
 });
 
+test('Claude forwards dispatch cancellation and cleans isolated temporary state', async () => {
+  const controller = new AbortController();
+  let isolatedCwd;
+  await assert.rejects(
+    reviewWithClaude({
+      root: '/tmp/repository',
+      prompt: 'packet',
+      timeoutMs: 5_000,
+      claudeBin: '/fixture/bin/claude',
+      responseSchema: REVIEW_RESULT_SCHEMA,
+      signal: controller.signal,
+      runProcessImpl: async (_command, _args, options) => {
+        isolatedCwd = options.cwd;
+        assert.equal(options.signal, controller.signal);
+        const error = new Error('PRIVATE cancellation diagnostic');
+        error.kind = 'cancelled';
+        error.code = 'ABORT_ERR';
+        throw error;
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof ProviderFailure, true);
+      assert.equal(error.failureCode, 'cancelled');
+      assert.equal(error.stage, 'inference');
+      assert.equal(error.message, 'The provider review was cancelled.');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE/);
+      return true;
+    }
+  );
+  await assert.rejects(access(isolatedCwd));
+});
+
 test('Claude preserves a validated outcome and reports only bounded cleanup status', async () => {
   const response = await reviewWithClaude({
     root: '/tmp/repository',

@@ -6,6 +6,7 @@ import {
 } from './egress-capability.mjs';
 import { runProcess } from './process.mjs';
 import {
+  assertStateOutsideRepository,
   ensurePrivateStatePath,
   readPrivateJson,
   resolveDataDir,
@@ -21,7 +22,8 @@ import {
 import { assessProviderModelIdentifier } from './secret-scan.mjs';
 
 const MODE_SCHEMA_VERSION = '1';
-export const MODE_POLICY_VERSION = '2';
+export const MODE_POLICY_VERSION = '4';
+const LEGACY_MODE_POLICY_VERSIONS = new Set(['2', '3']);
 const VALID_ACTIONS = new Set(['enable', 'disable', 'toggle', 'status']);
 const VALID_PROVIDERS = new Set(supportedProviderIds());
 const MODE_LOCK_TIMEOUT_MS = 30_000;
@@ -86,6 +88,8 @@ function defaultMode(root) {
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
     timeout_ms: 480_000,
+    continuous_review_enabled: false,
+    continuous_review_consented_at: null,
     consented_at: null,
     updated_at: null
   };
@@ -138,12 +142,40 @@ export function reviewersForMode(mode) {
 function validateMode(mode, root, options = {}) {
   if (!mode || typeof mode !== 'object' || Array.isArray(mode)) throw new Error('Buddy mode state must be an object');
   if (mode.schema_version !== MODE_SCHEMA_VERSION) throw new Error('Unsupported Buddy mode state version');
-  if (mode.policy_version !== MODE_POLICY_VERSION) throw new Error('Unsupported Buddy mode policy version');
+  const legacyPolicy = options.allowLegacyPolicy && LEGACY_MODE_POLICY_VERSIONS.has(mode.policy_version);
+  if (mode.policy_version !== MODE_POLICY_VERSION && !legacyPolicy) {
+    throw new Error('Unsupported Buddy mode policy version');
+  }
   if (!Number.isInteger(mode.config_revision) || mode.config_revision < 0) throw new Error('Invalid Buddy mode revision');
   if (mode.workspace_root !== root) throw new Error('Buddy mode state belongs to another workspace');
   if (typeof mode.enabled !== 'boolean' || mode.scope !== 'workspace') throw new Error('Invalid Buddy mode state');
   validateReviewerConfiguration(mode, options);
-  const normalized = normalizeAndValidateSecondaryReviewer(mode);
+  const normalized = normalizeAndValidateSecondaryReviewer(legacyPolicy ? {
+    ...mode,
+    policy_version: MODE_POLICY_VERSION,
+    continuous_review_enabled: false,
+    continuous_review_consented_at: null
+  } : mode);
+  if (typeof normalized.continuous_review_enabled !== 'boolean') {
+    throw new Error('Invalid Buddy continuous review state');
+  }
+  const consentMilliseconds = Date.parse(normalized.continuous_review_consented_at ?? '');
+  if (normalized.continuous_review_consented_at !== null
+    && (typeof normalized.continuous_review_consented_at !== 'string'
+      || !Number.isFinite(consentMilliseconds)
+      || new Date(consentMilliseconds).toISOString() !== normalized.continuous_review_consented_at)) {
+    throw new Error('Invalid Buddy continuous review consent timestamp');
+  }
+  if (normalized.continuous_review_enabled && normalized.continuous_review_consented_at === null
+    && normalized.enabled) {
+    throw new Error('Buddy continuous review requires explicit consent');
+  }
+  if (normalized.continuous_review_enabled && !normalized.enabled) {
+    throw new Error('Buddy continuous review cannot remain enabled while review mode is disabled');
+  }
+  if (!normalized.continuous_review_enabled && normalized.continuous_review_consented_at !== null) {
+    throw new Error('Buddy final-only mode cannot retain continuous review consent');
+  }
   if (normalized.pet_id !== undefined
     && (typeof normalized.pet_id !== 'string' || !/^(?:native:selected|[a-z0-9][a-z0-9_-]{0,63})$/.test(normalized.pet_id))) {
     throw new Error('Invalid Buddy pet identifier');
@@ -163,20 +195,24 @@ export function modeFile(root, dataDir) {
   return path.join(resolveDataDir(dataDir), 'mode', `${workspaceKey(root)}.json`);
 }
 
-async function ensureModeDirectory(dataDir) {
+async function ensureModeDirectory(root, dataDir) {
   const dataRoot = resolveDataDir(dataDir);
+  await assertStateOutsideRepository(root, dataRoot, 'mode state');
   await ensurePrivateStatePath(dataRoot, path.join(dataRoot, 'mode'));
 }
 
 export async function readMode({ root, dataDir }) {
-  await ensureModeDirectory(dataDir);
+  await ensureModeDirectory(root, dataDir);
   const stored = await readPrivateJson(modeFile(root, dataDir));
-  const validated = validateMode(stored ?? defaultMode(root), root, { allowLegacyTimeout: true });
+  const validated = validateMode(stored ?? defaultMode(root), root, {
+    allowLegacyTimeout: true,
+    allowLegacyPolicy: true
+  });
   return validated.timeout_ms > 480_000 ? { ...validated, timeout_ms: 480_000 } : validated;
 }
 
 export async function withModeLock({ root, dataDir }, callback) {
-  await ensureModeDirectory(dataDir);
+  await ensureModeDirectory(root, dataDir);
   const file = modeFile(root, dataDir);
   return withFileLock(
     file,
@@ -189,7 +225,7 @@ export async function changeMode({ root, action = 'toggle', dataDir, ...override
   if (!VALID_ACTIONS.has(action)) throw new Error(`Unknown Buddy mode action: ${action}`);
   const file = modeFile(root, dataDir);
   if (action === 'status') return readMode({ root, dataDir });
-  await ensureModeDirectory(dataDir);
+  await ensureModeDirectory(root, dataDir);
 
   const mutation = await withFileLock(file, async () => {
     const current = await readMode({ root, dataDir });
@@ -236,6 +272,17 @@ export async function changeMode({ root, action = 'toggle', dataDir, ...override
     }
     const enabled = action === 'enable' ? true : action === 'disable' ? false : !current.enabled;
     const now = new Date().toISOString();
+    if (overrides.continuousReview !== undefined && typeof overrides.continuousReview !== 'boolean') {
+      throw new Error('Buddy continuous review choice must be a boolean');
+    }
+    if (overrides.continuousReviewConsentedAt !== undefined
+      && overrides.continuousReview !== true) {
+      throw new Error('Buddy continuous review consent timestamp requires an enabled continuous review choice');
+    }
+    const continuousReviewEnabled = enabled && overrides.continuousReview === true;
+    const continuousReviewConsentedAt = continuousReviewEnabled
+      ? overrides.continuousReviewConsentedAt ?? now
+      : null;
     const next = validateMode({
       ...currentReviewMode,
       enabled,
@@ -248,6 +295,9 @@ export async function changeMode({ root, action = 'toggle', dataDir, ...override
       min_confidence: overrides.minConfidence ?? current.min_confidence,
       max_patch_bytes: overrides.maxPatchBytes ?? current.max_patch_bytes,
       timeout_ms: overrides.timeoutMs ?? current.timeout_ms,
+      policy_version: MODE_POLICY_VERSION,
+      continuous_review_enabled: continuousReviewEnabled,
+      continuous_review_consented_at: continuousReviewConsentedAt,
       consented_at: enabled ? current.consented_at ?? now : current.consented_at,
       config_revision: current.config_revision + 1,
       updated_at: now

@@ -14,6 +14,8 @@ Options:
   --also-model <id>            Secondary model (default: adapter-specific)
   --also-effort <level>        Secondary reasoning effort (default: high)
   --single-reviewer            Clear the secondary reviewer connection
+  --continuous-review          Start bounded background review after repository mutations
+  --no-continuous-review       Review only at the final Stop hook
   --confidence <0..1>          Publication threshold
   --max-patch-bytes <n>        Sanitized patch cap
   --timeout-seconds <n>        Reviewer deadline, at most 480 seconds
@@ -21,7 +23,10 @@ Options:
   -h, --help                   Show this help
 
 Automatic mode is workspace-scoped, advisory, and fail-open. Use the host's
-built-in /pet command to wake or tuck away the animated pet.
+built-in /pet command to wake or tuck away the animated pet. Enabling
+or toggling raw mode remains final-only unless --continuous-review explicitly
+authorizes privacy-filtered intermediate change evidence to be sent to each
+configured reviewer, up to two speculative batches per turn.
 `;
 
 export function parseModeArgs(argv) {
@@ -37,6 +42,8 @@ export function parseModeArgs(argv) {
     if (arg === '--help' || arg === '-h') options.help = true;
     else if (arg === '--json') options.json = true;
     else if (arg === '--single-reviewer') options.singleReviewer = true;
+    else if (arg === '--continuous-review') options.continuousReview = true;
+    else if (arg === '--no-continuous-review') options.continuousReview = false;
     else if (values.has(arg)) {
       const value = args[index + 1];
       if (value === undefined || value.startsWith('--')) throw new Error(`${arg} requires a value`);
@@ -69,6 +76,9 @@ export function parseModeArgs(argv) {
     || options.secondaryEffort !== undefined
   )) {
     throw new Error('--single-reviewer cannot be combined with --also-provider, --also-model, or --also-effort');
+  }
+  if (args.includes('--continuous-review') && args.includes('--no-continuous-review')) {
+    throw new Error('--continuous-review and --no-continuous-review cannot be combined');
   }
   if (options.minConfidence !== undefined && (
     !Number.isFinite(options.minConfidence) || options.minConfidence < 0 || options.minConfidence > 1

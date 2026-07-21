@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { lstat, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import {
+  assertStateOutsideRepository,
   readPrivateJson,
   writePrivateJsonAtomic,
   writePrivateJsonExclusive
@@ -21,6 +22,54 @@ async function temporaryDirectory() {
   temporaryPaths.push(directory);
   return directory;
 }
+
+test('private state roots must remain outside the reviewed repository', async () => {
+  const root = await temporaryDirectory();
+  assert.equal(
+    await assertStateOutsideRepository(root, path.join(path.dirname(root), 'sibling-state')),
+    path.join(await realpath(path.dirname(root)), 'sibling-state')
+  );
+  await assert.rejects(
+    assertStateOutsideRepository(root, root, 'runtime state'),
+    /outside the reviewed repository/u
+  );
+  await assert.rejects(
+    assertStateOutsideRepository(root, path.join(root, '.buddy'), 'mode state'),
+    /outside the reviewed repository/u
+  );
+});
+
+test('private state containment follows existing ancestor symlinks', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const container = await temporaryDirectory();
+  const repository = path.join(container, 'repository');
+  const alias = path.join(container, 'outside-looking-alias');
+  await mkdir(repository);
+  await symlink(repository, alias, 'dir');
+  await assert.rejects(
+    assertStateOutsideRepository(repository, path.join(alias, '.buddy-runtime'), 'runtime state'),
+    /outside the reviewed repository/u
+  );
+});
+
+test('private state containment recognizes the macOS tmp path alias', {
+  skip: process.platform !== 'darwin'
+}, async () => {
+  const aliasContainer = await mkdtemp('/tmp/codex-buddy-state-alias-');
+  temporaryPaths.push(aliasContainer);
+  const physicalContainer = await realpath(aliasContainer);
+  const repository = path.join(physicalContainer, 'repository');
+  await mkdir(repository);
+  await assert.rejects(
+    assertStateOutsideRepository(
+      repository,
+      path.join(aliasContainer, 'repository', '.buddy-runtime'),
+      'runtime state'
+    ),
+    /outside the reviewed repository/u
+  );
+});
 
 test('private JSON reads reject symlinks instead of following same-user path substitutions', {
   skip: process.platform === 'win32'

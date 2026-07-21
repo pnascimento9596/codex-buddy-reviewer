@@ -76,7 +76,8 @@ export async function reviewWithOllama(options = {}) {
     ambientEnvironment = process.env,
     platform = process.platform,
     runProcessImpl = runProcess,
-    cleanupImpl = rm
+    cleanupImpl = rm,
+    signal
   } = options;
   if (!responseSchema || typeof responseSchema !== 'object' || Array.isArray(responseSchema)) {
     throw providerFailure({
@@ -146,12 +147,15 @@ export async function reviewWithOllama(options = {}) {
         protectFromParentDeath: true,
         timeoutMs: remaining,
         maxOutputBytes: MAX_OUTPUT_BYTES,
-        env: buildOllamaProviderEnvironment(ambientEnvironment, platform)
+        env: buildOllamaProviderEnvironment(ambientEnvironment, platform),
+        signal
       });
     } catch (error) {
       throw providerFailure({
         provider: 'ollama', model: resolvedModel, stage: 'inference',
-        failureCode: processFailureCode(error), durationMs: elapsed(), cause: error
+        failureCode: error?.kind === 'cancelled' ? 'cancelled' : processFailureCode(error),
+        durationMs: elapsed(), cause: error,
+        safeMessage: error?.kind === 'cancelled' ? 'The provider review was cancelled.' : undefined
       });
     }
 

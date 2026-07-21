@@ -1,6 +1,6 @@
 ---
 name: buddy-review
-description: Toggle, inspect, diagnose, or reversibly set up workspace-scoped automatic independent review after Codex finishes a coding turn; manage Buddy pet packages and presentation choices; or operate the headless renderer. Use when the user selects buddy-review from the command menu or asks about Buddy Review. This skill never directly controls Codex's native pet window.
+description: Toggle, inspect, diagnose, or reversibly set up workspace-scoped continuous independent review while Codex works; manage Buddy pet packages and presentation choices; or operate the headless renderer. Use when the user selects buddy-review from the command menu or asks about Buddy Review. This skill never directly controls Codex's native pet window.
 ---
 
 # Buddy Review Control
@@ -17,9 +17,11 @@ Review-mode actions are `toggle`, `enable`, `disable`, or `status`:
    node "<plugin-root>/scripts/buddy-review.mjs" mode <action> --cwd "<repo-root>"
    ```
 
+   For the no-action `/buddy-review` toggle only, append `--continuous-review`. This keeps the command one step while making the user's invocation the explicit authorization for bounded intermediate evidence if the resulting state is ON. A toggle to OFF clears that authorization.
+
    When the user explicitly requests reviewer configuration, append only the documented flags under **Supported optional configuration** as separate quoted arguments before running the command.
 
-4. Report the resulting ON/OFF state, ordered primary and optional secondary provider/model connections, workspace scope, and that enabling authorizes bounded allowlisted patch egress to each configured connection after eligible turns. Explain that two lanes run concurrently, one success produces an attributed partial result, and Buddy never retries or falls back to an unconfigured provider.
+4. Report the resulting ON/OFF state, ordered primary and optional secondary provider/model connections, workspace scope, and continuous-review state. Explain that enabling continuous review authorizes privacy-filtered intermediate evidence for at most two speculative generations plus one exact final fallback per configured reviewer during a turn. Two lanes run independently and concurrently for a generation, one success produces an attributed partial result, and Buddy never retries or falls back to an unconfigured provider.
 5. For the animated companion, tell the user to run the first-party `/pet` command once and choose a built-in or installed Buddy pet in Codex Settings. The host persists its open state, selection, position, and animation surface.
 
 Pet actions are `pets`/`pet list`, `pet status`, `pet install <buddy-pet-id>`, `pet update <buddy-pet-id>`, `pet remove <buddy-pet-id>`, `pet restore <backup-id>`, or `pet reconcile`. Run exactly:
@@ -50,7 +52,7 @@ node "<plugin-root>/scripts/buddy-review.mjs" summary-guard enable \
 node "<plugin-root>/scripts/buddy-review.mjs" summary-guard disable --cwd "<repo-root>"
 ```
 
-The advisory shares the primary review call, is separately labeled, and its closed fields can never be promoted into a code finding. A secondary reviewer always receives technical evidence only. Changing the primary provider/model makes prior summary consent stale and fail closed; changing only the secondary does not widen summary egress. Do not claim that the optional packet cannot influence the primary model's technical output; the guarantee is structural separation plus independent validation. Do not describe it as hidden chain-of-thought, reasoning extraction, or transcript access.
+The advisory shares the primary review call, is separately labeled, and its closed fields can never be promoted into a code finding. A secondary reviewer always receives technical evidence only. Changing the primary provider/model makes prior summary consent stale and fail closed; changing only the secondary does not widen summary egress. Because the summary does not exist during implementation, enabling this guard disables speculative background review for that turn and uses the exact final Stop review. Do not claim that the optional packet cannot influence the primary model's technical output; the guarantee is structural separation plus independent validation. Do not describe it as hidden chain-of-thought, reasoning extraction, or transcript access.
 
 Diagnostics are read-only and make no provider call by default:
 
@@ -60,7 +62,7 @@ node "<plugin-root>/scripts/buddy-review.mjs" doctor --cwd "<repo-root>"
 
 Only add `--provider-check` after explicit user authorization for one bounded network/model health call per configured reviewer, with a maximum of two calls. The checks run concurrently, send no repository evidence, and return exact per-role pass/fail plus aggregate pass, warn, or fail status. A partial result is `warn`; no connection is substituted. This tests connectivity and strict one-field output handling, not review quality. Doctor cannot prove host hook trust, command-menu discovery, native pet selection, or visual Running/Ready animation.
 
-Guided setup is a deliberate plan/apply workflow:
+Guided setup is a deliberate plan/apply workflow. A fresh or disabled workspace plans final-only review unless the user explicitly requests `--continuous-review`. With no continuous-review flag, an already-enabled workspace preserves its current continuous or final-only choice:
 
 ```bash
 node "<plugin-root>/scripts/buddy-review.mjs" setup plan --cwd "<repo-root>" [closed options]
@@ -99,17 +101,19 @@ Only pass these flags when the user explicitly requests them:
 - `--provider opencode --model openai/gpt-5.6`
 - `--also-provider <grok|ollama|claude|opencode>` with optional `--also-model <id>` and `--also-effort <level>`
 - `--single-reviewer` to clear the configured secondary connection
+- `--continuous-review` to authorize bounded intermediate evidence and enable at most two speculative generations per turn; the no-action toggle is the documented exception that always appends this positive flag
+- `--no-continuous-review` to use final-only Stop review
 - `--effort <level>`
 - `--confidence <0..1>`
 - `--max-patch-bytes <integer>`
 - `--timeout-seconds <1..480>`
 
-The supported adapter IDs are exactly `claude`, `grok`, `ollama`, and `opencode`. Claude Max uses the direct Claude adapter. Grok and Ollama local/Cloud use their direct adapters. ChatGPT Pro uses `opencode` with an OpenCode OpenAI OAuth connection. Kimi is allowed only through `opencode` with the exact `provider/model` identifier already configured in the user's OpenCode connection. Direct `codex` and direct `kimi` adapters are unsupported because strict no-tools and no-inherited-context isolation has not been proven for those subscription routes. OpenCode projects only the selected provider auth entry; never copy, print, or request the user's auth store or ambient credentials.
+The supported adapter IDs are exactly `claude`, `grok`, `ollama`, and `opencode`. Claude Pro or Max uses only the direct Claude adapter with Claude Code. Grok or SuperGrok can use the direct Grok adapter; an exact configured OpenCode xAI route is also allowed. Ollama local and Ollama Cloud can use the direct Ollama adapter, while an exact configured OpenCode Ollama Cloud route is also allowed. ChatGPT Plus or Pro uses `opencode` with an OpenCode ChatGPT OAuth connection. Kimi or Moonshot is allowed only through `opencode` with the exact API-backed `provider/model` identifier already configured in the user's OpenCode connection. These routed connections are not native Buddy adapters. Direct `codex` and direct `kimi` adapters are unsupported because strict no-tools and no-inherited-context isolation has not been proven for those subscription routes. OpenCode projects only the selected provider auth entry; never copy, print, or request the user's auth store or ambient credentials.
 
 Claude, Grok, and OpenCode accept effort values `low`, `medium`, `high`, `xhigh`, and `max`. Ollama accepts only `low`, `medium`, and `high`. Reject an unsupported provider/effort combination rather than changing it or contacting the model.
 
-Never interpolate unvalidated free-form text into the command. Provider and model values must come from the closed adapter choices above or an explicit user-supplied OpenCode `provider/model` token accepted by the CLI. Reject unknown actions or flags. `--also-provider`, `--also-model`, and `--also-effort` must describe one complete secondary reviewer and cannot be combined with `--single-reviewer`. Do not modify Codex configuration, arbitrary pet files, global instruction files, or the reviewed repository. Pet-file writes are allowed only through the catalog/setup CLI above, only after an explicit request, and only for allowlisted `buddy-*` packages and private registry/backups.
+Never interpolate unvalidated free-form text into the command. Provider and model values must come from the closed adapter choices above or an explicit user-supplied OpenCode `provider/model` token accepted by the CLI. Reject unknown actions or flags. `--also-provider`, `--also-model`, and `--also-effort` must describe one complete secondary reviewer and cannot be combined with `--single-reviewer`. `--continuous-review` and `--no-continuous-review` cannot be combined. Do not modify Codex configuration, arbitrary pet files, global instruction files, or the reviewed repository. Pet-file writes are allowed only through the catalog/setup CLI above, only after an explicit request, and only for allowlisted `buddy-*` packages and private registry/backups.
 
 ## Product boundary
 
-The command-menu entry is a skill invocation selected by typing `/buddy-review`; it is not a third-party native slash-command registration. The plugin cannot programmatically wake, select, or make the native pet speak. Review text is delivered through the audited Codex task transcript, while the native pet supplies persistent animation and task-state signaling.
+The command-menu entry is a skill invocation selected by typing `/buddy-review`; it is not a third-party native slash-command registration. Continuous review uses exact private Git checkpoints, never screenshots or UI state. The plugin cannot programmatically wake, select, or make the native pet speak. Review text is delivered as one paragraph of at most three sentences and 700 characters through the audited Codex task transcript, while the full result remains in the private local receipt and the native pet supplies persistent animation and task-state signaling. If an exact final result is pending, the local event detail is `Code review and suggestions are in progress.`

@@ -187,12 +187,15 @@ export async function reviewWithGrok({
   grokAuthPath,
   responseSchema,
   cleanupImpl = rm,
-  monotonicNow = () => performance.now()
+  monotonicNow = () => performance.now(),
+  runProcessImpl = runProcess,
+  signal
 }) {
   if (!responseSchema || typeof responseSchema !== 'object' || Array.isArray(responseSchema)) {
     throw new TypeError('Grok review requires an explicit response schema');
   }
   if (typeof cleanupImpl !== 'function') throw new TypeError('Grok cleanup must be callable');
+  if (typeof runProcessImpl !== 'function') throw new TypeError('Grok process runner must be callable');
   const resolvedModel = model ?? 'grok-4.5';
   const started = monotonicNow();
   const elapsed = () => Math.max(0, monotonicNow() - started);
@@ -291,12 +294,13 @@ sessions = false
     const inspections = [];
     const inspect = async () => {
       try {
-        const result = await runProcess(binary, ['inspect', '--json'], {
+        const result = await runProcessImpl(binary, ['inspect', '--json'], {
           cwd: tempDir,
           env,
           protectFromParentDeath: true,
           timeoutMs: Math.min(remainingTimeout('preflight'), 30_000),
-          maxOutputBytes: 2 * 1024 * 1024
+          maxOutputBytes: 2 * 1024 * 1024,
+          signal
         });
         inspections.push(result);
         return JSON.parse(result.stdout);
@@ -304,8 +308,11 @@ sessions = false
         if (error instanceof ProviderFailure) throw error;
         throw providerFailure({
           provider: 'grok', model: resolvedModel, stage: 'preflight',
-          failureCode: error instanceof SyntaxError ? 'isolation_failed' : processFailureCode(error),
+          failureCode: error instanceof SyntaxError
+            ? 'isolation_failed'
+            : error?.kind === 'cancelled' ? 'cancelled' : processFailureCode(error),
           durationMs: elapsed(),
+          safeMessage: error?.kind === 'cancelled' ? 'The provider review was cancelled.' : undefined,
           cause: error
         });
       }
@@ -389,19 +396,22 @@ sessions = false
       const inference = buildGrokInferenceProcess(binary, args, {
         fifoPath: path.join(tempDir, GROK_POSIX_PROMPT_FIFO)
       });
-      result = await runProcess(inference.command, inference.args, {
+      result = await runProcessImpl(inference.command, inference.args, {
         cwd: tempDir,
         env,
         input: process.platform === 'win32' ? undefined : prompt,
         protectFromParentDeath: true,
         timeoutMs: inferenceTimeoutMs,
-        maxOutputBytes: 4 * 1024 * 1024
+        maxOutputBytes: 4 * 1024 * 1024,
+        signal
       });
     } catch (error) {
       if (error instanceof ProviderFailure) throw error;
       throw providerFailure({
         provider: 'grok', model: resolvedModel, stage: 'inference',
-        failureCode: processFailureCode(error), durationMs: elapsed(), cause: error
+        failureCode: error?.kind === 'cancelled' ? 'cancelled' : processFailureCode(error),
+        durationMs: elapsed(), cause: error,
+        safeMessage: error?.kind === 'cancelled' ? 'The provider review was cancelled.' : undefined
       });
     }
     let transport;

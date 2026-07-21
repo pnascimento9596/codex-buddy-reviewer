@@ -2,14 +2,14 @@
   "name": "codex-buddy-reviewer",
   "version": "0.5.0-rc.1",
   "private": true,
-  "description": "Independent post-turn code reviewer and persistent companion for OpenAI Codex",
+  "description": "Continuous exact-state code reviewer and persistent companion for OpenAI Codex",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "review": "node scripts/buddy-review.mjs review",
-    "test": "node --test",
+    "test": "node --test --test-timeout=900000",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:assets": "node scripts/buddy-review.mjs pet list --json",
     "check:atlas-structure": "node scripts/validate-pet-atlases.mjs --json",

@@ -126,6 +126,18 @@ test('approval validates normalized options and dispatch accepts only opaque app
   );
   assert.throws(() => dispatchProviderReview({}), /not an approved local handle/);
   assert.throws(() => inspectApprovedProviderReviewRequest(Object.freeze({})), /not an approved local handle/);
+  assert.throws(
+    () => approveProviderReviewRequest('ollama', {
+      root: process.cwd(),
+      prompt: 'bounded review packet',
+      model: 'fixture-model',
+      effort: 'high',
+      timeoutMs: 1_000,
+      responseSchema: RESPONSE_SCHEMA,
+      signal: new AbortController().signal
+    }),
+    /signal is dispatch-only/
+  );
 });
 
 test('registry rejects credential-shaped models before producing an approval handle', () => {

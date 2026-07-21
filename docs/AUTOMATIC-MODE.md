@@ -8,9 +8,19 @@ Automatic review is opt-in per canonical Git workspace. The supported command-me
 /buddy-review
 ```
 
-Select **Buddy Review** from the menu and send it. Codex inserts the plugin skill mention; the skill runs the allowlisted `mode toggle` command and prints the resulting state. Explicit `enable`, `disable`, and `status` requests are also supported.
+Select **Buddy Review** from the menu and send it. Codex inserts the plugin skill mention; the skill runs the allowlisted `mode toggle --continuous-review` command and prints the resulting state. This one-step invocation is the explicit authorization for bounded intermediate evidence when the resulting state is ON. A toggle to OFF clears that authorization. Explicit `enable`, `disable`, and `status` requests are also supported.
 
 This is not a third-party registration in Codex's closed first-party slash-command enum. It is the supported skill-in-command-menu path and should be described that way.
+
+Generic raw mode enable and toggle commands remain final-only. Only `--continuous-review` records purpose-specific consent for privacy-filtered intermediate change evidence to reach every configured reviewer. It can spend up to two speculative review calls per reviewer during a turn, plus one exact final fallback call when no matching completed result is available. Final-only mode performs no speculative provider calls. Policy v2 and ambiguous policy v3 records migrate fail-closed to final-only policy v4.
+
+## What a snapshot means
+
+Buddy never reads the screen. Its snapshot is a private Git repository checkpoint produced from `HEAD`, the index, the worktree, and safe untracked content under the bounded privacy contract. It is independent of terminal size, display scaling, open panels, collapsed tool calls, and whether Codex is running in the CLI or desktop app.
+
+The full snapshot digest is an identity and freshness signal. Reviewers do not receive an opaque whole-workspace screenshot or unrestricted repository access. They receive the exact bounded, privacy-filtered diff and grounding evidence constructed between the private baseline and one stable checkpoint.
+
+The evidence describes changes observed during the turn window. It is not actor telemetry. A human, formatter, generator, IDE, or another process changing the same worktree is indistinguishable from the coding agent.
 
 ## Lifecycle
 
@@ -20,47 +30,78 @@ For an enabled root turn, the hook:
 
 - canonicalizes the repository root;
 - captures a stable private baseline tree under one aggregate monotonic capture budget shared by both stability passes;
-- opportunistically terminalizes abandoned turn state and prunes eligible turn state, automatic receipts, and v1/v2 outbox content without blocking active turns;
+- opportunistically terminalizes abandoned state and prunes eligible turn state, receipts, and v1/v2 outbox content without blocking active turns;
 - stores a hash of the prompt, never the prompt text;
 - emits a local `turn_started` event;
-- adds a small context note telling the worker that Buddy is active.
+- adds a small context note telling the worker that Buddy is active;
+- when continuous review is enabled and separately consented, launches one detached bounded worker after the baseline is durable.
 
-Subagent/nested events and suppressed reviewer sessions are ignored.
+Subagent and nested events, suppressed reviewer sessions, and a second launch for the same turn are ignored. The detached payload contains only the canonical working directory, opaque session and turn identity inputs, a random worker nonce, and private data-directory metadata. It does not contain prompt text, tool input, tool output, model responses, transcripts, or credentials.
+
+### Continuous checkpoint worker
+
+The worker uses filesystem mutation notifications as a latency hint and exact Git checkpoint polling as the authority. This matters because Codex currently does not expose every file edit as a portable plugin hook. Correctness does not depend on `PostToolUse`, UI state, or the terminal transcript.
+
+For each eligible stable generation, the worker:
+
+1. waits for the repository to settle and confirms the same exact checkpoint twice;
+2. builds bounded evidence from the original baseline to that checkpoint;
+3. computes an exact review key from full checkpoint and evidence digests plus the ordered configuration;
+4. screens privacy coverage and writes a durable speculative-attempt fence;
+5. atomically authorizes the executable reviewer set;
+6. runs one or two configured reviewer lanes independently and concurrently;
+7. cancels in-flight provider process groups when a newer exact checkpoint supersedes the reviewed generation;
+8. writes a full private terminal receipt only after strict result validation.
+
+At most two speculative generations launch per turn. A completed speculative receipt is useful only when its exact key matches the Stop checkpoint. The worker does not keep a persistent provider chat, replay prior conversational context, or carry reviewer memory into another turn.
+
+The detached worker has a strict six-hour absolute lifetime and periodically revalidates the workspace mode while it is idle. Expiry clears idle ownership so the exact Stop path can proceed. If a provider attempt was already fenced, expiry cancels that provider process domain without treating the cancellation as a reviewer-quality failure, and the durable fence still prevents ambiguous replay.
 
 ### Stop
 
 For the matching enabled root turn, the hook:
 
 - ignores an existing Stop continuation;
-- acquires a unique-claim turn lock before any mutable Stop capture;
-- recovers completed delivery state or checks a durable prior-attempt key before recapturing mutable Stop inputs;
+- acquires a unique-claim turn lock before mutable final capture;
+- recovers completed delivery state or checks a durable prior-attempt key before recapturing inputs;
 - requires the exact matching baseline;
-- revokes and cleans the snapshot if mode was disabled, and abstains if the review configuration changed mid-turn;
-- captures a stable final tree under the same bounded capture contract;
-- computes the deterministic review key and recovers any already-published receipt;
-- diffs baseline to final;
-- enters the workspace provider lane, checks the exact mode and optional summary-consent revisions under short locks, and checks each configured reviewer circuit;
-- writes one durable turn-attempt marker and atomically issues one exact-bound single-use egress capability for every executable configured reviewer, so batch authorization cannot publish only part of the reviewer set;
-- releases configuration locks before spending those capabilities and launching one or two ordered reviewer lanes concurrently, while preserving a completed mode/summary mutation as a drain-backed revocation barrier;
-- makes exactly one attempt per configured executable reviewer, with no retry, substitution, or provider fallback;
-- validates each result independently, including explicit old-side citations for complete deleted files, then combines successful results deterministically without a synthesis model;
-- when separately consented, sends the bounded worker-summary packet only to the ordered primary reviewer and validates that advisory independently from the technical result; the secondary remains technical-only;
-- writes a terminal receipt and immutable event with ordered, attributed reviewer outcomes, including partial failures or open circuits;
-- returns one read-only continuation that preserves the immediately preceding worker summary and adds the independent result.
+- revokes and cleans the snapshot if mode was disabled, and abstains if review configuration changed mid-turn;
+- captures a stable exact final checkpoint and builds the final bounded evidence;
+- computes the exact final review key;
+- atomically requests the exact final key; if the worker has not fenced a provider attempt, Stop takes over immediately, while an active or durable attempt remains conservative and is never replayed;
+- adopts a terminal receipt only when that exact key matches;
+- avoids a duplicate provider call while ownership of the exact final attempt is ambiguous;
+- otherwise performs the normal exact final review with no retry, substitution, or hidden provider fallback;
+- validates each result independently, including old-side citations for complete deleted files;
+- combines successful results deterministically without a synthesis model;
+- writes a terminal receipt and immutable event with ordered attributed outcomes;
+- returns one read-only continuation that preserves the preceding worker summary and appends only the compact Buddy paragraph.
 
-If the baseline is missing, Buddy abstains. It never reviews the whole worktree as a fallback.
+When the final exact result is not ready, the local `turn_finished` event detail is exactly:
 
-## Attribution language
+```text
+Code review and suggestions are in progress.
+```
 
-The evidence is a bounded snapshot-to-snapshot Git delta for the turn window. It includes committed and uncommitted changes visible at Stop and removes unchanged pre-existing dirty content, subject to the current RC completeness limits. The sealed pre-fix RC scan proved that invalid UTF-8 Git pathnames could be omitted while branch or automatic evidence was reported complete. The current implementation captures Git path records as raw bytes and rejects non-round-tripping UTF-8 before provider approval. That remediation has focused coverage and still requires the fresh exact-final scan plus native Linux gate before stable release.
+The native Codex pet cannot display arbitrary plugin bubbles. It continues to show host-owned Running and Ready animation. An optional renderer can display the progress event and later completion event.
 
-It is not actor telemetry. If a human, formatter, generator, IDE, or another process changes the same working tree during the window, its bytes are indistinguishable. User-facing output must say “changes observed during this turn,” not “changes made by the agent.”
+## Compact visible output
 
-## Synchronous delivery tradeoff
+The transcript and `review_completed.detail` use the same deterministic paragraph. It is:
 
-v0.5 runs the reviewer synchronously in Stop because the native Codex pet has no plugin API for arbitrary later notifications. This keeps the task Running and lets the validated review be included in the audited response during the normal host lifecycle.
+- at most three sentences;
+- at most 700 characters;
+- single-paragraph and terminal-safe;
+- prioritized toward the highest-value validated defect and recommendation;
+- able to include one optimization, partial-review warning, cleanup warning, summary note, or defensible no-finding result when space permits.
 
-The tradeoff is latency: the task can remain active up to the provider deadline. Delivery is durable but not magical: Buddy records `prepared`, claims delivery with a random token/lease, records `stdout_written` only from the hook write callback, and records `observed` only when Codex invokes the continued Stop with `stop_hook_active`. A crash after stdout becomes externally visible but before observation remains ambiguous and can cause a later replay to duplicate the continuation. A detached worker is appropriate only when a sidecar or reliable next-turn unread-result delivery is available.
+This compression is a presentation layer, not lossy storage. The private receipt retains the validated structured result, per-reviewer attribution, disagreements, connection failures, grounding, comments, and operational metadata for bounded recovery and local inspection.
+
+## Summary-claim advisory limitation
+
+Worker-summary egress is a separate purpose-specific consent record. It is disabled by default, bound to the exact ordered primary provider/model and its own revision, and included in the final review identity. The secondary reviewer remains technical-only.
+
+The summary does not exist during implementation. If the summary-claim advisory is enabled, Buddy deliberately skips speculative background review for that turn and performs the ordinary exact Stop review so the screened summary packet and technical evidence share one final authorized request. This is an honest latency tradeoff, not a silent fallback. Changing the primary connection makes old summary consent stale and fail closed.
 
 ## Configuration
 
@@ -73,17 +114,13 @@ Defaults:
 | model | `glm-5.2:cloud` |
 | effort | `high` |
 | secondary reviewer | disabled |
+| continuous review | final-only by default; explicit `--continuous-review` consent required |
+| speculative generation cap | 2 per turn |
 | confidence | `0.75` |
 | patch cap | 256 KiB |
 | provider timeout | 480 seconds |
 | presentation profile | separate local state; `native:selected` / `precise` |
-| summary-claim advisory | disabled; separate explicit consent |
-
-Mode state includes a policy version, configuration revision, first consent timestamp, one ordered primary reviewer, and an optional ordered secondary reviewer. Enabling is authorization for bounded allowlisted patch egress to each configured connection after eligible turns. The two descriptors must be complete, and the same provider/model connection cannot occupy both positions. `--also-provider` adds or replaces the secondary connection, with optional `--also-model` and `--also-effort`; `--single-reviewer` clears it. A changed provider gets its adapter default model unless a model is supplied explicitly.
-
-Provider-capable turns are serialized by a provider-lane lease. Under a short mode lock, Buddy writes the attempt marker and atomically issues a durable capability for each executable reviewer, bound to the exact revision, connection configuration, prompt, schema, and deadline. A mode mutation commits its new revision, snapshots active capabilities from the prior revision, releases the lock, and waits for positive settlement before returning. Thus the state can already read disabled while the command is still draining authorized calls, but once the command completes no captured prior-revision capability remains live. Dead PIDs or elapsed deadlines do not count as settlement; ambiguous crashes favor safe unavailability over a false revocation success. Existing private receipts are preserved. Pet ID, personality, mood, and XP are not mode fields and cannot revoke or re-key an in-flight review.
-
-Worker-summary egress uses a separate purpose-specific consent record. It is disabled by default, bound to the exact ordered primary provider/model and its own revision, and included in the deterministic review identity. Under a short consent lock, Buddy constructs and hashes the exact bounded packet and binds it only to the primary capability. A configured secondary receives technical evidence only. A consent disable commits a new revision and drains only capabilities issued under the revoked revision before returning. Changing the primary provider/model makes old summary consent stale and therefore fail closed. Changing only the secondary does not widen summary egress. The advisory has a closed schema and independent validation, but it shares the primary model call with technical review; the guarantee is that advisory fields cannot be promoted into technical findings, not that the model's technical response is mathematically invariant to the optional summary packet.
+| summary-claim advisory | disabled; separate explicit consent; final-only when enabled |
 
 Example dual-reviewer configuration:
 
@@ -91,57 +128,60 @@ Example dual-reviewer configuration:
 node scripts/buddy-review.mjs mode enable \
   --cwd "/path/to/repository" \
   --provider claude --model claude-opus-4-8 --effort high \
-  --also-provider grok --also-model grok-4.5 --also-effort high
+  --also-provider grok --also-model grok-4.5 --also-effort high \
+  --continuous-review
 ```
 
-Both lanes receive the same bounded technical evidence and run concurrently. The primary and secondary order is stable in receipts, transcript attribution, and renderer events. One successful lane is sufficient for a partial completed review, but the failed lane remains visible and is never replaced. If neither lane succeeds, Buddy emits a degraded result and preserves the worker response.
+Use final-only review when intermediate provider calls are not worth the added egress, latency overlap, or subscription usage:
+
+```bash
+node scripts/buddy-review.mjs mode enable \
+  --cwd "/path/to/repository" \
+  --no-continuous-review
+```
+
+Both lanes receive the same exact technical evidence and run concurrently for a given generation. Primary and secondary order is stable in receipts, attribution, and renderer events. One successful lane is sufficient for a partial completed review, while the failed lane remains visible and is never replaced.
 
 ## Supported connections
 
 | Subscription or connection | Buddy configuration | Boundary |
 |---|---|---|
 | Claude Max | `--provider claude --model claude-opus-4-8` | direct authenticated Claude Code CLI |
-| Grok | `--provider grok --model grok-4.5` | direct authenticated Grok CLI |
+| Grok or SuperGrok | `--provider grok --model grok-4.5` | direct authenticated Grok CLI; a configured OpenCode xAI route is also possible |
 | Ollama local | `--provider ollama --model <local-model>` | direct local Ollama CLI |
 | Ollama Cloud | `--provider ollama --model <cloud-model>:cloud` | direct authenticated Ollama CLI |
-| ChatGPT Pro | `--provider opencode --model openai/<model>` | OpenCode OpenAI OAuth connection |
-| Kimi through OpenCode | `--provider opencode --model <configured-kimi-provider>/<model>` | selected OpenCode provider connection only |
-| Other configured OpenCode provider | `--provider opencode --model <provider>/<model>` | selected OpenCode provider connection only |
+| ChatGPT Plus or Pro | `--provider opencode --model openai/<model>` | OpenCode ChatGPT OAuth connection |
+| Kimi or Moonshot through OpenCode | `--provider opencode --model <configured-moonshot-provider>/<model>` | selected configured OpenCode provider entry only |
+| Ollama Cloud through OpenCode | `--provider opencode --model <configured-ollama-provider>/<model>` | selected OpenCode Ollama Cloud connection; direct `ollama` remains available |
+| Other configured OpenCode provider | `--provider opencode --model <provider>/<model>` | selected configured OpenCode provider entry only |
 
-The OpenCode adapter copies only the selected provider entry from the user's OpenCode auth store into a disposable deny-all environment. It does not forward ambient provider secrets or the rest of the auth inventory. Direct Codex CLI and direct Kimi CLI are not supported because strict no-tools and no-inherited-context isolation has not yet been proven for those subscription paths. Claude Max should use the direct Claude adapter; Buddy does not route that subscription through OpenCode.
-
-Effort validation is provider-specific and occurs before persistence, capability spend, or provider dispatch. Claude, Grok, and OpenCode accept `low`, `medium`, `high`, `xhigh`, and `max`. Ollama accepts only `low`, `medium`, and `high`.
+The implemented adapter IDs are exactly `claude`, `grok`, `ollama`, and `opencode`. ChatGPT OAuth, Kimi/Moonshot API-backed models, SuperGrok, Ollama Cloud, and other third-party connections can be selected only when their exact provider/model is already configured in OpenCode; they are routed connections, not additional Buddy adapters. Direct Codex CLI and direct Kimi CLI are not supported because their strict no-tools and no-inherited-context boundaries have not been proven. Claude Pro or Max must use Buddy's direct `claude` adapter with Claude Code and must not be routed through OpenCode. OpenCode receives only the selected provider authentication entry inside a disposable deny-all environment. Buddy never asks the user to paste tokens into its configuration.
 
 ## Failure semantics
 
 | Condition | Behavior |
 |---|---|
 | non-Git workspace | control skill refuses activation |
-| mode disabled | hooks no-op |
-| nested agent | hooks no-op |
+| mode disabled or nested agent | hooks no-op |
+| continuous review disabled | final-only Stop review |
+| continuous consent missing or invalid | background worker does not contact a provider |
+| summary guard enabled | background worker skips; exact Stop review handles the summary packet |
+| background launch or watcher unavailable | final Stop path remains available |
 | missing baseline | abstain, no whole-tree fallback |
-| unstable capture | fail open, no egress |
-| aggregate capture deadline/path/byte/Git/object budget exceeded | durable capture-stage terminal state; no provider call |
-| reviewable ignored content changed or could not be bounded | abstain without transmitting its name/content |
+| unstable capture or exceeded capture budget | fail closed for egress |
+| newer checkpoint appears during review | cancel the superseded provider process domain; do not publish its findings |
+| two speculative generations already launched | stop speculative work; exact final fallback remains available |
+| exact completed receipt exists at Stop | adopt it; no provider rerun |
+| exact final attempt remains ambiguous | do not duplicate the provider call |
 | no observed changes | local `no_findings`, no provider call |
-| incomplete/excluded evidence | no clean assurance |
-| index/worktree representations diverge or an opaque submodule stays dirty | abstain; transmit no patch for that path |
-| one of two reviewer lanes fails or has an open circuit | publish the successful lane with attributed partial status; no retry or fallback |
-| every configured reviewer lane fails or is unavailable | degraded receipt/event; preserve worker result |
-| validated review succeeds but disposable-state cleanup fails | preserve the review and emit only the bounded `temporary_state_cleanup_failed` warning; do not expose cleanup paths or errors |
-| three consecutive failures for one provider/model | only that reviewer circuit opens for 30 minutes |
-| duplicate Stop while delivery has a live claim | no second continuation inside the retry window |
-| hook stdout callback fails | do not mark stdout written; durable receipt remains replayable |
-| unobserved delivery after retry window | reconstruct continuation from durable receipt, no provider rerun |
-| crash after durable attempt, with terminal receipt | recover and replay the original receipt/key |
-| crash after durable attempt, without terminal receipt | abstain on retry; never repeat provider attempt |
-| unresolved issued/consumed egress capability after an ambiguous crash | later mode/summary mutation times out instead of inferring safe drain from PID death or deadline |
-| hook parent is SIGKILLed during a POSIX provider call | IPC-liveness supervisor immediately kills the provider process group; durable attempt still prevents replay |
-| Windows verified Job helper unavailable or invalid | fail closed with `isolation_failed`; never retry by directly spawning the provider |
-| Stop continuation | mark prepared/claimed/stdout-written delivery observed, then no-op via `stop_hook_active` |
-| stale attempt beyond TTL | terminalize `prior_attempt_incomplete`, then prune; never re-authorize provider |
-| stale baseline beyond TTL | terminalize `baseline_expired`, then prune private objects |
+| incomplete or excluded evidence | no clean assurance |
+| one reviewer lane fails or has an open circuit | publish the successful lane as attributed partial review |
+| every reviewer lane fails | degraded receipt/event; preserve the worker result |
+| validated review succeeds but temporary cleanup fails | preserve review and emit bounded cleanup warning |
+| duplicate Stop with live delivery claim | no second continuation inside retry window |
+| crash with terminal receipt | recover exact receipt and compact presentation |
+| crash after durable attempt without receipt | abstain; never repeat that ambiguous attempt |
 
 ## Trust and installation
 
-Codex discovers `hooks/hooks.json` at the plugin's default path. The plugin manifest deliberately has no top-level `hooks` field because it is unnecessary and the locally installed validator does not yet accept it. Codex still requires an explicit hook trust review, and any hook-definition change invalidates the previous trust hash.
+Codex discovers `hooks/hooks.json` at the plugin's default path. The plugin manifest deliberately has no top-level `hooks` field because the locally installed validator does not accept it and discovery does not require it. Codex still requires an explicit hook trust review, and any hook-definition change invalidates the previous trust hash.

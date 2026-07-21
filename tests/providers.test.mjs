@@ -10,6 +10,7 @@ import { prepareReviewRequest } from '../src/cli.mjs';
 import {
   egressConfigurationHash,
   issueEgressCapability,
+  readEgressRegistry,
   spendEgressCapability
 } from '../src/egress-capability.mjs';
 import {
@@ -18,7 +19,7 @@ import {
   processFailureCode,
   providerResult
 } from '../src/provider-contract.mjs';
-import { approveProviderReviewRequest } from '../src/provider-registry.mjs';
+import { approveProviderReviewRequest, dispatchProviderReview } from '../src/provider-registry.mjs';
 import {
   buildGrokInferenceProcess,
   buildGrokProviderEnvironment,
@@ -398,6 +399,95 @@ test('technical requests immutably bind the exact default response-schema digest
     .update(canonicalJson(REVIEW_RESULT_SCHEMA))
     .digest('hex');
   assert.equal(spent.audit.response_schema_sha256, expectedDigest);
+});
+
+test('dispatch cancellation remains outside approval binding and egress settles exactly once', async () => {
+  const fixture = await temporaryDirectory('codex-buddy-provider-cancel-egress-');
+  const configuration = {
+    provider: 'ollama', model: 'cancel-fixture', effort: 'high', timeout_ms: 2_000,
+    min_confidence: 0.75, max_patch_bytes: 4_096
+  };
+  const dataDir = path.join(fixture, 'state');
+  const approvedRequest = approveProviderReviewRequest('ollama', {
+    root: fixture,
+    prompt: 'PRIVATE_PROVIDER_PROMPT',
+    model: configuration.model,
+    effort: configuration.effort,
+    timeoutMs: configuration.timeout_ms,
+    responseSchema: REVIEW_RESULT_SCHEMA
+  });
+  const capability = await issueEgressCapability({
+    root: fixture,
+    dataDir,
+    binding: {
+      sessionKey: 'd'.repeat(24), turnKey: 'e'.repeat(24), reviewKey: 'f'.repeat(64),
+      modeRevision: 1, provider: configuration.provider, model: configuration.model,
+      effort: configuration.effort, timeoutMs: configuration.timeout_ms,
+      configurationSha256: egressConfigurationHash(configuration),
+      summaryConsentRevision: null, summarySha256: null
+    },
+    approvedRequest
+  });
+  const controller = new AbortController();
+  controller.abort('PRIVATE_ABORT_REASON');
+  await assert.rejects(
+    spendEgressCapability({ root: fixture, dataDir, capability }, (boundRequest) => {
+      assert.equal(boundRequest, approvedRequest);
+      return dispatchProviderReview(boundRequest, { platform: 'linux', signal: controller.signal });
+    }),
+    (error) => {
+      assert.equal(error instanceof ProviderFailure, true);
+      assert.equal(error.failureCode, 'cancelled');
+      assert.equal(error.egressCapabilityStage, 'executor');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE_ABORT_REASON|PRIVATE_PROVIDER_PROMPT/);
+      return true;
+    }
+  );
+  assert.equal((await readEgressRegistry({ root: fixture, dataDir })).active.length, 0);
+  await assert.rejects(
+    spendEgressCapability({ root: fixture, dataDir, capability }, async () => 'must not run'),
+    /unknown or non-local capability/
+  );
+});
+
+test('Grok forwards one dispatch signal through preflight and inference then cleans temporary state', async () => {
+  const fixture = await temporaryDirectory('codex-buddy-grok-cancel-');
+  const authPath = await syntheticGrokAuth(fixture);
+  const fakeGrok = await fakeExecutable(fixture, 'grok', '#!/bin/sh\nexit 99\n');
+  const controller = new AbortController();
+  let calls = 0;
+  let isolatedCwd;
+  await assert.rejects(
+    reviewWithGrok({
+      root: fixture,
+      prompt: 'packet',
+      timeoutMs: 5_000,
+      grokBin: fakeGrok,
+      grokAuthPath: authPath,
+      responseSchema: REVIEW_RESULT_SCHEMA,
+      signal: controller.signal,
+      runProcessImpl: async (_command, _args, options) => {
+        calls += 1;
+        isolatedCwd = options.cwd;
+        assert.equal(options.signal, controller.signal);
+        if (calls === 1) return { stdout: JSON.stringify(grokInventory()), stderr: '' };
+        const error = new Error('PRIVATE cancellation diagnostic');
+        error.kind = 'cancelled';
+        error.code = 'ABORT_ERR';
+        throw error;
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof ProviderFailure, true);
+      assert.equal(error.failureCode, 'cancelled');
+      assert.equal(error.stage, 'inference');
+      assert.equal(error.message, 'The provider review was cancelled.');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE/);
+      return true;
+    }
+  );
+  assert.equal(calls, 2);
+  await assert.rejects(access(isolatedCwd));
 });
 
 test('provider adapters reject an omitted response schema before launching a process', async () => {
@@ -920,6 +1010,39 @@ process.stdin.on('end', () => {
     }),
     /think setting/
   );
+});
+
+test('Ollama forwards dispatch cancellation and cleans isolated temporary state', async () => {
+  const fixture = await temporaryDirectory('codex-buddy-ollama-cancel-');
+  const controller = new AbortController();
+  let isolatedCwd;
+  await assert.rejects(
+    reviewWithOllama({
+      root: fixture,
+      prompt: 'packet',
+      model: 'glm-5.2:cloud',
+      timeoutMs: 5_000,
+      responseSchema: REVIEW_RESULT_SCHEMA,
+      signal: controller.signal,
+      runProcessImpl: async (_command, _args, options) => {
+        isolatedCwd = options.cwd;
+        assert.equal(options.signal, controller.signal);
+        const error = new Error('PRIVATE cancellation diagnostic');
+        error.kind = 'cancelled';
+        error.code = 'ABORT_ERR';
+        throw error;
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof ProviderFailure, true);
+      assert.equal(error.failureCode, 'cancelled');
+      assert.equal(error.stage, 'inference');
+      assert.equal(error.message, 'The provider review was cancelled.');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE/);
+      return true;
+    }
+  );
+  await assert.rejects(access(isolatedCwd));
 });
 
 test('Ollama removes its neutral cwd after an inference failure', {

@@ -24,6 +24,17 @@ export class GitPathParseError extends Error {
 }
 
 export async function runGit(root, args, options = {}) {
+  if (!Array.isArray(args) || args.some((argument) => typeof argument !== 'string')) {
+    throw new TypeError('Buddy Git arguments must be strings');
+  }
+  for (const argument of args) {
+    if (argument === '--' || !argument.startsWith('-')) break;
+    if (argument.startsWith('-c')
+        || argument === '--config-env'
+        || argument.startsWith('--config-env=')) {
+      throw new TypeError('Buddy Git arguments cannot override command configuration');
+    }
+  }
   const budget = options.budget;
   budget?.chargeGitOperation();
   if (options.input !== undefined) {
@@ -32,7 +43,12 @@ export async function runGit(root, args, options = {}) {
       : Buffer.byteLength(String(options.input), 'utf8'));
   }
   const timeoutMs = Math.min(options.timeoutMs ?? 30_000, budget?.remainingMs() ?? Number.MAX_SAFE_INTEGER);
-  const result = await runProcess('git', ['-c', 'color.ui=false', '-c', 'color.diff=false', ...args], {
+  const result = await runProcess('git', [
+    '-c', 'color.ui=false',
+    '-c', 'color.diff=false',
+    '-c', 'core.fsmonitor=false',
+    ...args
+  ], {
     cwd: root,
     input: options.input,
     env: {

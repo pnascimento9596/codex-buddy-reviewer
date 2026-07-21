@@ -1,6 +1,6 @@
 # Privacy
 
-Codex Buddy Reviewer is a local Codex plugin. It has no hosted Buddy service, no telemetry endpoint, and no Buddy account system.
+Codex Buddy Reviewer is a local Codex plugin. It has no hosted Buddy service, telemetry endpoint, Buddy account system, central review database, or cross-session reviewer memory.
 
 ## Credential custody
 
@@ -9,13 +9,13 @@ Buddy does not deliberately persist provider credentials in its configuration, r
 - Claude Code for Claude subscriptions or supported Anthropic credentials
 - Grok CLI for xAI or SuperGrok access
 - Ollama for local or Ollama Cloud models
-- OpenCode for selected OAuth or API-backed provider connections, including OpenAI and configured Kimi providers
+- OpenCode for selected OAuth or API-backed provider connections, including ChatGPT, SuperGrok, Ollama Cloud, and configured Kimi or Moonshot providers. Claude Pro or Max is intentionally excluded from this route and uses direct Claude Code instead
 
 On supported POSIX hosts, the adapter transiently exposes the minimum authentication environment or selected connection entry needed by the chosen CLI. OpenCode receives only the selected provider entry inside a disposable environment. Grok receives the path to its existing authentication file. A selected CLI may materialize private authentication state inside Buddy's temporary run. New run markers store only the provider, PID, timestamps, random run ID, a short display key, and a full SHA-256 workspace binding. They do not store the raw workspace path. Buddy removes the run after the provider settles. A later provider launch can quarantine and remove an exact marked run after 24 hours only when UID, private modes, marker binding, stable directory identity, and non-live PID checks pass. Directory identity always requires exact device and inode values. A live POSIX run also keeps its issued directory open through cleanup so an unlinked inode cannot be recycled into a replacement path. Darwin, FreeBSD, and Windows additionally require a positive matching nanosecond creation time and fail closed before creating a provider run when it is unavailable. Linux and other platforms use device and inode under the private ownership, mode, marker, age, and dead-PID boundary because Node documents that unavailable birth time can be reported as either change time or the Unix epoch. PID reuse or no later Buddy activity can delay cleanup. Legacy v1 markers remain eligible for that POSIX age-based cleanup but are intentionally unattributed and cannot be selected by workspace purge. These values are never valid repository configuration.
 
 ## What can leave the machine
 
-External review is disabled until the user enables it for one Git workspace. An authorized reviewer can receive only the final locally screened technical review packet and, when separately consented, a bounded worker-summary advisory packet for the primary reviewer.
+External review is disabled until the user enables it for one Git workspace. Final-only mode can send one exact locally screened technical packet per configured reviewer. Continuous mode requires an additional recorded workspace consent and can send up to two stable intermediate packets plus one exact final fallback per configured reviewer during a turn. The final fallback is skipped when an exact matching receipt is ready. A separately consented bounded worker-summary advisory can go only to the primary reviewer at Stop.
 
 The technical packet can include:
 
@@ -25,11 +25,15 @@ The technical packet can include:
 
 The design does not intentionally send the original user prompt, excluded path contents, Codex transcripts, provider stderr, credentials, memory, tools, or repository access. Privacy coverage must be current and complete before an approved provider request can be issued. Missing, unstable, incompatible, or over-budget coverage blocks provider contact.
 
+Continuous review observes exact repository checkpoints, not the display. It does not receive screenshots, terminal pixels, expanded or collapsed Codex updates, tool input, tool output, or the current contents of a UI panel. Filesystem notifications are only wake hints. The authoritative evidence comes from confirmed private Git captures and a bounded privacy-filtered diff.
+
+Each configured reviewer receives the same exact technical evidence for a generation and runs independently. Buddy starts a fresh isolated provider invocation rather than a persistent chat. No provider conversation history is intentionally retained or replayed into a later generation, turn, session, or workspace.
+
 Buddy cannot control service-side logging or retention by Anthropic, xAI, OpenAI, Ollama Cloud, Kimi, or another selected provider. The provider account, connection, and service policy govern data after an authorized request reaches that provider.
 
 ## Local operational state
 
-The always-on workflow needs bounded local state for opt-in configuration, crash recovery, at-most-once provider execution, and one safe continuation. This state lives outside the reviewed repository under Codex plugin data or the user-level Buddy data directory. POSIX paths are checked as private user-owned state. The current Node implementation does not verify a user-only Windows DACL for the default or a custom `CODEX_BUDDY_DATA_DIR` or `PLUGIN_DATA` path. Real Windows ACL evidence is a release blocker, not an implied guarantee.
+The always-on workflow needs bounded local state for opt-in configuration, crash recovery, at-most-once provider execution, and one safe continuation. This state lives outside the reviewed repository under Codex plugin data or the user-level Buddy data directory. Buddy rejects runtime or mode state configured at or below the reviewed repository root before automatic snapshot or provider work begins. POSIX paths are checked as private user-owned state. The current Node implementation does not verify a user-only Windows DACL for the default or a custom `CODEX_BUDDY_DATA_DIR` or `PLUGIN_DATA` path. Real Windows ACL evidence is a release blocker, not an implied guarantee.
 
 Windows v0.5 RC therefore disables all live reviewer contact. Manual live review, automatic turn hooks, doctor provider checks, live evaluation, and the canonical provider dispatcher fail closed before Buddy creates a turn snapshot, review prompt, provider capability, provider subprocess, or provider temporary run. Read-only status, pet management, configuration, local dry runs, and offline validation remain available. This is an enforced product gate, not documentation-only guidance.
 
@@ -39,13 +43,14 @@ Windows v0.5 RC therefore disables all live reviewer contact. Manual live review
 | Manual review receipt | Not stored unless `--store` is explicit |
 | Raw manual patch | Not stored unless both `--store` and `--retain-evidence` are explicit |
 | Worker summary | Preserved in the Codex transcript. New v2 renderer events store null; a still-retained legacy v1 event can contain it and is default-denied by the renderer projection |
-| Automatic content receipt | Unobserved content becomes eligible 24 hours after completion; observed content becomes eligible 24 hours after recorded presentation observation; content-free replay protection remains |
+| Automatic content receipt | Full validated attributed detail remains local and private for bounded recovery. Unobserved content becomes eligible 24 hours after completion; observed content becomes eligible 24 hours after recorded presentation observation; content-free replay protection remains |
+| Continuous pre-review state | Private per-turn worker nonce, generation counters, checkpoint identity, attempt fences, and exact receipts only; no prompt, transcript, screen state, provider chat history, or credentials |
 | Renderer event content | Eligible for deletion after 24 hours; acknowledgments can shorten but not extend that age threshold |
 | Provider temporary state | Removed after a normal supported POSIX run; stale non-live POSIX runs can be removed after the bounded TTL; Windows live runs are disabled and residue from an older build is reported but preserved |
 | Workspace mode and connection selection | Stored locally until disabled or explicitly purged with settings |
 | Guided setup journal | Unstarted expired plans and terminal journals older than 24 hours are removed opportunistically; unresolved state is preserved for recovery |
 
-Buddy is not a background service. Turn state, automatic receipts, and outbox hard expiry are handled by an eligible lifecycle prune. `renderer prune --apply` handles an acknowledged renderer prefix. Provider startup scavenges exact eligible provider temporary runs, and setup activity prunes only safely classified setup records. Unrelated Buddy commands do not guarantee that another subsystem's eligible files are removed. A workspace with no later eligible activity can retain already-eligible local files. The explicit purge command below is the immediate operator-controlled cleanup path for exact review content and, on POSIX, attributable non-live provider temporary runs. It is not a complete Buddy footprint eraser.
+Buddy is not a permanent background service. Continuous mode launches one detached worker for an eligible active turn, enforces a strict six-hour absolute lifetime, periodically revalidates mode while idle, and terminates or yields to Stop after its bounded work. Turn state, automatic receipts, and outbox hard expiry are handled by an eligible lifecycle prune. `renderer prune --apply` handles an acknowledged renderer prefix. Provider startup scavenges exact eligible provider temporary runs, and setup activity prunes only safely classified setup records. Unrelated Buddy commands do not guarantee that another subsystem's eligible files are removed. A workspace with no later eligible activity can retain already-eligible local files. The explicit purge command below is the immediate operator-controlled cleanup path for exact review content and, on POSIX, attributable non-live provider temporary runs. It is not a complete Buddy footprint eraser.
 
 Installed marketplace users can select `/buddy-review` and ask it to show local data status. The direct command below is for a source checkout or an advanced operator already running from the plugin root:
 

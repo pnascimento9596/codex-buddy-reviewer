@@ -1,7 +1,7 @@
 {
   "name": "codex-buddy-reviewer",
   "version": "0.5.0-rc.1+codex.20260719195058",
-  "description": "One or two turn-window-grounded reviewers with animated companions, attributed results, diagnostics, and reversible setup.",
+  "description": "One or two independent reviewers track exact Git changes in the background and finish with a compact Buddy review.",
   "author": {
     "name": "Paulo Nascimento",
     "url": "https://github.com/pnascimento9596"
@@ -22,8 +22,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Codex Buddy Reviewer",
-    "shortDescription": "Automatic independent review after Codex work",
-    "longDescription": "Capture private start and finish snapshots for enabled Codex turns, run one or two isolated configured reviewers concurrently, preserve provider attribution and partial failures, leave the worker summary in the Codex transcript, and deliver grounded technical review plus optional primary-only separately consented summary advice through one safe Stop continuation.",
+    "shortDescription": "Continuous independent review with an animated Buddy",
+    "longDescription": "Capture private exact Git checkpoints without screen access, run one or two isolated configured reviewers independently while Codex works, adopt only an exact final match, keep full attributed detail in a private local receipt, and append one compact grounded review paragraph through a safe Stop continuation.",
     "developerName": "Paulo Nascimento",
     "category": "Coding",
     "capabilities": [

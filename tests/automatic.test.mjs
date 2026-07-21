@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { access, chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,7 +7,7 @@ import test from 'node:test';
 
 import { CaptureBudgetError } from '../src/capture-budget.mjs';
 import { prepareReviewRequest, reviewEvidence as reviewEvidenceImpl } from '../src/cli.mjs';
-import { readEgressRegistry } from '../src/egress-capability.mjs';
+import { egressConfigurationHash, readEgressRegistry } from '../src/egress-capability.mjs';
 import { collectEvidence } from '../src/evidence.mjs';
 import { writeHookOutput } from '../src/hook-transport.mjs';
 import {
@@ -15,12 +16,15 @@ import {
   renderContinuation,
   reviewTurnStop as reviewTurnStopImpl
 } from '../src/lifecycle.mjs';
-import { changeMode, modeFile, readMode } from '../src/mode.mjs';
+import { changeMode, modeFile, readMode, reviewersForMode } from '../src/mode.mjs';
 import { appendOutboxEvent, readSequencedOutboxEvents } from '../src/outbox.mjs';
 import { runProcess } from '../src/process.mjs';
+import { runPreReviewWorker, startTurnPreReview } from '../src/pre-review.mjs';
 import { inspectApprovedProviderReviewRequest } from '../src/provider-registry.mjs';
+import { reviewKeyFor } from '../src/review-identity.mjs';
+import { localReviewResultForEvidence } from '../src/result.mjs';
 import { pruneWorkspaceTurns } from '../src/runtime-pruner.mjs';
-import { opaqueKey, withFileLock, workspaceKey } from '../src/state.mjs';
+import { canonicalJson, opaqueKey, withFileLock, workspaceKey } from '../src/state.mjs';
 import { buildTurnEvidence, captureTurnSnapshot } from '../src/turn-snapshot.mjs';
 import {
   changePresentationProfile,
@@ -28,6 +32,7 @@ import {
 } from '../src/presentation-state.mjs';
 import {
   changeSummaryClaimGuardConsent,
+  buildSummaryClaimGuardPacket,
   readSummaryClaimGuardConsent
 } from '../src/summary-claim-guard.mjs';
 
@@ -39,6 +44,7 @@ const reviewEvidence = (evidence, options = {}) => reviewEvidenceImpl(evidence, 
 });
 const captureTurnStart = (input, options = {}) => captureTurnStartImpl(input, {
   platform: 'linux',
+  startPreReview: async () => ({ status: 'started' }),
   ...options
 });
 const reviewTurnStop = (input, options = {}) => reviewTurnStopImpl(input, {
@@ -97,6 +103,151 @@ function noFindings(summary) {
     summary,
     findings: [],
     comments: []
+  };
+}
+
+function turnDirectory(runtimeDataDir, root, sessionId, turnId) {
+  return path.join(
+    runtimeDataDir,
+    'turns',
+    workspaceKey(root),
+    opaqueKey(sessionId),
+    opaqueKey(turnId)
+  );
+}
+
+function successfulReceipt(
+  mode,
+  reviewKey,
+  context,
+  summary = 'No validated defects were reported.',
+  { summaryGuardConsent = null, workerSummary = null } = {}
+) {
+  const result = noFindings(summary);
+  const [reviewer] = reviewersForMode(mode);
+  const summaryPacket = summaryGuardConsent === null
+    ? null
+    : buildSummaryClaimGuardPacket({
+        consent: summaryGuardConsent,
+        reviewKey,
+        summary: workerSummary
+      });
+  const summaryAdvisory = summaryPacket === null ? null : {
+    schema_version: '1',
+    status: 'no_notes',
+    advisory: 'The bounded summary claims are proportionate.',
+    notes: []
+  };
+  const consumedAt = Date.parse('2026-07-20T00:00:01.000Z');
+  const egressCapability = {
+    schema_version: '1',
+    capability_id: 'a'.repeat(64),
+    workspace_key: workspaceKey(context.root),
+    session_key: opaqueKey(context.input.session_id),
+    turn_key: opaqueKey(context.input.turn_id),
+    review_key: reviewKey,
+    mode_revision: mode.config_revision,
+    provider: reviewer.provider,
+    model: reviewer.model,
+    effort: reviewer.effort,
+    timeout_ms: mode.timeout_ms,
+    configuration_sha256: egressConfigurationHash({
+      provider: reviewer.provider,
+      model: reviewer.model,
+      effort: reviewer.effort,
+      timeout_ms: mode.timeout_ms,
+      min_confidence: mode.min_confidence,
+      max_patch_bytes: mode.max_patch_bytes
+    }),
+    approval_sha256: 'b'.repeat(64),
+    content_policy_version: '1',
+    channel_inventory_sha256: 'c'.repeat(64),
+    prompt_sha256: 'd'.repeat(64),
+    prompt_bytes: 128,
+    response_schema_sha256: 'e'.repeat(64),
+    summary_consent_revision: summaryPacket?.consent_revision ?? null,
+    summary_sha256: summaryPacket?.summary_sha256 ?? null,
+    summary_packet_sha256: summaryPacket === null
+      ? null
+      : createHash('sha256').update(canonicalJson(summaryPacket)).digest('hex'),
+    issued_at: '2026-07-20T00:00:00.000Z',
+    consumed_at: new Date(consumedAt).toISOString(),
+    deadline_at: new Date(consumedAt + mode.timeout_ms + 10_000).toISOString()
+  };
+  return {
+    schema_version: '1',
+    review_key: reviewKey,
+    terminal_status: result.status,
+    provider: mode.provider,
+    model: mode.model,
+    baseline_tree: context.baseline.tree,
+    final_tree: context.final.tree,
+    patch_hash: context.evidence.patch_hash,
+    changed_path_count: context.evidence.changed_paths.length,
+    excluded_path_count: context.evidence.excluded_paths.length
+      + (context.evidence.sensitive_change_count ?? 0)
+      + (context.evidence.ignored_change_count ?? 0),
+    result,
+    reviews: [{
+      source_index: 0,
+      label: `${mode.provider}/${mode.model}`,
+      provider: mode.provider,
+      model: mode.model,
+      result,
+      ...(summaryAdvisory === null ? {} : { summaryAdvisory })
+    }],
+    review_failures: [],
+    review_sources: null,
+    reviewer_runs: [{
+      source_index: 0,
+      provider: mode.provider,
+      model: mode.model,
+      status: 'succeeded',
+      result,
+      failure: null,
+      summary_claim_advisory: summaryAdvisory,
+      provider_run: null,
+      egress_capability: egressCapability
+    }],
+    summary_claim_guard: summaryPacket === null ? null : {
+      policy_version: summaryPacket.policy_version,
+      consent_revision: summaryPacket.consent_revision,
+      summary_sha256: summaryPacket.summary_sha256,
+      summary_truncated: summaryPacket.summary_truncated
+    },
+    summary_claim_advisory: summaryAdvisory,
+    provider_run: null,
+    egress_capability: egressCapability,
+    created_at: new Date().toISOString()
+  };
+}
+
+function localSuccessReceipt(reviewKey, context) {
+  const result = localReviewResultForEvidence(context.evidence);
+  assert.notEqual(result, null);
+  return {
+    schema_version: '1',
+    review_key: reviewKey,
+    terminal_status: result.status,
+    provider: 'none',
+    model: 'none',
+    baseline_tree: context.baseline.tree,
+    final_tree: context.final.tree,
+    patch_hash: context.evidence.patch_hash,
+    changed_path_count: context.evidence.changed_paths.length,
+    excluded_path_count: context.evidence.excluded_paths.length
+      + (context.evidence.sensitive_change_count ?? 0)
+      + (context.evidence.ignored_change_count ?? 0),
+    result,
+    reviews: [],
+    review_failures: [],
+    review_sources: null,
+    reviewer_runs: [],
+    summary_claim_guard: null,
+    summary_claim_advisory: null,
+    provider_run: null,
+    egress_capability: null,
+    created_at: new Date().toISOString()
   };
 }
 
@@ -506,6 +657,15 @@ test('turn snapshots include new safe files but never transmit denied path names
   assert.doesNotMatch(evidence.patch, /\.env|never-egress/);
 });
 
+test('turn snapshots preserve safe filenames that begin with Git option text', async () => {
+  const root = await makeRepository();
+  const { evidence } = await snapshotPair(root, async () => {
+    await writeFile(path.join(root, '-config.js'), 'export const optionLikeName = true;\n');
+  });
+  assert.deepEqual(evidence.changed_paths, ['-config.js']);
+  assert.match(evidence.patch, /optionLikeName/u);
+});
+
 test('turn evidence excludes high-confidence secret material in an otherwise allowed path', async () => {
   const root = await makeRepository();
   const secret = `sk-proj-${'A9_bC7-dE5_fG3-hJ1_kL8'}`;
@@ -791,6 +951,48 @@ test('turn snapshots disable Git color before parsing hunks', async () => {
   assert.deepEqual(evidence.hunk_ranges['app.js'], [{ start: 1, end: 1 }]);
 });
 
+test('turn snapshots disable repository fsmonitor hooks', { skip: process.platform === 'win32' }, async () => {
+  const root = await makeRepository();
+  const hookDirectory = await temporaryDirectory('codex-buddy-fsmonitor-hook-');
+  const hook = path.join(hookDirectory, 'fsmonitor-hook.mjs');
+  const marker = path.join(root, '.git', 'buddy-fsmonitor-fired');
+  await writeFile(hook, `#!/usr/bin/env node\nimport { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(marker)}, 'called\\n');\n`);
+  await chmod(hook, 0o755);
+  await git(root, ['config', 'core.fsmonitor', hook]);
+
+  const snapshotDir = await temporaryDirectory('codex-buddy-fsmonitor-snapshot-');
+  const snapshot = await captureTurnSnapshot({ root, workDir: snapshotDir });
+
+  assert.match(snapshot.tree, /^[0-9a-f]{40,64}$/u);
+  await assert.rejects(access(marker));
+});
+
+test('automatic runtime state configured inside the repository fails before snapshot work', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = path.join(root, '.buddy-runtime');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir });
+  let captureCalls = 0;
+
+  await assert.rejects(captureTurnStart({
+    cwd: root,
+    session_id: 'state-boundary-session',
+    turn_id: 'state-boundary-turn',
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Do not place Buddy state in the repository.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    captureSnapshot: async () => {
+      captureCalls += 1;
+      throw new Error('snapshot work must not start');
+    }
+  }), /outside the reviewed repository/u);
+
+  assert.equal(captureCalls, 0);
+  await assert.rejects(access(runtimeDataDir));
+});
+
 test('a symlink to a denied target never transmits the target name', async () => {
   const root = await makeRepository();
   const { evidence } = await snapshotPair(root, async () => {
@@ -934,12 +1136,16 @@ test('continuation uses a unique closed JSON boundary and never re-embeds the wo
   assert.ok(start);
   const delimiter = start.slice(0, -'_START'.length);
   assert.equal(lines.at(-1), `${delimiter}_END`);
-  assert.equal(continuation.length <= 9_000, true);
+  assert.equal(continuation.length <= 1_800, true);
   assert.doesNotMatch(continuation, /WORKER_INJECTION_MUST_NOT_BE_REEMBEDDED/);
   const jsonLine = lines[lines.indexOf(start) + 1];
   const parsed = JSON.parse(jsonLine);
-  assert.equal(parsed.status, 'findings');
-  assert.equal(parsed.omitted_findings + parsed.omitted_comments > 0, true);
+  assert.deepEqual(Object.keys(parsed).sort(), ['review_key', 'schema_version', 'visible_review']);
+  assert.equal(parsed.schema_version, '2');
+  assert.equal(parsed.review_key, 'a'.repeat(64));
+  assert.match(parsed.visible_review, /Buddy review found 20 validated issues/u);
+  assert.equal(parsed.visible_review.includes('\n'), false);
+  assert.equal(parsed.visible_review.length <= 700, true);
   assert.equal(lines.filter((line) => line === `${delimiter}_END`).length, 1);
 });
 
@@ -967,6 +1173,144 @@ test('continuation rendering rejects credential-shaped aggregate and reviewer mo
     }),
     /invalid model identifier/
   );
+});
+
+test('continuation rendering bounds the serialized envelope for escape-heavy review text', () => {
+  const slashes = (count) => '\\'.repeat(count);
+  const output = {
+    provider: 'grok',
+    model: 'grok-4.5',
+    result: {
+      schema_version: '2',
+      status: 'findings',
+      summary: 'One issue.',
+      findings: [{
+        severity: 'high',
+        confidence: 0.99,
+        title: slashes(145),
+        body: 'The escaped review text must remain deliverable.',
+        path: slashes(180),
+        line_start: 1,
+        line_end: 1,
+        recommendation: slashes(205)
+      }],
+      comments: []
+    },
+    reviews: [],
+    failures: []
+  };
+
+  const continuation = renderContinuation({ output, reviewKey: 'c'.repeat(64) });
+  const lines = continuation.split('\n');
+  const start = lines.findIndex((line) => line.endsWith('_START'));
+  const payload = JSON.parse(lines[start + 1]);
+  assert.equal(continuation.length <= 1_800, true);
+  assert.equal(payload.visible_review.length <= 700, true);
+  assert.equal(payload.visible_review.endsWith('\u2026'), true);
+  assert.equal(lines.at(-1), lines[start].replace(/_START$/u, '_END'));
+});
+
+test('turn start launches continuous review once only after the durable baseline exists', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'launch-session', turn_id: 'launch-turn', cwd: root };
+  const directory = turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id);
+  let launches = 0;
+  const startPreReview = async (payload, options) => {
+    launches += 1;
+    assert.deepEqual(payload, identity);
+    assert.equal(options.runtimeDataDir, runtimeDataDir);
+    assert.equal(options.modeDataDir, modeDataDir);
+    const baseline = JSON.parse(await readFile(path.join(directory, 'baseline.json'), 'utf8'));
+    assert.equal(baseline.mode_revision, 1);
+    return { status: 'started' };
+  };
+  const started = await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Launch the continuous reviewer.'
+  }, { modeDataDir, runtimeDataDir, startPreReview });
+  assert.equal(started.skipped, undefined);
+  assert.equal(launches, 1);
+  const duplicate = await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Duplicate delivery.'
+  }, { modeDataDir, runtimeDataDir, startPreReview });
+  assert.equal(duplicate.skipped, 'duplicate_start');
+  assert.equal(launches, 1);
+});
+
+test('turn start does not launch continuous review without explicit enabled consent', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({
+    root,
+    action: 'enable',
+    dataDir: modeDataDir,
+    continuousReview: false
+  });
+  const identity = { session_id: 'no-consent-session', turn_id: 'no-consent-turn', cwd: root };
+  let launches = 0;
+  const started = await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Capture the baseline without speculative egress.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    startPreReview: async () => { launches += 1; }
+  });
+  assert.equal(started.skipped, undefined);
+  assert.equal(launches, 0);
+  await access(path.join(
+    turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id),
+    'baseline.json'
+  ));
+});
+
+test('continuous review launch failure leaves the normal final Stop review available', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'launch-failure-session', turn_id: 'launch-failure-turn', cwd: root };
+  const started = await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Keep the final review available.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    startPreReview: async () => { throw new Error('synthetic detached launch failure'); }
+  });
+  assert.equal(started.skipped, undefined);
+  assert.match(started.output.hookSpecificOutput.additionalContext, /After this turn/u);
+  await writeFile(path.join(root, 'app.js'), 'const value = 16;\n');
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented the requested change.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    review: async (evidence, options) => {
+      reviewCalls += 1;
+      return {
+        evidence,
+        provider: options.provider,
+        model: options.model,
+        result: noFindings('The final fallback review completed.')
+      };
+    }
+  });
+  assert.equal(reviewCalls, 1);
+  assert.equal(stopped.result.status, 'no_findings');
 });
 
 test('automatic lifecycle produces one deterministic receipt and one Stop continuation', async () => {
@@ -1045,6 +1389,503 @@ test('automatic lifecycle produces one deterministic receipt and one Stop contin
   await assert.rejects(access(path.join(path.dirname(path.dirname(first.receipt)), 'nonexistent')));
 });
 
+test('Stop adopts an exact ready background receipt without duplicate provider egress', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const mode = await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'adopt-session', turn_id: 'adopt-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Adopt the exact background receipt.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 17;\n');
+  let reviewCalls = 0;
+  let receiptContext = null;
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented and validated the change.'
+  };
+  const stopped = await reviewTurnStop(stopInput, {
+    modeDataDir,
+    runtimeDataDir,
+    buildEvidence: async (options) => {
+      const built = await buildTurnEvidence(options);
+      receiptContext = {
+        root,
+        input: stopInput,
+        baseline: options.baseline,
+        final: options.final,
+        evidence: built
+      };
+      return built;
+    },
+    waitForPreReview: async (_directory, reviewKey, receipt, timeoutMs) => {
+      assert.equal(timeoutMs > mode.timeout_ms, true);
+      assert.equal(timeoutMs < 570_000, true);
+      const terminal = successfulReceipt(mode, reviewKey, receiptContext);
+      await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
+      return { status: 'ready', terminal, ownerActive: false };
+    },
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('exact background receipt must prevent duplicate provider egress');
+    }
+  });
+  assert.equal(reviewCalls, 0);
+  assert.equal(stopped.skipped, 'pre_review_adopted');
+  assert.equal(stopped.output.decision, 'block');
+  const payload = continuationPayload(stopped.output.reason);
+  const outbox = await readSequencedOutboxEvents({ repositoryRoot: root, runtimeDataDir });
+  const progress = outbox.events.find((item) => item.event.event_type === 'turn_finished');
+  const completed = outbox.events.find((item) => item.event.event_type === 'review_completed');
+  assert.equal(progress.event.payload.detail, 'Code review and suggestions are in progress.');
+  assert.equal(completed.event.payload.detail, payload.visible_review);
+  assert.deepEqual(await readCompletedReviewKeys({ root, dataDir: modeDataDir }), [stopped.reviewKey]);
+  const directory = turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id);
+  await assert.rejects(access(path.join(directory, 'baseline.json')));
+});
+
+test('Stop recovers an exact local receipt left before completed publication', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'local-recovery-session', turn_id: 'local-recovery-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Recover a local review receipt after interrupted publication.'
+  }, { modeDataDir, runtimeDataDir });
+
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'No repository changes were needed.'
+  };
+  let receiptContext = null;
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop(stopInput, {
+    modeDataDir,
+    runtimeDataDir,
+    buildEvidence: async (options) => {
+      const built = await buildTurnEvidence(options);
+      receiptContext = {
+        root,
+        input: stopInput,
+        baseline: options.baseline,
+        final: options.final,
+        evidence: built
+      };
+      return built;
+    },
+    waitForPreReview: async (_directory, reviewKey, receipt) => {
+      const terminal = localSuccessReceipt(reviewKey, receiptContext);
+      await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
+      return { status: 'ready', terminal, ownerActive: false };
+    },
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('an exact local receipt must not trigger provider egress');
+    }
+  });
+
+  assert.equal(reviewCalls, 0);
+  assert.equal(stopped.skipped, 'pre_review_adopted');
+  assert.equal(stopped.output.decision, 'block');
+  assert.equal(stopped.result.status, 'no_findings');
+  const terminal = JSON.parse(await readFile(stopped.receipt, 'utf8'));
+  assert.equal(terminal.provider, 'none');
+  assert.equal(terminal.model, 'none');
+  assert.deepEqual(terminal.reviewer_runs, []);
+  const completed = JSON.parse(await readFile(path.join(
+    turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id),
+    'completed.json'
+  ), 'utf8'));
+  assert.equal(
+    completed.receipt_sha256,
+    createHash('sha256').update(canonicalJson(terminal)).digest('hex')
+  );
+});
+
+test('real speculative checkpoints share the baseline object store and Stop adopts the receipt', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'real-pre-review-session', turn_id: 'real-pre-review-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Exercise the real speculative snapshot path.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 1701;\n');
+
+  let workerPayload = null;
+  const launched = await startTurnPreReview({
+    ...identity,
+    runtime_data_dir: runtimeDataDir,
+    mode_data_dir: modeDataDir
+  }, {
+    platform: 'linux',
+    launchWorker: async (payload) => {
+      workerPayload = payload;
+      return { pid: 1701 };
+    }
+  });
+  assert.equal(launched.status, 'started');
+  assert.ok(workerPayload);
+
+  let speculativeCalls = 0;
+  let sharedObjectStoreObserved = false;
+  const workerPromise = runPreReviewWorker(workerPayload, {
+    platform: 'linux',
+    debounceMs: 0,
+    checkpointPollMs: 25,
+    workerLifetimeMs: 60_000,
+    buildEvidence: async (options) => {
+      sharedObjectStoreObserved = options.baseline.object_directory === options.final.object_directory;
+      return buildTurnEvidence(options);
+    },
+    review: async (evidence, options) => {
+      speculativeCalls += 1;
+      return {
+        evidence,
+        provider: options.provider,
+        model: options.model,
+        result: noFindings('The speculative review completed from a shared private object store.')
+      };
+    }
+  });
+
+  const receiptDirectory = path.join(runtimeDataDir, 'automatic-reviews', workspaceKey(root));
+  await waitFor(async () => (await filesBelow(receiptDirectory)).some((file) => file.endsWith('.json')),
+    'real speculative receipt', 30_000);
+  let foregroundCalls = 0;
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented and validated the exact change.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    review: async () => {
+      foregroundCalls += 1;
+      throw new Error('the exact speculative receipt must prevent foreground egress');
+    }
+  });
+  const worker = await workerPromise;
+
+  assert.equal(sharedObjectStoreObserved, true);
+  assert.equal(speculativeCalls, 1);
+  assert.equal(foregroundCalls, 0);
+  assert.equal(worker.error, undefined, worker.error?.stack ?? JSON.stringify(worker));
+  assert.equal(worker.status === 'ready' || worker.skipped === 'not_owner', true);
+  assert.equal(stopped.skipped, 'pre_review_adopted');
+  assert.equal(stopped.output.decision, 'block');
+  await assert.rejects(access(path.join(
+    turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id),
+    'snapshot'
+  )));
+});
+
+test('Stop terminalizes an invalid exact background receipt without fallback, credit, or completion', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const mode = await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'invalid-receipt-session', turn_id: 'invalid-receipt-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Reject a corrupted background receipt.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 171;\n');
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented the requested change.'
+  };
+  let receiptContext = null;
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop(stopInput, {
+    modeDataDir,
+    runtimeDataDir,
+    buildEvidence: async (options) => {
+      const built = await buildTurnEvidence(options);
+      receiptContext = {
+        root,
+        input: stopInput,
+        baseline: options.baseline,
+        final: options.final,
+        evidence: built
+      };
+      return built;
+    },
+    waitForPreReview: async (_directory, reviewKey, receipt) => {
+      const terminal = successfulReceipt(mode, reviewKey, receiptContext);
+      terminal.reviewer_runs[0].egress_capability.turn_key = opaqueKey('different-turn');
+      await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
+      return { status: 'ready', terminal, ownerActive: false };
+    },
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('invalid exact receipt must preserve the at-most-once boundary');
+    }
+  });
+  assert.equal(reviewCalls, 0);
+  assert.equal(stopped.skipped, 'invalid_pre_review_receipt');
+  assert.equal(stopped.output.decision, undefined);
+  assert.match(stopped.output.systemMessage, /invalid background receipt/u);
+  assert.deepEqual(await readCompletedReviewKeys({ root, dataDir: modeDataDir }), []);
+  const outbox = await readSequencedOutboxEvents({ repositoryRoot: root, runtimeDataDir });
+  assert.equal(outbox.events.some((item) => item.event.event_type === 'review_completed'), false);
+  assert.equal(outbox.events.filter((item) => item.event.event_type === 'review_degraded').length, 1);
+  const completed = JSON.parse(await readFile(path.join(
+    turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id),
+    'completed.json'
+  ), 'utf8'));
+  assert.equal(completed.terminal_status, 'invalid_pre_review_receipt');
+  assert.equal(completed.presentation_status, 'terminal');
+});
+
+test('Stop preserves an exact speculative attempt boundary when no receipt exists', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'ambiguous-session', turn_id: 'ambiguous-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Preserve at-most-once provider egress.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 18;\n');
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented the change.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    waitForPreReview: async (directory, reviewKey) => {
+      const attempts = path.join(directory, 'pre-review-attempts');
+      await mkdir(attempts, { recursive: true });
+      await writeFile(path.join(attempts, `${reviewKey}.json`), `${JSON.stringify({
+        schema_version: '1', review_key: reviewKey, generation: 1, started_at: new Date().toISOString()
+      })}\n`);
+      return { status: 'ambiguous', terminal: null, ownerActive: true };
+    },
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('an ambiguous exact attempt must not be repeated');
+    }
+  });
+  assert.equal(reviewCalls, 0);
+  assert.equal(stopped.skipped, 'prior_attempt_incomplete');
+  assert.match(stopped.output.systemMessage, /will not be repeated/u);
+  const directory = turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id);
+  const completed = JSON.parse(await readFile(path.join(directory, 'completed.json'), 'utf8'));
+  assert.equal(completed.terminal_status, 'prior_attempt_incomplete');
+});
+
+test('Stop rejects a stale receipt key and falls back to the exact final review', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'stale-session', turn_id: 'stale-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Review the exact final state.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 19;\n');
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented the final state.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    waitForPreReview: async () => ({
+      status: 'ready',
+      terminal: {
+        schema_version: '1',
+        review_key: 'f'.repeat(64),
+        terminal_status: 'no_findings'
+      },
+      ownerActive: false,
+      state: { worker_state: 'superseded' }
+    }),
+    review: async (evidence, options) => {
+      reviewCalls += 1;
+      return {
+        evidence,
+        provider: options.provider,
+        model: options.model,
+        result: noFindings('The exact final fallback completed.')
+      };
+    }
+  });
+  assert.equal(reviewCalls, 1);
+  assert.equal(stopped.result.status, 'no_findings');
+  assert.equal(stopped.skipped, undefined);
+});
+
+test('failed exact background receipt degrades honestly without provider fallback', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const mode = await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'failed-adopt-session', turn_id: 'failed-adopt-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Do not duplicate a failed exact review.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 20;\n');
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented the requested change.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    waitForPreReview: async (_directory, reviewKey, receipt) => {
+      const terminal = {
+        schema_version: '1',
+        review_key: reviewKey,
+        terminal_status: 'provider_unavailable',
+        failure_stage: 'provider',
+        failure_code: 'no_successful_reviews',
+        provider: mode.provider,
+        model: mode.model,
+        reviewer_runs: [{
+          source_index: 0,
+          provider: mode.provider,
+          model: mode.model,
+          status: 'circuit_open',
+          result: null,
+          failure: {
+            stage: 'authorization',
+            failure_code: 'circuit_open',
+            message: 'Reviewer circuit is temporarily open.'
+          },
+          summary_claim_advisory: null,
+          provider_run: null,
+          egress_capability: null
+        }],
+        created_at: new Date().toISOString()
+      };
+      await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
+      return { status: 'ready', terminal, ownerActive: false };
+    },
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('failed exact receipt must not trigger provider fallback');
+    }
+  });
+  assert.equal(reviewCalls, 0);
+  assert.equal(stopped.skipped, 'pre_review_failed');
+  assert.match(stopped.output.systemMessage, /no configured reviewer succeeded/u);
+  const outbox = await readSequencedOutboxEvents({ repositoryRoot: root, runtimeDataDir });
+  assert.equal(outbox.events.some((item) => item.event.event_type === 'review_completed'), false);
+  assert.equal(outbox.events.some((item) => item.event.event_type === 'review_degraded'), true);
+});
+
+test('cleanup preserves active pre-review inputs and removes them after the owner terminalizes', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const mode = await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'active-cleanup-session', turn_id: 'active-cleanup-turn', cwd: root };
+  const directory = turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id);
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Preserve active worker inputs.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 21;\n');
+  let receiptContext = null;
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented the requested change.'
+  };
+  const stopped = await reviewTurnStop(stopInput, {
+    modeDataDir,
+    runtimeDataDir,
+    buildEvidence: async (options) => {
+      const built = await buildTurnEvidence(options);
+      receiptContext = {
+        root,
+        input: stopInput,
+        baseline: options.baseline,
+        final: options.final,
+        evidence: built
+      };
+      return built;
+    },
+    waitForPreReview: async (_directory, reviewKey, receipt) => {
+      const terminal = successfulReceipt(mode, reviewKey, receiptContext);
+      await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
+      await writeFile(path.join(directory, 'pre-review.json'), `${JSON.stringify({
+        schema_version: '1',
+        generation: 1,
+        speculative_launches: 1,
+        worker_nonce: 'a'.repeat(48),
+        worker_state: 'debouncing',
+        active_generation: null,
+        active_review_key: null,
+        ready_review_key: reviewKey,
+        final_requested: true,
+        final_review_key: reviewKey,
+        updated_at: new Date().toISOString()
+      })}\n`);
+      return { status: 'ready', terminal, ownerActive: true };
+    }
+  });
+  assert.equal(stopped.skipped, 'pre_review_adopted');
+  await access(path.join(directory, 'baseline.json'));
+  await access(path.join(directory, 'pre-review.json'));
+  await writeFile(path.join(directory, 'pre-review.json'), `${JSON.stringify({
+    schema_version: '1',
+    generation: 1,
+    speculative_launches: 1,
+    worker_nonce: null,
+    worker_state: 'ready',
+    active_generation: null,
+    active_review_key: null,
+    ready_review_key: stopped.reviewKey,
+    final_requested: true,
+    final_review_key: stopped.reviewKey,
+    updated_at: new Date().toISOString()
+  })}\n`);
+  const observed = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: true,
+    last_assistant_message: 'Implemented the requested change.'
+  }, { modeDataDir, runtimeDataDir });
+  assert.equal(observed.skipped, 'continuation');
+  await assert.rejects(access(path.join(directory, 'baseline.json')));
+  await assert.rejects(access(path.join(directory, 'pre-review.json')));
+});
+
 test('dual reviewers start concurrently and preserve configured presentation order', async () => {
   const fixture = await prepareDualReviewerTurn({ turnId: 'dual-concurrent', value: 201 });
   const started = [];
@@ -1077,11 +1918,9 @@ test('dual reviewers start concurrently and preserve configured presentation ord
   const stopped = await stopping;
   assert.equal(stopped.result.status, 'no_findings');
   const payload = continuationPayload(stopped.output.reason);
-  assert.deepEqual(payload.reviews.map((review) => review.provider), ['ollama', 'claude']);
-  assert.deepEqual(
-    payload.reviews.map((review) => review.summary),
-    ['ollama completed independently.', 'claude completed independently.']
-  );
+  assert.deepEqual(Object.keys(payload).sort(), ['review_key', 'schema_version', 'visible_review']);
+  assert.match(payload.visible_review, /no actionable correctness defect/u);
+  assert.doesNotMatch(stopped.output.reason, /completed independently/u);
   const receipt = JSON.parse(await readFile(stopped.receipt, 'utf8'));
   assert.deepEqual(receipt.reviewer_runs.map((run) => run.provider), ['ollama', 'claude']);
   assert.deepEqual(receipt.reviewer_runs.map((run) => run.status), ['succeeded', 'succeeded']);
@@ -1128,8 +1967,9 @@ test('one invalid reviewer and one success complete with attributed audit record
   assert.deepEqual(receipt.reviews.map((review) => review.source_index), [1]);
   assert.deepEqual(receipt.review_failures.map((failure) => failure.source_index), [0]);
   const payload = continuationPayload(stopped.output.reason);
-  assert.deepEqual(payload.reviews.map((review) => review.provider), ['claude']);
-  assert.deepEqual(payload.review_failures.map((failure) => failure.provider), ['ollama']);
+  assert.match(payload.visible_review, /partial review/u);
+  assert.equal(Object.hasOwn(payload, 'reviews'), false);
+  assert.equal(Object.hasOwn(payload, 'review_failures'), false);
   const outbox = await readSequencedOutboxEvents({
     repositoryRoot: fixture.root,
     runtimeDataDir: fixture.runtimeDataDir
@@ -1662,6 +2502,44 @@ test('post-dispatch capability settlement failures do not increment the provider
   assert.equal(JSON.parse(await readFile(circuitFile, 'utf8')).consecutive_failures, 0);
 });
 
+test('intentional provider cancellation never increments the provider circuit', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const mode = await changeMode({ root, action: 'enable', dataDir: modeDataDir });
+  const identity = { session_id: 'cancelled-circuit-session', turn_id: 'cancelled-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Exercise the neutral cancellation boundary.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 119;\n');
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'The review was intentionally cancelled.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    review: async () => {
+      const error = new Error('synthetic intentional cancellation');
+      error.failureCode = 'cancelled';
+      throw error;
+    }
+  });
+  assert.match(stopped.output.systemMessage, /could not complete/u);
+  const circuitFile = path.join(
+    runtimeDataDir,
+    'circuits',
+    workspaceKey(root),
+    `${opaqueKey(`${mode.provider}\0${mode.model}`)}.json`
+  );
+  await assert.rejects(access(circuitFile));
+  const receipt = JSON.parse(await readFile(stopped.receipt, 'utf8'));
+  assert.equal(receipt.failure_code, 'cancelled');
+});
+
 test('late start publication and Stop share one turn lease', async () => {
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
@@ -1785,16 +2663,19 @@ test('separately consented summary advisory shares one review call and cosmetic 
   const payload = JSON.parse(stopped.output.reason.split('\n')[
     stopped.output.reason.split('\n').indexOf(boundaryLine) + 1
   ]);
-  assert.equal(payload.summary_advisory.status, 'no_notes');
-  assert.equal(payload.companion.pet_id, 'buddy-lupo');
-  assert.equal(payload.companion.personality, 'warm');
-  assert.equal(payload.companion.xp, 10);
+  assert.deepEqual(Object.keys(payload).sort(), ['review_key', 'schema_version', 'visible_review']);
+  assert.match(payload.visible_review, /no actionable correctness defect/u);
   assert.deepEqual(await readCompletedReviewKeys({ root, dataDir: modeDataDir }), [stopped.reviewKey]);
   const receiptText = await readFile(stopped.receipt, 'utf8');
   assert.doesNotMatch(receiptText, /GUARD_SUMMARY_UNIQUE/);
   const receipt = JSON.parse(receiptText);
   assert.equal(receipt.summary_claim_guard.summary_sha256.length, 64);
   assert.equal(receipt.summary_claim_advisory.status, 'no_notes');
+  const outbox = await readSequencedOutboxEvents({ repositoryRoot: root, runtimeDataDir });
+  const completed = outbox.events.find((item) => item.event.event_type === 'review_completed');
+  assert.equal(completed.event.payload.companion.pet_id, 'buddy-lupo');
+  assert.equal(completed.event.payload.companion.personality, 'warm');
+  assert.equal(completed.event.payload.companion.xp, 10);
 });
 
 test('real summary lifecycle dispatches the spent immutable packet through the Ollama boundary', {
@@ -2460,7 +3341,7 @@ test('a durable prior-attempt marker prevents provider replay after an interrupt
   await assert.rejects(access(path.join(path.dirname(baselineFile), 'attempt.json')));
 });
 
-test('a receipt from a prior attempt is replayed even when later Stop inputs would derive a new key', async () => {
+test('an exact durable receipt from a prior attempt replays only after current evidence validation', async () => {
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
   const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
@@ -2473,34 +3354,68 @@ test('a receipt from a prior attempt is replayed even when later Stop inputs wou
     (file) => path.basename(file) === 'baseline.json'
   );
   assert.ok(baselineFile);
-  const attemptedReviewKey = 'b'.repeat(64);
+  await writeFile(path.join(root, 'app.js'), 'const value = 67;\n');
+  const mode = await readMode({ root, dataDir: modeDataDir });
+  await changeSummaryClaimGuardConsent({
+    root,
+    dataDir: modeDataDir,
+    action: 'enable',
+    provider: mode.provider,
+    model: mode.model,
+    confirmSummaryEgress: true
+  });
+  const baseline = JSON.parse(await readFile(baselineFile, 'utf8')).snapshot;
+  const final = { ...baseline, tree: 'f'.repeat(40), captured_at: '2026-07-20T00:00:00.000Z' };
+  const evidence = {
+    schema_version: '1',
+    repository_root: root,
+    changed_paths: ['app.js'],
+    excluded_paths: [],
+    sensitive_change_count: 0,
+    ignored_change_count: 0,
+    path_evidence: [{ path: 'app.js', transmitted: true, disposition: 'complete' }],
+    hunk_ranges: { 'app.js': [{ side: 'new', start: 1, end: 1, kind: 'changed' }] },
+    line_counts: { 'app.js': 1 },
+    old_line_counts: { 'app.js': 1 },
+    patch_hash: '9'.repeat(64)
+  };
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'A summary that is not part of the technical-only review key.'
+  };
+  const summaryGuardConsent = await readSummaryClaimGuardConsent({ root, dataDir: modeDataDir });
+  const attemptedReviewKey = reviewKeyFor({
+    input: stopInput,
+    mode,
+    baseline,
+    final,
+    evidence,
+    summaryGuardConsent
+  });
   await writeFile(path.join(path.dirname(baselineFile), 'attempt.json'), `${JSON.stringify({
     schema_version: '1', review_key: attemptedReviewKey, started_at: new Date().toISOString()
   })}\n`);
   const receiptDirectory = path.join(runtimeDataDir, 'automatic-reviews', workspaceKey(root));
   await mkdir(receiptDirectory, { recursive: true });
   const receipt = path.join(receiptDirectory, `${attemptedReviewKey}.json`);
-  await writeFile(receipt, `${JSON.stringify({
-    schema_version: '1',
-    review_key: attemptedReviewKey,
-    terminal_status: 'no_findings',
-    provider: 'ollama',
-    model: 'glm-5.2:cloud',
-    result: {
-      schema_version: '1', status: 'no_findings', summary: 'Recovered prior result.', findings: [], comments: []
-    },
-    created_at: new Date().toISOString()
-  })}\n`);
-  await writeFile(path.join(root, 'app.js'), 'const value = 67;\n');
+  await writeFile(receipt, `${JSON.stringify(successfulReceipt(mode, attemptedReviewKey, {
+    root,
+    input: stopInput,
+    baseline,
+    final,
+    evidence
+  }, 'Recovered prior result.', {
+    summaryGuardConsent,
+    workerSummary: stopInput.last_assistant_message
+  }))}\n`);
   let calls = 0;
-  const result = await reviewTurnStop({
-    ...identity,
-    hook_event_name: 'Stop',
-    stop_hook_active: false,
-    last_assistant_message: 'A changed summary that would otherwise alter the review key.'
-  }, {
+  const result = await reviewTurnStop(stopInput, {
     modeDataDir,
     runtimeDataDir,
+    captureSnapshot: async () => final,
+    buildEvidence: async () => evidence,
     review: async () => {
       calls += 1;
       throw new Error('provider must not replay after a durable receipt');
@@ -2511,12 +3426,12 @@ test('a receipt from a prior attempt is replayed even when later Stop inputs wou
   assert.equal(result.reviewKey, attemptedReviewKey);
   assert.equal(result.receipt, receipt);
   assert.equal(result.output.decision, 'block');
-  assert.match(result.output.reason, /Recovered prior result/);
+  assert.match(result.output.reason, /no actionable correctness defect/u);
   await assert.rejects(access(baselineFile));
   await assert.rejects(access(path.join(path.dirname(baselineFile), 'attempt.json')));
 });
 
-test('a legacy receipt with a credential-shaped model is not replayed or echoed', async () => {
+test('a stale legacy receipt with a credential-shaped model is never replayed or echoed', async () => {
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
   const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
@@ -2551,8 +3466,8 @@ test('a legacy receipt with a credential-shaped model is not replayed or echoed'
     stop_hook_active: false,
     last_assistant_message: 'Done.'
   }, { modeDataDir, runtimeDataDir });
-  assert.equal(stopped.skipped, 'duplicate');
-  assert.equal(stopped.output, null);
+  assert.equal(stopped.skipped, 'prior_attempt_incomplete');
+  assert.match(stopped.output.systemMessage, /does not match the current final repository state/u);
   assert.equal(JSON.stringify(stopped).includes(model), false);
 });
 
