@@ -501,7 +501,8 @@ test('provider adapters reject an omitted response schema before launching a pro
   );
 });
 
-test('Windows containment failures map to stable provider failure categories', () => {
+test('process containment failures map to stable provider failure categories', () => {
+  assert.equal(processFailureCode({ kind: 'containment_failure' }), 'isolation_failed');
   assert.equal(processFailureCode({ kind: 'helper_unavailable' }), 'isolation_failed');
   assert.equal(processFailureCode({ kind: 'integrity_mismatch' }), 'isolation_failed');
   assert.equal(processFailureCode({ kind: 'control_protocol' }), 'isolation_failed');

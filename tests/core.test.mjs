@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { access, chmod, copyFile, readFile, stat, mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { promisify } from 'node:util';
 
 import { parseArgs, reviewEvidence as reviewEvidenceImpl, runReview } from '../src/cli.mjs';
 import { collectEvidence } from '../src/evidence.mjs';
@@ -21,6 +22,7 @@ import { storeReceipt } from '../src/store.mjs';
 import { opaqueKey, workspaceKey } from '../src/state.mjs';
 
 const temporaryPaths = [];
+const execFileAsync = promisify(execFile);
 const reviewEvidence = (evidence, options = {}) => reviewEvidenceImpl(evidence, {
   platform: 'linux',
   ...options
@@ -34,6 +36,34 @@ async function temporaryDirectory(prefix) {
   const directory = await mkdtemp(path.join(os.tmpdir(), prefix));
   temporaryPaths.push(directory);
   return directory;
+}
+
+async function assertProcessTerminated(pid, message) {
+  try {
+    process.kill(pid, 0);
+  } catch (error) {
+    if (error?.code === 'ESRCH') return;
+    throw error;
+  }
+
+  try {
+    const { stdout } = await execFileAsync('ps', ['-o', 'stat=', '-p', String(pid)], {
+      encoding: 'utf8',
+      timeout: 1_000,
+      windowsHide: true
+    });
+    const state = stdout.trim();
+    assert.match(state, /^Z/u, `${message}; observed process state ${state || 'unknown'}`);
+  } catch (error) {
+    if (error?.code !== 1) throw error;
+    try {
+      process.kill(pid, 0);
+    } catch (recheckError) {
+      if (recheckError?.code === 'ESRCH') return;
+      throw recheckError;
+    }
+    throw error;
+  }
 }
 
 async function syntheticGrokAuth(directory) {
@@ -977,13 +1007,60 @@ setInterval(() => {}, 1000);
     assert.equal(error.code, 'ABORT_ERR');
     return true;
   });
-  for (const pid of [providerPid, descendantPid]) {
-    assert.throws(
-      () => process.kill(pid, 0),
-      (error) => error?.code === 'ESRCH',
-      `cancelled provider process ${pid} must be gone before rejection`
+  for (const [label, pid] of [['provider', providerPid], ['descendant', descendantPid]]) {
+    await assertProcessTerminated(
+      pid,
+      `cancelled ${label} process ${pid} must be terminated before rejection`
     );
   }
+});
+
+test('process containment cleanup failure takes precedence over cancellation', {
+  skip: process.platform === 'win32',
+  timeout: 10_000
+}, async () => {
+  const root = await temporaryDirectory('codex-buddy-containment-failure-');
+  const provider = path.join(root, 'provider.mjs');
+  const providerPidFile = path.join(root, 'provider.pid');
+  await writeFile(provider, `
+import { writeFileSync } from 'node:fs';
+process.on('SIGTERM', () => {});
+writeFileSync(process.argv[2], String(process.pid));
+setInterval(() => {}, 1000);
+`);
+  const controller = new AbortController();
+  const running = runProcess(process.execPath, [provider, providerPidFile], {
+    timeoutMs: 8_000,
+    signal: controller.signal,
+    processGroupCleanupImpl: async () => {
+      throw new Error('PRIVATE_PROCESS_DIAGNOSTIC');
+    }
+  });
+  let providerPid;
+  try {
+    const deadline = Date.now() + 3_000;
+    while (!existsSync(providerPidFile)) {
+      if (Date.now() >= deadline) throw new Error('provider did not start before cancellation');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    providerPid = Number(await readFile(providerPidFile, 'utf8'));
+    controller.abort('PRIVATE_ABORT_REASON');
+    await assert.rejects(running, (error) => {
+      assert.equal(error.name, 'ProcessContainmentError');
+      assert.equal(error.kind, 'containment_failure');
+      assert.equal(error.code, 'PROCESS_CONTAINMENT_FAILED');
+      assert.equal(error.message, 'Buddy could not verify provider process containment cleanup');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE_PROCESS_DIAGNOSTIC|PRIVATE_ABORT_REASON/);
+      return true;
+    });
+  } finally {
+    controller.abort();
+    await running.catch(() => {});
+  }
+  await assertProcessTerminated(
+    providerPid,
+    `cancelled provider process ${providerPid} must be terminated after a cleanup verification failure`
+  );
 });
 
 test('subprocess natural exit force-kills in-group descendants before resolving', {
