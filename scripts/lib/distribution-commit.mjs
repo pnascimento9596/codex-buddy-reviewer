@@ -21,6 +21,15 @@ const SHA1_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const SEMVER_PATTERN = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const CONTROL_PATTERN = /[\u0000-\u001F\u007F-\u009F\u2028-\u202E\u2066-\u2069]/u;
+const GIT_COMMAND_TIMEOUT_MS = 60_000;
+const GIT_REAP_TIMEOUT_MS = 5_000;
+const GIT_FINAL_REAP_TIMEOUT_MS = 2_000;
+const PARTIAL_OUTPUT_REMOVAL_OPTIONS = Object.freeze({
+  recursive: true,
+  force: true,
+  maxRetries: 5,
+  retryDelay: 100
+});
 const PERSONAL_PATH_PATTERNS = Object.freeze([
   /(?:^|[^0-9A-Za-z])\/Users\/[^/\s"'`<>]+(?:\/|$)/u,
   /(?:^|[^0-9A-Za-z])\/home\/[^/\s"'`<>]+(?:\/|$)/u,
@@ -239,10 +248,14 @@ async function runGit(executable, args, {
   repository,
   input,
   extraEnv,
-  maxOutputBytes = 64 * 1024 * 1024
+  maxOutputBytes = 64 * 1024 * 1024,
+  timeoutMs = GIT_COMMAND_TIMEOUT_MS,
+  reapTimeoutMs = GIT_REAP_TIMEOUT_MS,
+  finalReapTimeoutMs = GIT_FINAL_REAP_TIMEOUT_MS,
+  spawnImpl = spawn
 }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, {
+    const child = spawnImpl(executable, args, {
       cwd,
       env: sanitizedGitEnvironment(repository, extraEnv),
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -252,29 +265,82 @@ async function runGit(executable, args, {
     const stderr = [];
     let outputBytes = 0;
     let settled = false;
-    let timer;
+    let pendingError = null;
+    let deadlineTimer;
+    let reapTimer;
+    let finalReapTimer;
+    const markReap = (error, confirmed) => {
+      Object.defineProperty(error, 'reapConfirmed', {
+        value: confirmed,
+        enumerable: false,
+        configurable: true
+      });
+      return error;
+    };
+    const clearTimers = () => {
+      clearTimeout(deadlineTimer);
+      clearTimeout(reapTimer);
+      clearTimeout(finalReapTimer);
+    };
     const finish = (error, value) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      clearTimers();
       if (error) reject(error);
       else resolve(value);
+    };
+    const killIfRunning = () => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      child.kill('SIGKILL');
+    };
+    const requestTermination = (error) => {
+      if (settled || pendingError) return;
+      pendingError = error;
+      killIfRunning();
+      reapTimer = setTimeout(() => {
+        if (settled) return;
+        killIfRunning();
+        child.stdin.destroy();
+        child.stdout.destroy();
+        child.stderr.destroy();
+        finalReapTimer = setTimeout(() => {
+          finish(markReap(pendingError, false));
+        }, finalReapTimeoutMs);
+        finalReapTimer.unref?.();
+      }, reapTimeoutMs);
+      reapTimer.unref?.();
     };
     const collect = (destination) => (chunk) => {
       outputBytes += chunk.length;
       if (outputBytes > maxOutputBytes) {
-        child.kill('SIGKILL');
-        finish(new Error('Git output exceeded its local validation budget'));
+        requestTermination(new Error('Git output exceeded its local validation budget'));
         return;
       }
       destination.push(chunk);
     };
     child.stdout.on('data', collect(stdout));
     child.stderr.on('data', collect(stderr));
-    child.on('error', (error) => finish(error));
+    child.stdin.on('error', (error) => {
+      // Git may exit before consuming all piped input. Its close status remains
+      // authoritative for that ordinary early-close case. Other stream errors
+      // terminate the child and retain the stream failure until close proves
+      // that cleanup can safely begin.
+      if (!['EPIPE', 'EOF'].includes(error.code)) requestTermination(error);
+    });
+    child.on('error', (error) => {
+      if (pendingError) return;
+      finish(markReap(error, child.pid === undefined));
+    });
     child.on('close', (code, signal) => {
+      if (pendingError) {
+        finish(markReap(pendingError, true));
+        return;
+      }
       if (code !== 0) {
-        finish(new Error(`Git command failed with status ${String(code)} and signal ${String(signal)}`));
+        finish(markReap(
+          new Error(`Git command failed with status ${String(code)} and signal ${String(signal)}`),
+          true
+        ));
         return;
       }
       finish(null, {
@@ -282,14 +348,52 @@ async function runGit(executable, args, {
         stderr: Buffer.concat(stderr)
       });
     });
-    timer = setTimeout(() => {
-      child.kill('SIGKILL');
-      finish(new Error('Git command exceeded its local validation deadline'));
-    }, 30_000);
-    timer.unref?.();
+    deadlineTimer = setTimeout(() => {
+      requestTermination(new Error('Git command exceeded its local validation deadline'));
+    }, timeoutMs);
+    deadlineTimer.unref?.();
     if (input === undefined) child.stdin.end();
     else child.stdin.end(input);
   });
+}
+
+function annotateBuildFailure(primary, note, diagnostic) {
+  const failure = new Error(`${primary.message}; ${note}`, { cause: primary });
+  if (Object.hasOwn(primary, 'reapConfirmed')) {
+    Object.defineProperty(failure, 'reapConfirmed', {
+      value: primary.reapConfirmed,
+      enumerable: false,
+      configurable: true
+    });
+  }
+  if (diagnostic) {
+    Object.defineProperty(failure, 'cleanupError', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true
+    });
+  }
+  return failure;
+}
+
+async function cleanupFailedDistribution(destination, primary, removeImpl = rm) {
+  if (primary?.reapConfirmed === false) {
+    return annotateBuildFailure(
+      primary,
+      'partial output was preserved because Git process termination was not confirmed'
+    );
+  }
+  try {
+    await removeImpl(destination, PARTIAL_OUTPUT_REMOVAL_OPTIONS);
+    return primary;
+  } catch (cleanupError) {
+    const code = typeof cleanupError?.code === 'string' ? cleanupError.code : 'unknown';
+    return annotateBuildFailure(
+      primary,
+      `partial output cleanup also failed (${code})`,
+      cleanupError
+    );
+  }
 }
 
 async function gitText(executable, args, options) {
@@ -839,8 +943,15 @@ export async function buildDistributionRepository({
       policyRoot: trustedPolicyRoot
     });
   } catch (error) {
-    if (created) await rm(destination, { recursive: true, force: true });
-    if (error.message.startsWith('Buddy distribution commit:')) throw error;
-    fail(error.message);
+    const failure = created
+      ? await cleanupFailedDistribution(destination, error)
+      : error;
+    if (failure.message.startsWith('Buddy distribution commit:')) throw failure;
+    throw new Error(`Buddy distribution commit: ${failure.message}`, { cause: failure });
   }
 }
+
+export const DISTRIBUTION_TEST_ONLY = Object.freeze({
+  cleanupFailedDistribution,
+  runGit
+});

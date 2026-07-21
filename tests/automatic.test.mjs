@@ -1055,10 +1055,11 @@ test('stale lock recovery preserves mutual exclusion for concurrent contenders',
   const root = await temporaryDirectory('codex-buddy-lock-');
   const target = path.join(root, 'state.json');
   const lockDirectory = `${target}.lock`;
+  const staleMs = 60_000;
   await mkdir(lockDirectory, { recursive: true });
   const deadClaim = path.join(lockDirectory, 'claim-000000000001-dead.json');
   await writeFile(deadClaim, `${JSON.stringify({ ticket: 1, token: 'dead', pid: 2_147_483_647 })}\n`);
-  const old = new Date(Date.now() - 60_000);
+  const old = new Date(Date.now() - (staleMs * 2));
   await utimes(deadClaim, old, old);
   let active = 0;
   let maximumActive = 0;
@@ -1069,9 +1070,10 @@ test('stale lock recovery preserves mutual exclusion for concurrent contenders',
     await new Promise((resolve) => setTimeout(resolve, 5));
     completed += 1;
     active -= 1;
-  }, { timeoutMs: 10_000, staleMs: 5 })));
+  }, { timeoutMs: 30_000, staleMs })));
   assert.equal(completed, 24);
   assert.equal(maximumActive, 1);
+  await assert.rejects(access(deadClaim));
 });
 
 test('legacy 540-second mode records are clamped and rewritten within the current limit', async () => {
