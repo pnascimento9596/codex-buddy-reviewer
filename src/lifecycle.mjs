@@ -32,6 +32,7 @@ import { REVIEW_SCHEMA_VERSION } from './review-schema.mjs';
 import { pruneWorkspaceTurns } from './runtime-pruner.mjs';
 import { assessProviderModelIdentifier } from './secret-scan.mjs';
 import {
+  assertStateOutsideRepository,
   canonicalJson,
   ensurePrivateStatePath,
   opaqueKey,
@@ -477,6 +478,7 @@ export async function markContinuationStdoutWritten(input, token, options = {}) 
   if (typeof token !== 'string' || !/^[0-9a-f]{48}$/.test(token)) return false;
   const root = await tryResolveRoot(input, options.resolveRoot ?? resolveRepositoryRoot);
   if (!root) return false;
+  await assertStateOutsideRepository(root, resolveRuntimeDataDir(options.runtimeDataDir), 'runtime state');
   const directory = automaticTurnDirectory(options.runtimeDataDir, root, input.session_id, input.turn_id);
   const completedFile = path.join(directory, 'completed.json');
   return withFileLock(path.join(directory, 'stop'), async () => {
@@ -495,6 +497,7 @@ export async function captureTurnStart(input, options = {}) {
   if (input.agent_id || process.env.CODEX_BUDDY_SUPPRESS_HOOKS === '1') return { output: null, skipped: 'nested' };
   const root = await tryResolveRoot(input, options.resolveRoot ?? resolveRepositoryRoot);
   if (!root) return { output: null, skipped: 'non_git' };
+  await assertStateOutsideRepository(root, resolveRuntimeDataDir(options.runtimeDataDir), 'runtime state');
   const mode = await readMode({ root, dataDir: options.modeDataDir });
   if (!mode.enabled) {
     await (options.pruneTurns ?? pruneWorkspaceTurns)({
@@ -639,6 +642,7 @@ export async function reviewTurnStop(input, options = {}) {
   if (input.agent_id || process.env.CODEX_BUDDY_SUPPRESS_HOOKS === '1') return { output: null, skipped: 'nested' };
   const root = await tryResolveRoot(input, options.resolveRoot ?? resolveRepositoryRoot);
   if (!root) return { output: null, skipped: 'non_git' };
+  await assertStateOutsideRepository(root, resolveRuntimeDataDir(options.runtimeDataDir), 'runtime state');
   const platformPolicy = providerEgressPlatformPolicy(options.platform ?? process.platform);
   if (!platformPolicy.allowed) {
     const mode = await readMode({ root, dataDir: options.modeDataDir });

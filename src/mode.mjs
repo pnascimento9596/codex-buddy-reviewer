@@ -6,6 +6,7 @@ import {
 } from './egress-capability.mjs';
 import { runProcess } from './process.mjs';
 import {
+  assertStateOutsideRepository,
   ensurePrivateStatePath,
   readPrivateJson,
   resolveDataDir,
@@ -194,13 +195,14 @@ export function modeFile(root, dataDir) {
   return path.join(resolveDataDir(dataDir), 'mode', `${workspaceKey(root)}.json`);
 }
 
-async function ensureModeDirectory(dataDir) {
+async function ensureModeDirectory(root, dataDir) {
   const dataRoot = resolveDataDir(dataDir);
+  await assertStateOutsideRepository(root, dataRoot, 'mode state');
   await ensurePrivateStatePath(dataRoot, path.join(dataRoot, 'mode'));
 }
 
 export async function readMode({ root, dataDir }) {
-  await ensureModeDirectory(dataDir);
+  await ensureModeDirectory(root, dataDir);
   const stored = await readPrivateJson(modeFile(root, dataDir));
   const validated = validateMode(stored ?? defaultMode(root), root, {
     allowLegacyTimeout: true,
@@ -210,7 +212,7 @@ export async function readMode({ root, dataDir }) {
 }
 
 export async function withModeLock({ root, dataDir }, callback) {
-  await ensureModeDirectory(dataDir);
+  await ensureModeDirectory(root, dataDir);
   const file = modeFile(root, dataDir);
   return withFileLock(
     file,
@@ -223,7 +225,7 @@ export async function changeMode({ root, action = 'toggle', dataDir, ...override
   if (!VALID_ACTIONS.has(action)) throw new Error(`Unknown Buddy mode action: ${action}`);
   const file = modeFile(root, dataDir);
   if (action === 'status') return readMode({ root, dataDir });
-  await ensureModeDirectory(dataDir);
+  await ensureModeDirectory(root, dataDir);
 
   const mutation = await withFileLock(file, async () => {
     const current = await readMode({ root, dataDir });

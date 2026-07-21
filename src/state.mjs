@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { chmod, link, lstat, mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
+import { chmod, link, lstat, mkdir, open, readdir, realpath, rename, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -12,6 +12,36 @@ export function resolveDataDir(explicit) {
 
 export function resolveRuntimeDataDir(explicit) {
   return explicit ?? process.env.PLUGIN_DATA ?? resolveDataDir();
+}
+
+async function resolvePhysicalCandidate(candidate) {
+  let current = path.resolve(candidate);
+  const unresolved = [];
+  while (true) {
+    try {
+      return path.resolve(await realpath(current), ...unresolved);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      const parent = path.dirname(current);
+      if (parent === current) throw error;
+      unresolved.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+export async function assertStateOutsideRepository(repositoryRoot, stateRoot, label = 'private state') {
+  const [resolvedRepository, resolvedState] = await Promise.all([
+    resolvePhysicalCandidate(repositoryRoot),
+    resolvePhysicalCandidate(stateRoot)
+  ]);
+  const relative = path.relative(resolvedRepository, resolvedState);
+  if (relative === '' || (!relative.startsWith(`..${path.sep}`)
+      && relative !== '..'
+      && !path.isAbsolute(relative))) {
+    throw new Error(`Buddy ${label} directory must be outside the reviewed repository`);
+  }
+  return resolvedState;
 }
 
 export function workspaceKey(root) {

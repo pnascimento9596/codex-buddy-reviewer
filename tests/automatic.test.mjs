@@ -22,6 +22,7 @@ import { runProcess } from '../src/process.mjs';
 import { runPreReviewWorker, startTurnPreReview } from '../src/pre-review.mjs';
 import { inspectApprovedProviderReviewRequest } from '../src/provider-registry.mjs';
 import { reviewKeyFor } from '../src/review-identity.mjs';
+import { localReviewResultForEvidence } from '../src/result.mjs';
 import { pruneWorkspaceTurns } from '../src/runtime-pruner.mjs';
 import { canonicalJson, opaqueKey, withFileLock, workspaceKey } from '../src/state.mjs';
 import { buildTurnEvidence, captureTurnSnapshot } from '../src/turn-snapshot.mjs';
@@ -217,6 +218,35 @@ function successfulReceipt(
     summary_claim_advisory: summaryAdvisory,
     provider_run: null,
     egress_capability: egressCapability,
+    created_at: new Date().toISOString()
+  };
+}
+
+function localSuccessReceipt(reviewKey, context) {
+  const result = localReviewResultForEvidence(context.evidence);
+  assert.notEqual(result, null);
+  return {
+    schema_version: '1',
+    review_key: reviewKey,
+    terminal_status: result.status,
+    provider: 'none',
+    model: 'none',
+    baseline_tree: context.baseline.tree,
+    final_tree: context.final.tree,
+    patch_hash: context.evidence.patch_hash,
+    changed_path_count: context.evidence.changed_paths.length,
+    excluded_path_count: context.evidence.excluded_paths.length
+      + (context.evidence.sensitive_change_count ?? 0)
+      + (context.evidence.ignored_change_count ?? 0),
+    result,
+    reviews: [],
+    review_failures: [],
+    review_sources: null,
+    reviewer_runs: [],
+    summary_claim_guard: null,
+    summary_claim_advisory: null,
+    provider_run: null,
+    egress_capability: null,
     created_at: new Date().toISOString()
   };
 }
@@ -627,6 +657,15 @@ test('turn snapshots include new safe files but never transmit denied path names
   assert.doesNotMatch(evidence.patch, /\.env|never-egress/);
 });
 
+test('turn snapshots preserve safe filenames that begin with Git option text', async () => {
+  const root = await makeRepository();
+  const { evidence } = await snapshotPair(root, async () => {
+    await writeFile(path.join(root, '-config.js'), 'export const optionLikeName = true;\n');
+  });
+  assert.deepEqual(evidence.changed_paths, ['-config.js']);
+  assert.match(evidence.patch, /optionLikeName/u);
+});
+
 test('turn evidence excludes high-confidence secret material in an otherwise allowed path', async () => {
   const root = await makeRepository();
   const secret = `sk-proj-${'A9_bC7-dE5_fG3-hJ1_kL8'}`;
@@ -910,6 +949,48 @@ test('turn snapshots disable Git color before parsing hunks', async () => {
   });
   assert.doesNotMatch(evidence.patch, /\u001b/);
   assert.deepEqual(evidence.hunk_ranges['app.js'], [{ start: 1, end: 1 }]);
+});
+
+test('turn snapshots disable repository fsmonitor hooks', { skip: process.platform === 'win32' }, async () => {
+  const root = await makeRepository();
+  const hookDirectory = await temporaryDirectory('codex-buddy-fsmonitor-hook-');
+  const hook = path.join(hookDirectory, 'fsmonitor-hook.mjs');
+  const marker = path.join(root, '.git', 'buddy-fsmonitor-fired');
+  await writeFile(hook, `#!/usr/bin/env node\nimport { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(marker)}, 'called\\n');\n`);
+  await chmod(hook, 0o755);
+  await git(root, ['config', 'core.fsmonitor', hook]);
+
+  const snapshotDir = await temporaryDirectory('codex-buddy-fsmonitor-snapshot-');
+  const snapshot = await captureTurnSnapshot({ root, workDir: snapshotDir });
+
+  assert.match(snapshot.tree, /^[0-9a-f]{40,64}$/u);
+  await assert.rejects(access(marker));
+});
+
+test('automatic runtime state configured inside the repository fails before snapshot work', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = path.join(root, '.buddy-runtime');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir });
+  let captureCalls = 0;
+
+  await assert.rejects(captureTurnStart({
+    cwd: root,
+    session_id: 'state-boundary-session',
+    turn_id: 'state-boundary-turn',
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Do not place Buddy state in the repository.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    captureSnapshot: async () => {
+      captureCalls += 1;
+      throw new Error('snapshot work must not start');
+    }
+  }), /outside the reviewed repository/u);
+
+  assert.equal(captureCalls, 0);
+  await assert.rejects(access(runtimeDataDir));
 });
 
 test('a symlink to a denied target never transmits the target name', async () => {
@@ -1366,6 +1447,69 @@ test('Stop adopts an exact ready background receipt without duplicate provider e
   assert.deepEqual(await readCompletedReviewKeys({ root, dataDir: modeDataDir }), [stopped.reviewKey]);
   const directory = turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id);
   await assert.rejects(access(path.join(directory, 'baseline.json')));
+});
+
+test('Stop recovers an exact local receipt left before completed publication', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'local-recovery-session', turn_id: 'local-recovery-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Recover a local review receipt after interrupted publication.'
+  }, { modeDataDir, runtimeDataDir });
+
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'No repository changes were needed.'
+  };
+  let receiptContext = null;
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop(stopInput, {
+    modeDataDir,
+    runtimeDataDir,
+    buildEvidence: async (options) => {
+      const built = await buildTurnEvidence(options);
+      receiptContext = {
+        root,
+        input: stopInput,
+        baseline: options.baseline,
+        final: options.final,
+        evidence: built
+      };
+      return built;
+    },
+    waitForPreReview: async (_directory, reviewKey, receipt) => {
+      const terminal = localSuccessReceipt(reviewKey, receiptContext);
+      await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
+      return { status: 'ready', terminal, ownerActive: false };
+    },
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('an exact local receipt must not trigger provider egress');
+    }
+  });
+
+  assert.equal(reviewCalls, 0);
+  assert.equal(stopped.skipped, 'pre_review_adopted');
+  assert.equal(stopped.output.decision, 'block');
+  assert.equal(stopped.result.status, 'no_findings');
+  const terminal = JSON.parse(await readFile(stopped.receipt, 'utf8'));
+  assert.equal(terminal.provider, 'none');
+  assert.equal(terminal.model, 'none');
+  assert.deepEqual(terminal.reviewer_runs, []);
+  const completed = JSON.parse(await readFile(path.join(
+    turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id),
+    'completed.json'
+  ), 'utf8'));
+  assert.equal(
+    completed.receipt_sha256,
+    createHash('sha256').update(canonicalJson(terminal)).digest('hex')
+  );
 });
 
 test('real speculative checkpoints share the baseline object store and Stop adopts the receipt', async () => {

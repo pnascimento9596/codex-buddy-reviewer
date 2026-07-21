@@ -195,6 +195,109 @@ function failureReceipt(ctx) {
   };
 }
 
+function localContext(dual = true, evidence = {}) {
+  const ctx = context(dual);
+  ctx.final = { tree: ctx.baseline.tree };
+  ctx.evidence = {
+    changed_paths: [],
+    excluded_paths: [],
+    sensitive_change_count: 0,
+    ignored_change_count: 0,
+    incomplete_paths: [],
+    path_evidence: [],
+    hunk_ranges: {},
+    line_counts: {},
+    old_line_counts: {},
+    patch_hash: '6'.repeat(64),
+    ...evidence
+  };
+  return ctx;
+}
+
+function localReceipt(ctx, result = noFindings('No reviewable changes were observed in the selected scope.')) {
+  return {
+    schema_version: '1',
+    review_key: ctx.reviewKey,
+    terminal_status: result.status,
+    provider: 'none',
+    model: 'none',
+    baseline_tree: ctx.baseline.tree,
+    final_tree: ctx.final.tree,
+    patch_hash: ctx.evidence.patch_hash,
+    changed_path_count: ctx.evidence.changed_paths.length,
+    excluded_path_count: ctx.evidence.excluded_paths.length
+      + (ctx.evidence.sensitive_change_count ?? 0)
+      + (ctx.evidence.ignored_change_count ?? 0),
+    result,
+    reviews: [],
+    review_failures: [],
+    review_sources: null,
+    reviewer_runs: [],
+    summary_claim_guard: null,
+    summary_claim_advisory: null,
+    provider_run: null,
+    egress_capability: null,
+    created_at: CREATED_AT
+  };
+}
+
+test('accepts exact local no-egress success receipts', () => {
+  for (const dual of [false, true]) {
+    const ctx = localContext(dual);
+    assert.equal(validateAutomaticReceipt(localReceipt(ctx), ctx).provider, 'none');
+  }
+
+  const excluded = localContext(true, {
+    changed_paths: ['private.env'],
+    excluded_paths: ['private.env'],
+    path_evidence: [{ path: 'private.env', transmitted: false, disposition: 'excluded' }]
+  });
+  const abstain = {
+    schema_version: '2',
+    status: 'abstain',
+    summary: 'All observed changes were excluded by privacy policy.',
+    findings: [],
+    comments: []
+  };
+  assert.equal(validateAutomaticReceipt(localReceipt(excluded, abstain), excluded).terminal_status, 'abstain');
+});
+
+test('rejects forged or provider-eligible local success receipts', () => {
+  const providerEligible = context(false);
+  assert.throws(
+    () => validateAutomaticReceipt(localReceipt(providerEligible), providerEligible),
+    /exact no-egress result/u
+  );
+
+  const ctx = localContext(false);
+  const malformedContext = localContext(false);
+  const malformedReceipt = localReceipt(malformedContext);
+  delete malformedContext.evidence.changed_paths;
+  assert.throws(
+    () => validateAutomaticReceipt(malformedReceipt, malformedContext),
+    /changed, excluded, and path evidence arrays/u
+  );
+  const missingPathEvidence = localContext(false);
+  const missingPathReceipt = localReceipt(missingPathEvidence);
+  delete missingPathEvidence.evidence.path_evidence;
+  assert.throws(
+    () => validateAutomaticReceipt(missingPathReceipt, missingPathEvidence),
+    /changed, excluded, and path evidence arrays/u
+  );
+  for (const mutate of [
+    (receipt) => { receipt.result.summary = 'Forged local result.'; },
+    (receipt) => { receipt.reviews.push({ provider: 'none' }); },
+    (receipt) => { receipt.reviewer_runs.push({ provider: 'none' }); },
+    (receipt) => { receipt.summary_claim_advisory = {}; },
+    (receipt) => { receipt.provider_run = {}; },
+    (receipt) => { receipt.egress_capability = {}; }
+  ]) {
+    const receipt = localReceipt(ctx);
+    mutate(receipt);
+    assert.throws(() => validateAutomaticReceipt(receipt, ctx));
+  }
+});
+
 test('accepts exact success and terminal failure receipts', () => {
   const dual = context(true);
   assert.equal(validateAutomaticReceipt(successReceipt(dual), dual).review_key, dual.reviewKey);

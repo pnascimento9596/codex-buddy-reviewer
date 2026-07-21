@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -24,6 +24,17 @@ test('repository roots use the host filesystem canonical path form', async () =>
   await mkdir(options.root, { recursive: true });
   await runProcess('git', ['init', '--quiet'], { cwd: options.root });
   assert.equal(await resolveRepositoryRoot(options.root), await realpath(options.root));
+});
+
+test('mode state configured inside the reviewed repository fails before writing', async () => {
+  const options = await fixture();
+  await mkdir(options.root, { recursive: true });
+  const dataDir = path.join(options.root, '.buddy-mode');
+  await assert.rejects(
+    changeMode({ root: options.root, dataDir, action: 'enable' }),
+    /outside the reviewed repository/u
+  );
+  await assert.rejects(access(dataDir));
 });
 
 test('mode accepts bounded model identifiers and closed reasoning efforts', async () => {

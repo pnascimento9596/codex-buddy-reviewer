@@ -34,9 +34,11 @@ import {
 } from './provider-circuit.mjs';
 import { aggregateReviewOutcomes, ReviewAggregationError } from './review-aggregate.mjs';
 import {
+  assertStateOutsideRepository,
   ensurePrivateStatePath,
   opaqueKey,
   readPrivateJson,
+  resolveDataDir,
   resolveRuntimeDataDir,
   withFileLock,
   writePrivateJsonExclusive
@@ -762,6 +764,8 @@ export async function startTurnPreReview(rawInput, options = {}) {
   } catch {
     return { skipped: 'non_git' };
   }
+  await assertStateOutsideRepository(root, resolveRuntimeDataDir(runtimeDataDir), 'runtime state');
+  await assertStateOutsideRepository(root, resolveDataDir(modeDataDir), 'mode state');
   const directory = automaticTurnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id);
   const runtimeRoot = resolveRuntimeDataDir(runtimeDataDir);
   await deps.ensurePrivatePath(runtimeRoot, directory);
@@ -793,6 +797,8 @@ export async function runPreReviewWorker(rawInput, options = {}) {
   } catch {
     return { skipped: 'non_git' };
   }
+  await assertStateOutsideRepository(root, resolveRuntimeDataDir(runtimeDataDir), 'runtime state');
+  await assertStateOutsideRepository(root, resolveDataDir(modeDataDir), 'mode state');
   const directory = automaticTurnDirectory(runtimeDataDir, root, input.session_id, input.turn_id);
   const runtimeRoot = resolveRuntimeDataDir(runtimeDataDir);
   await deps.ensurePrivatePath(runtimeRoot, directory);

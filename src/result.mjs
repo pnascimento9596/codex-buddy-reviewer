@@ -13,6 +13,55 @@ const COMMENT_KEYS = new Set([
 ]);
 const VALID_COMMENT_CATEGORY = new Set(['optimization', 'reliability', 'maintainability', 'testing']);
 
+export function localReviewResultForEvidence(evidence) {
+  if (!Array.isArray(evidence?.changed_paths)
+      || !Array.isArray(evidence.excluded_paths)
+      || !Array.isArray(evidence.path_evidence)) {
+    throw new TypeError('review evidence requires changed, excluded, and path evidence arrays');
+  }
+  if (evidence.path_evidence.some((item) => (
+    !item
+    || typeof item !== 'object'
+    || Array.isArray(item)
+    || typeof item.path !== 'string'
+    || typeof item.transmitted !== 'boolean'
+    || typeof item.disposition !== 'string'
+  ))) {
+    throw new TypeError('review path evidence contains an invalid entry');
+  }
+  const changedPaths = evidence.changed_paths;
+  const transmittedPaths = new Set(
+    evidence.path_evidence
+      .filter((item) => item.transmitted === true && item.disposition === 'complete')
+      .map((item) => item.path)
+  );
+  if (changedPaths.length > 0 && changedPaths.some((repoPath) => transmittedPaths.has(repoPath))) {
+    return null;
+  }
+  const excludedCount = (evidence.excluded_paths?.length ?? 0)
+    + (evidence.sensitive_change_count ?? 0)
+    + (evidence.ignored_change_count ?? 0);
+  const incompleteCount = evidence.incomplete_paths?.length ?? 0;
+  if (excludedCount || incompleteCount) {
+    return {
+      schema_version: REVIEW_SCHEMA_VERSION,
+      status: 'abstain',
+      summary: incompleteCount
+        ? 'No complete transmitted evidence was available for the observed changes.'
+        : 'All observed changes were excluded by privacy policy.',
+      findings: [],
+      comments: []
+    };
+  }
+  return {
+    schema_version: REVIEW_SCHEMA_VERSION,
+    status: 'no_findings',
+    summary: 'No reviewable changes were observed in the selected scope.',
+    findings: [],
+    comments: []
+  };
+}
+
 function rejectUnknownKeys(object, allowed, label) {
   const unknown = Object.keys(object).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`${label} contains unknown properties: ${unknown.join(', ')}`);

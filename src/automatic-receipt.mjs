@@ -4,7 +4,7 @@ import { PROVIDER_CONTENT_POLICY_VERSION } from './approved-provider-request.mjs
 import { egressConfigurationHash } from './egress-capability.mjs';
 import { reviewersForMode } from './mode.mjs';
 import { aggregateReviewOutcomes } from './review-aggregate.mjs';
-import { validateReviewResult } from './result.mjs';
+import { localReviewResultForEvidence, validateReviewResult } from './result.mjs';
 import { canonicalJson, opaqueKey, workspaceKey } from './state.mjs';
 import {
   assessSummaryClaimGuardEgress,
@@ -377,6 +377,30 @@ function validateSuccessReceipt(receipt, context, reviewers, outcomes) {
   }
 }
 
+function validateLocalSuccessReceipt(receipt, context) {
+  const expectedResult = localReviewResultForEvidence(context.evidence);
+  if (expectedResult === null
+      || receipt.provider !== 'none'
+      || receipt.model !== 'none'
+      || receipt.terminal_status !== expectedResult.status
+      || receipt.baseline_tree !== context.baseline.tree
+      || receipt.final_tree !== context.final.tree
+      || receipt.patch_hash !== context.evidence.patch_hash
+      || receipt.changed_path_count !== context.evidence.changed_paths.length
+      || receipt.excluded_path_count !== excludedPathCount(context.evidence)
+      || !same(receipt.result, expectedResult)
+      || !same(receipt.reviews, [])
+      || !same(receipt.review_failures, [])
+      || receipt.review_sources !== null
+      || !same(receipt.reviewer_runs, [])
+      || receipt.summary_claim_guard !== null
+      || receipt.summary_claim_advisory !== null
+      || receipt.provider_run !== null
+      || receipt.egress_capability !== null) {
+    fail('local success receipt does not match the exact no-egress result');
+  }
+}
+
 function validateFailureReceipt(receipt, context, reviewers, outcomes, kind) {
   if (kind === 'circuit') {
     if (receipt.terminal_status !== 'circuit_open'
@@ -505,6 +529,7 @@ export function validateAutomaticReceipt(receipt, context) {
     fail('schema, review key, or creation timestamp is invalid');
   }
   const success = Object.hasOwn(receipt, 'result');
+  const localSuccess = success && receipt?.provider === 'none' && receipt?.model === 'none';
   const failureKind = success
     ? null
     : receipt?.terminal_status === 'circuit_open' ? 'circuit'
@@ -522,7 +547,7 @@ export function validateAutomaticReceipt(receipt, context) {
     summaryPacket: summaryPacketForReceipt(receipt, context, reviewers)
   };
   const outcomes = validateReviewerRuns(receipt, validationContext, reviewers, {
-    allowEmpty: failureKind === 'catch'
+    allowEmpty: failureKind === 'catch' || localSuccess
   });
   if (outcomes.length > 0) {
     try {
@@ -531,7 +556,8 @@ export function validateAutomaticReceipt(receipt, context) {
       if (error?.code !== 'no_successful_reviews') throw error;
     }
   }
-  if (success) validateSuccessReceipt(receipt, validationContext, reviewers, outcomes);
+  if (localSuccess) validateLocalSuccessReceipt(receipt, validationContext);
+  else if (success) validateSuccessReceipt(receipt, validationContext, reviewers, outcomes);
   else validateFailureReceipt(receipt, validationContext, reviewers, outcomes, failureKind);
   return receipt;
 }
