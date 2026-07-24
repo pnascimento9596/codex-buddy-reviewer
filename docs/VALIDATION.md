@@ -136,3 +136,54 @@ Before stable promotion, replace this pre-final status with:
 - host-evidence v2 path and digest only after genuine manual observations exist.
 
 Until those fields are evidence-backed, this remains an RC implementation record rather than a final release attestation.
+
+## Post-publication addendum (2026-07-23)
+
+This additive section records evidence obtained after the historical sections above were frozen. It does not replace or retroactively broaden the earlier claims.
+
+### Published RC identity
+
+The [GitHub prerelease for `v0.5.0-rc.1`](https://github.com/pnascimento9596/codex-buddy-reviewer/releases/tag/v0.5.0-rc.1) was published at `2026-07-21T04:05:29Z` from source commit `01fad043c22b045a702485046c243ba1e3f833c6`. Live GitHub Actions inspection on 2026-07-23 confirmed these successful runs:
+
+- [PR validation `29798480284`](https://github.com/pnascimento9596/codex-buddy-reviewer/actions/runs/29798480284): `success` for pull-request head `44aa6b3663127ae2765f78b5d47e5e1fa29c01dc`.
+- [Protected-main validation `29799020760`](https://github.com/pnascimento9596/codex-buddy-reviewer/actions/runs/29799020760): `success` at released source `01fad043c22b045a702485046c243ba1e3f833c6`.
+- [Release publication `29799553023`](https://github.com/pnascimento9596/codex-buddy-reviewer/actions/runs/29799553023): `success` at the same released source. Its exact publish step completed at `2026-07-21T04:05:29Z`.
+
+The artifact-only tag object is `fff82d167f9cbcf4440a942a5f366ae599ea09c5`; it resolves to distribution commit `f819879d158a37d0f8a476da65e5502f1cd5ef9d` and tree `84b5e4c93f1733ce02157fa1155a2411a6c3ccdd`. The tag message and downloaded `codex-buddy-reviewer-0.5.0-rc.1-distribution.json` bind that distribution to release-manifest SHA-256 `2b61320d766c750ce6642b652003bb7296f99c437e33f3145065293c270fffe9` and artifact-content SHA-256 `decc03263b01d7eeb088797a56a75c97f76a52fda57e4ee4d35447f863114682`.
+
+### Release assets and provenance
+
+The five GitHub Release assets were downloaded again on 2026-07-23. Locally recomputed SHA-256 values matched the live GitHub asset digests, and the two checksum files named the same tarball and distribution-bundle hashes:
+
+| Release asset | SHA-256 | Provenance subject |
+|---|---|---|
+| `codex-buddy-reviewer-0.5.0-rc.1.tar.gz` | `60ad2571202dbcf5def899a1c9de5b4af75d7cb2fbdb7efd326de1023e2ffa88` | yes |
+| `codex-buddy-reviewer-0.5.0-rc.1.tar.gz.sha256` | `b46a6b740849d4c96005392a67c9857bbc01da07cd5f869fb143bb30efd8ce31` | no; checksum metadata asset |
+| `codex-buddy-reviewer-0.5.0-rc.1-distribution.bundle` | `88c9a8fbee898e42f256726a8110cdb0e9b88f1382fff6c5e046eaa8222b9aee` | yes |
+| `codex-buddy-reviewer-0.5.0-rc.1-distribution.bundle.sha256` | `3e2e609e7986d80337958ed4b41699db94b6ec1acdcf018c1afc6cc8af8d78e9` | no; checksum metadata asset |
+| `codex-buddy-reviewer-0.5.0-rc.1-distribution.json` | `35276704f34fc6005043028b75d31759a5477f7267e86113c9a1a0750b119228` | yes |
+
+`gh attestation verify --repo pnascimento9596/codex-buddy-reviewer` succeeded independently for each of the three provenance subjects. The verified predicate type is `https://slsa.dev/provenance/v1`. The certificate identity is:
+
+- subject alternative name: `https://github.com/pnascimento9596/codex-buddy-reviewer/.github/workflows/release.yml@refs/heads/main`;
+- issuer: `https://token.actions.githubusercontent.com`;
+- workflow: `release artifact` in `pnascimento9596/codex-buddy-reviewer` at `refs/heads/main`;
+- workflow and source digest: `01fad043c22b045a702485046c243ba1e3f833c6`;
+- trigger: `workflow_dispatch`;
+- invocation: `https://github.com/pnascimento9596/codex-buddy-reviewer/actions/runs/29799553023/attempts/1`.
+
+The checksum metadata assets are release assets with verified hashes, but they are not subjects in the SLSA statement. The statement covers exactly the tarball, distribution bundle, and distribution JSON listed above.
+
+### Released-head totals and remaining gates
+
+The 2026-07-23 local recon at the released head recorded `706` total tests, `688` passes, and `18` intentional skips. Live retrieval of the protected-main macOS job in run `29799020760` independently reported `706` tests, `688` passes, `0` failures, and `18` skips. The later README-only wording merge does not change source or test files.
+
+The following remain explicitly unrun, unimplemented, disabled, or unpublished and are not claimed by this addendum:
+
+- a fresh exact-head Codex Security scan;
+- the five named artifact-bound pet host observations;
+- Windows current-user-only DACL work and verification;
+- live Windows provider egress;
+- stable `v0.5.0` publication.
+
+The README badge labeled `Release gates pending` refers to those stable-promotion gates. It does not mean that the published `v0.5.0-rc.1` release or its protected publication run failed.
