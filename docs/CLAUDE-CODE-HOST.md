@@ -25,9 +25,15 @@ not `turn_id`. Buddy normalizes:
 turn_id = "claude:" + prompt_id
 ```
 
-UserPromptSubmit and Stop for the same prompt share `prompt_id`, so the turn
-key is exact and collision-safe across the turn. Missing `prompt_id` fails
-closed (no invented cross-event identity).
+UserPromptSubmit and Stop for the same prompt are expected to share
+`prompt_id`, so the turn key is exact and collision-safe across the turn.
+Missing `prompt_id` fails closed (no invented cross-event identity).
+
+Caveat: Start/Stop turn-identity correlation via `prompt_id` is
+fixture-verified only. No live Claude Code host session has confirmed that
+the Stop payload carries the same `prompt_id` as UserPromptSubmit.
+Fail-closed behavior on missing `prompt_id` is the guard against unstable
+or invented turn identity.
 
 ## State root
 
