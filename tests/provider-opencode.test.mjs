@@ -139,7 +139,8 @@ test('OpenCode uses an empty private cwd, isolated config, denied tools, and std
   assert.equal(options.env.OPENCODE_AUTO_SHARE, 'false');
   assert.equal(options.env.OPENCODE_DISABLE_SHARE, 'true');
   assert.equal(options.env.OPENCODE_DISABLE_AUTOUPDATE, 'true');
-  assert.equal(options.env.OPENCODE_DISABLE_DEFAULT_PLUGINS, 'true');
+  // First-party providers require default plugins; pure mode covers externals.
+  assert.equal(options.env.OPENCODE_DISABLE_DEFAULT_PLUGINS, undefined);
   assert.equal(options.env.OPENCODE_DISABLE_CLAUDE_CODE, 'true');
   assert.equal(options.env.OPENCODE_DISABLE_CLAUDE_CODE_PROMPT, 'true');
   assert.equal(options.env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS, 'true');
@@ -265,11 +266,14 @@ test('OpenCode environment overrides ambient capability-enabling values', () => 
   const env = buildOpenCodeProviderEnvironment({
     ambient: {
       OPENCODE_AUTO_SHARE: 'true',
-      OPENCODE_DISABLE_DEFAULT_PLUGINS: 'false',
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: 'true',
       OPENCODE_DISABLE_CLAUDE_CODE: 'false',
       OPENCODE_DISABLE_LSP_DOWNLOAD: 'false',
       OPENCODE_ENABLE_EXA: 'true',
-      OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: 'true'
+      OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: 'true',
+      OPENCODE_PERMISSION: '{"*":"allow"}',
+      SECRET_TOKEN: 'must-not-forward',
+      ANTHROPIC_API_KEY: 'must-not-forward'
     },
     configDir: '/private/config',
     workDir: '/private/work',
@@ -280,11 +284,40 @@ test('OpenCode environment overrides ambient capability-enabling values', () => 
     agentName: 'buddy-review-fixture'
   });
   assert.equal(env.OPENCODE_AUTO_SHARE, 'false');
-  assert.equal(env.OPENCODE_DISABLE_DEFAULT_PLUGINS, 'true');
+  // Ambient OPENCODE_DISABLE_DEFAULT_PLUGINS must not be forwarded: forcing it
+  // breaks first-party provider/model resolution (xai/grok-4.5 etc.).
+  assert.equal(env.OPENCODE_DISABLE_DEFAULT_PLUGINS, undefined);
   assert.equal(env.OPENCODE_DISABLE_CLAUDE_CODE, 'true');
   assert.equal(env.OPENCODE_DISABLE_LSP_DOWNLOAD, 'true');
   assert.equal(env.OPENCODE_ENABLE_EXA, 'false');
   assert.equal(env.OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS, 'false');
+  assert.equal(env.SECRET_TOKEN, undefined);
+  assert.equal(env.ANTHROPIC_API_KEY, undefined);
+  assert.notEqual(env.OPENCODE_PERMISSION, '{"*":"allow"}');
+});
+
+test('OpenCode env allowlist does not widen when ambient enables default plugins disable', () => {
+  const env = buildOpenCodeProviderEnvironment({
+    ambient: {
+      PATH: '/fixture/bin',
+      HOME: '/fixture/home',
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: 'true',
+      OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"allow"}}',
+      EXTRA_ENV: 'nope'
+    },
+    configDir: '/private/config',
+    workDir: '/private/work',
+    dataDir: '/private/data',
+    cacheDir: '/private/cache',
+    stateDir: '/private/state',
+    tempDir: '/private/tmp',
+    agentName: 'buddy-review-fixture'
+  });
+  const keys = Object.keys(env).sort();
+  assert.equal(keys.includes('EXTRA_ENV'), false);
+  assert.equal(keys.includes('OPENCODE_DISABLE_DEFAULT_PLUGINS'), false);
+  assert.equal(keys.includes('OPENCODE_PURE'), true);
+  assert.equal(env.OPENCODE_PURE, 'true');
 });
 
 test('OpenCode bridges stored auth into isolated runtime data without copying prompt state back', async () => {

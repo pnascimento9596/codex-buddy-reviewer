@@ -100,6 +100,10 @@ function processGroupExists(pid) {
     return true;
   } catch (error) {
     if (error.code === 'ESRCH') return false;
+    // EPERM means the group still exists but is not signalable to this
+    // process. Treat as present so cleanup keeps waiting / re-killing rather
+    // than throwing a containment failure before the group can exit.
+    if (error.code === 'EPERM') return true;
     throw error;
   }
 }
@@ -112,6 +116,11 @@ async function forceKillAndWaitForProcessGroup(child, { force = true } = {}) {
     if (Date.now() >= deadline) {
       throw new Error(`process group ${child.pid} remained alive after forced containment cleanup`);
     }
+    // Re-issue SIGKILL while waiting. Cancellation races with the supervisor
+    // escalation timer can leave SIGTERM-ignoring descendants alive until a
+    // second group kill lands; without re-issue, cleanup can spuriously fail
+    // and reclassify an AbortError as ProcessContainmentError.
+    if (force) forceKill(child);
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
@@ -276,6 +285,9 @@ function runResolvedProcess(command, args, options = {}) {
       process.removeListener('SIGINT', onSigint);
       process.removeListener('SIGTERM', onSigterm);
       signal?.removeEventListener('abort', onAbort);
+      // Precedence: verified containment-cleanup failure, then cancellation,
+      // then other transport errors. Abort never masks a true cleanup failure;
+      // cleanupFailure is only set after cancel-path retries are exhausted.
       if (error) reject(cleanupFailure ?? abortFailure ?? error);
       else resolve(result);
     };
@@ -336,12 +348,27 @@ function runResolvedProcess(command, args, options = {}) {
           // `close` proves its inherited pipes reached EOF, so do not signal or
           // probe that numeric group id again after the leader has closed.
           if (!supervisorResult) {
+            // Cancellation must re-force cleanup even if stopChild already
+            // issued a group kill: SIGTERM-resistant descendants can still be
+            // exiting when `close` fires. Non-cancel paths keep the prior
+            // single-kill-then-wait contract so pid recycling stays bounded.
             await processGroupCleanupImpl(child, {
-              force: !groupKillIssued
+              force: Boolean(abortFailure) || !groupKillIssued
             });
           }
         } catch {
-          cleanupFailure = processContainmentError();
+          if (abortFailure) {
+            // One deterministic retry after cancel-initiated cleanup failure.
+            // If the group is still alive after the retry, containment wins
+            // (product contract: real cleanup failure outranks cancellation).
+            try {
+              await processGroupCleanupImpl(child, { force: true });
+            } catch {
+              cleanupFailure = processContainmentError();
+            }
+          } else {
+            cleanupFailure = processContainmentError();
+          }
         }
       }
       const stdoutBuffer = Buffer.concat(stdout);

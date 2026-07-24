@@ -1063,6 +1063,167 @@ setInterval(() => {}, 1000);
   );
 });
 
+test('cancel cleanup retries once then classifies AbortError when the retry succeeds', {
+  skip: process.platform === 'win32',
+  timeout: 10_000
+}, async () => {
+  const root = await temporaryDirectory('codex-buddy-cancel-cleanup-retry-ok-');
+  const provider = path.join(root, 'provider.mjs');
+  const providerPidFile = path.join(root, 'provider.pid');
+  await writeFile(provider, `
+import { writeFileSync } from 'node:fs';
+process.on('SIGTERM', () => {});
+writeFileSync(process.argv[2], String(process.pid));
+setInterval(() => {}, 1000);
+`);
+  const cleanupCalls = [];
+  const controller = new AbortController();
+  const running = runProcess(process.execPath, [provider, providerPidFile], {
+    timeoutMs: 8_000,
+    signal: controller.signal,
+    processGroupCleanupImpl: async (child, options = {}) => {
+      cleanupCalls.push({ force: options.force === true, aborted: controller.signal.aborted });
+      if (cleanupCalls.length === 1) {
+        throw new Error('PRIVATE_FIRST_CLEANUP_FAILURE');
+      }
+      // Retry path: succeed without leaking diagnostics into the classification.
+    }
+  });
+  let providerPid;
+  try {
+    const deadline = Date.now() + 3_000;
+    while (!existsSync(providerPidFile)) {
+      if (Date.now() >= deadline) throw new Error('provider did not start before cancellation');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    providerPid = Number(await readFile(providerPidFile, 'utf8'));
+    controller.abort('PRIVATE_ABORT_REASON');
+    await assert.rejects(running, (error) => {
+      assert.equal(error.name, 'AbortError');
+      assert.equal(error.kind, 'cancelled');
+      assert.equal(error.code, 'ABORT_ERR');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE_FIRST_CLEANUP_FAILURE|PRIVATE_ABORT_REASON/);
+      return true;
+    });
+  } finally {
+    controller.abort();
+    await running.catch(() => {});
+  }
+  assert.equal(cleanupCalls.length, 2);
+  assert.equal(cleanupCalls[0].aborted, true);
+  assert.equal(cleanupCalls[1].aborted, true);
+  assert.equal(cleanupCalls[1].force, true);
+  await assertProcessTerminated(
+    providerPid,
+    `cancelled provider process ${providerPid} must be terminated after a successful cleanup retry`
+  );
+});
+
+test('cancel cleanup retries once then keeps containment_failure when the retry fails', {
+  skip: process.platform === 'win32',
+  timeout: 10_000
+}, async () => {
+  const root = await temporaryDirectory('codex-buddy-cancel-cleanup-retry-fail-');
+  const provider = path.join(root, 'provider.mjs');
+  const providerPidFile = path.join(root, 'provider.pid');
+  await writeFile(provider, `
+import { writeFileSync } from 'node:fs';
+process.on('SIGTERM', () => {});
+writeFileSync(process.argv[2], String(process.pid));
+setInterval(() => {}, 1000);
+`);
+  const cleanupCalls = [];
+  const controller = new AbortController();
+  const running = runProcess(process.execPath, [provider, providerPidFile], {
+    timeoutMs: 8_000,
+    signal: controller.signal,
+    processGroupCleanupImpl: async (_child, options = {}) => {
+      cleanupCalls.push({ force: options.force === true, aborted: controller.signal.aborted });
+      throw new Error(`PRIVATE_PERSISTENT_CLEANUP_FAILURE_${cleanupCalls.length}`);
+    }
+  });
+  let providerPid;
+  try {
+    const deadline = Date.now() + 3_000;
+    while (!existsSync(providerPidFile)) {
+      if (Date.now() >= deadline) throw new Error('provider did not start before cancellation');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    providerPid = Number(await readFile(providerPidFile, 'utf8'));
+    controller.abort('PRIVATE_ABORT_REASON');
+    await assert.rejects(running, (error) => {
+      assert.equal(error.name, 'ProcessContainmentError');
+      assert.equal(error.kind, 'containment_failure');
+      assert.equal(error.code, 'PROCESS_CONTAINMENT_FAILED');
+      assert.equal(error.message, 'Buddy could not verify provider process containment cleanup');
+      assert.doesNotMatch(
+        JSON.stringify(error),
+        /PRIVATE_PERSISTENT_CLEANUP_FAILURE|PRIVATE_ABORT_REASON/
+      );
+      return true;
+    });
+  } finally {
+    controller.abort();
+    await running.catch(() => {});
+  }
+  assert.equal(cleanupCalls.length, 2);
+  assert.equal(cleanupCalls[0].aborted, true);
+  assert.equal(cleanupCalls[1].aborted, true);
+  assert.equal(cleanupCalls[1].force, true);
+  await assertProcessTerminated(
+    providerPid,
+    `cancelled provider process ${providerPid} must be terminated after persistent cleanup failure`
+  );
+});
+
+test('non-cancel deadline cleanup does not retry and still classifies as containment_failure', {
+  skip: process.platform === 'win32',
+  timeout: 10_000
+}, async () => {
+  const root = await temporaryDirectory('codex-buddy-deadline-cleanup-no-retry-');
+  const provider = path.join(root, 'provider.mjs');
+  const providerPidFile = path.join(root, 'provider.pid');
+  await writeFile(provider, `
+import { writeFileSync } from 'node:fs';
+process.on('SIGTERM', () => {});
+writeFileSync(process.argv[2], String(process.pid));
+setInterval(() => {}, 1000);
+`);
+  const cleanupCalls = [];
+  const running = runProcess(process.execPath, [provider, providerPidFile], {
+    timeoutMs: 200,
+    processGroupCleanupImpl: async () => {
+      cleanupCalls.push({ at: Date.now() });
+      throw new Error('PRIVATE_DEADLINE_CLEANUP_FAILURE');
+    }
+  });
+  let providerPid;
+  try {
+    const deadline = Date.now() + 3_000;
+    while (!existsSync(providerPidFile)) {
+      if (Date.now() >= deadline) throw new Error('provider did not start before deadline');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    providerPid = Number(await readFile(providerPidFile, 'utf8'));
+    await assert.rejects(running, (error) => {
+      // Contract: non-cancel cleanup failures do not get the cancel-path retry.
+      // Containment still outranks the raw deadline message when cleanup fails.
+      assert.equal(error.name, 'ProcessContainmentError');
+      assert.equal(error.kind, 'containment_failure');
+      assert.equal(error.code, 'PROCESS_CONTAINMENT_FAILED');
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE_DEADLINE_CLEANUP_FAILURE/);
+      return true;
+    });
+  } finally {
+    await running.catch(() => {});
+  }
+  assert.equal(cleanupCalls.length, 1);
+  await assertProcessTerminated(
+    providerPid,
+    `deadline provider process ${providerPid} must be terminated after non-retry cleanup failure`
+  );
+});
+
 test('subprocess natural exit force-kills in-group descendants before resolving', {
   skip: process.platform === 'win32'
 }, async () => {
@@ -1487,9 +1648,15 @@ test('plugin exposes explicit manual and automatic skills with default-path trus
   assert.ok(hooks.hooks.UserPromptSubmit);
   assert.ok(hooks.hooks.Stop);
   assert.equal(hooks.hooks.UserPromptSubmit[0].hooks[0].timeout, 60);
-  assert.equal(hooks.hooks.UserPromptSubmit[0].hooks[0].command, 'node "${PLUGIN_ROOT}/scripts/buddy-hook.mjs"');
+  assert.equal(
+    hooks.hooks.UserPromptSubmit[0].hooks[0].command,
+    'node "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/buddy-hook.mjs"'
+  );
   assert.equal(hooks.hooks.Stop[0].hooks[0].timeout, 600);
-  assert.equal(hooks.hooks.Stop[0].hooks[0].command, 'node "${PLUGIN_ROOT}/scripts/buddy-hook.mjs"');
+  assert.equal(
+    hooks.hooks.Stop[0].hooks[0].command,
+    'node "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/buddy-hook.mjs"'
+  );
 });
 
 test('checked-in JSON schema stays aligned with the runtime schema', async () => {

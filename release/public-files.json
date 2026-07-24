@@ -77,6 +77,10 @@
       "destination": "docs/AUTOMATIC-MODE.md"
     },
     {
+      "source": "docs/CLAUDE-CODE-HOST.md",
+      "destination": "docs/CLAUDE-CODE-HOST.md"
+    },
+    {
       "source": "docs/HOST-E2E-RUNBOOK.md",
       "destination": "docs/HOST-E2E-RUNBOOK.md"
     },
