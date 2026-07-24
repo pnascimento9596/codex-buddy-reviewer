@@ -232,7 +232,11 @@ export function buildOpenCodeProviderEnvironment({
     OPENCODE_AUTO_SHARE: 'false',
     OPENCODE_DISABLE_SHARE: 'true',
     OPENCODE_DISABLE_AUTOUPDATE: 'true',
-    OPENCODE_DISABLE_DEFAULT_PLUGINS: 'true',
+    // Do not set OPENCODE_DISABLE_DEFAULT_PLUGINS. OpenCode 1.18+ registers
+    // first-party providers (xai, anthropic, openai, ...) through default
+    // plugins. Disabling them yields ProviderModelNotFoundError for valid
+    // provider/model IDs under isolation, which Buddy surfaces as
+    // transport_exit. --pure / OPENCODE_PURE already exclude external plugins.
     OPENCODE_DISABLE_CLAUDE_CODE: 'true',
     OPENCODE_DISABLE_CLAUDE_CODE_PROMPT: 'true',
     OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: 'true',
