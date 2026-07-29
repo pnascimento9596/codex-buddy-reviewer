@@ -148,7 +148,7 @@ export function validateReviewResult(raw, evidence, options = {}) {
   if (![REVIEW_SCHEMA_VERSION, '1'].includes(raw.schema_version)) throw new Error('unsupported review schema version');
   if (!VALID_STATUS.has(raw.status)) throw new Error(`invalid review status: ${raw.status}`);
   assertString(raw.summary, 'summary', 1200);
-  if (!Array.isArray(raw.findings) || raw.findings.length > 5) throw new Error('findings must be an array with at most five items');
+  if (!Array.isArray(raw.findings)) throw new Error('findings must be an array');
   if (raw.status !== 'findings' && raw.findings.length !== 0) throw new Error(`${raw.status} must not include findings`);
   if (raw.status === 'findings' && raw.findings.length === 0) throw new Error('findings status requires at least one finding');
 

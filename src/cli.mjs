@@ -37,6 +37,7 @@ import { renderDoctorCommand, runDoctorCommand } from './doctor-cli.mjs';
 import { renderSetupCommand, runSetupCommand } from './setup-cli.mjs';
 import { renderDataCommand, runDataCommand } from './data-cli.mjs';
 import { assertProviderEgressPlatformAllowed } from './provider-egress-platform.mjs';
+import { preserveRejectedReviewerResponse } from './rejected-response.mjs';
 
 const HELP = `Codex Buddy Reviewer
 
@@ -290,6 +291,16 @@ export async function reviewEvidence(evidence, options) {
   } catch (error) {
     error.failureCode = 'invalid_review_json';
     error.run = response.run;
+    try {
+      error.rawResponsePath = await preserveRejectedReviewerResponse({
+        response,
+        evidence,
+        error,
+        dataDir: options.dataDir
+      });
+    } catch (preservationError) {
+      error.rawResponsePreservationError = preservationError;
+    }
     throw error;
   }
   try {
@@ -304,6 +315,16 @@ export async function reviewEvidence(evidence, options) {
       ? 'grounding_rejected'
       : 'invalid_review_schema';
     error.run = response.run;
+    try {
+      error.rawResponsePath = await preserveRejectedReviewerResponse({
+        response,
+        evidence,
+        error,
+        dataDir: options.dataDir
+      });
+    } catch (preservationError) {
+      error.rawResponsePreservationError = preservationError;
+    }
     throw error;
   }
   let summaryAdvisory = null;
@@ -435,7 +456,12 @@ export async function main(argv) {
     }
     return 0;
   } catch (error) {
-    process.stderr.write(`Buddy review failed: ${escapeDiagnosticLine(error.message)}\n`);
+    const preservation = error.rawResponsePath
+      ? `; raw response preserved at ${escapeDiagnosticLine(error.rawResponsePath)}`
+      : error.rawResponsePreservationError
+        ? '; raw response preservation failed'
+        : '';
+    process.stderr.write(`Buddy review failed: ${escapeDiagnosticLine(error.message)}${preservation}\n`);
     return 2;
   }
 }
