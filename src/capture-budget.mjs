@@ -1,7 +1,14 @@
 import { performance } from 'node:perf_hooks';
 
+export const DEFAULT_CAPTURE_DEADLINE_MS = 180_000;
+// Evidence capture can legitimately span hundreds of bounded Git and privacy
+// operations. Responsive progress earns only the same eight 30-second graces
+// used by provider process deadlines; a stalled capture cannot re-arm itself.
+const CAPTURE_PROGRESS_REARM_GRACE_MS = 30_000;
+const CAPTURE_PROGRESS_REARM_LIMIT = 8;
+
 const DEFAULTS = Object.freeze({
-  deadlineMs: 45_000,
+  deadlineMs: DEFAULT_CAPTURE_DEADLINE_MS,
   maxPaths: 50_000,
   maxFileBytes: 256 * 1024 * 1024,
   maxGitBytes: 256 * 1024 * 1024,
@@ -36,11 +43,20 @@ function positiveInteger(value, field) {
 
 export class CaptureBudget {
   #startedAt;
+  #deadlineAt;
   #limits;
   #usage;
+  #now;
+  #progressRevision;
+  #progressRevisionAtArm;
+  #deadlineRearms;
 
   constructor(options = {}) {
-    this.#startedAt = options.startedAt ?? performance.now();
+    if (options.now !== undefined && typeof options.now !== 'function') {
+      throw new TypeError('capture monotonic clock must be callable');
+    }
+    this.#now = options.now ?? (() => performance.now());
+    this.#startedAt = options.startedAt ?? this.#now();
     this.#limits = Object.freeze({
       deadlineMs: positiveInteger(options.deadlineMs ?? DEFAULTS.deadlineMs, 'deadlineMs'),
       maxPaths: positiveInteger(options.maxPaths ?? DEFAULTS.maxPaths, 'maxPaths'),
@@ -50,6 +66,10 @@ export class CaptureBudget {
       maxObjectBytes: positiveInteger(options.maxObjectBytes ?? DEFAULTS.maxObjectBytes, 'maxObjectBytes'),
       maxGitOperations: positiveInteger(options.maxGitOperations ?? DEFAULTS.maxGitOperations, 'maxGitOperations')
     });
+    this.#deadlineAt = this.#startedAt + this.#limits.deadlineMs;
+    this.#progressRevision = 0;
+    this.#progressRevisionAtArm = 0;
+    this.#deadlineRearms = 0;
     this.#usage = {
       paths: 0,
       fileBytes: 0,
@@ -60,10 +80,19 @@ export class CaptureBudget {
     };
   }
 
-  remainingMs(now = performance.now()) {
-    const remaining = Math.floor(this.#limits.deadlineMs - (now - this.#startedAt));
-    if (remaining < 1) throw new CaptureBudgetError('capture_deadline_exceeded');
-    return remaining;
+  remainingMs(now = this.#now()) {
+    let remaining = Math.floor(this.#deadlineAt - now);
+    if (remaining < 1) {
+      const responsiveProgress = this.#progressRevision > this.#progressRevisionAtArm;
+      if (!responsiveProgress || this.#deadlineRearms >= CAPTURE_PROGRESS_REARM_LIMIT) {
+        throw new CaptureBudgetError('capture_deadline_exceeded');
+      }
+      this.#deadlineRearms += 1;
+      this.#progressRevisionAtArm = this.#progressRevision;
+      this.#deadlineAt = now + Math.min(this.#limits.deadlineMs, CAPTURE_PROGRESS_REARM_GRACE_MS);
+      remaining = Math.floor(this.#deadlineAt - now);
+    }
+    return Math.max(1, remaining);
   }
 
   #charge(field, bytes, limitField, code) {
@@ -71,6 +100,7 @@ export class CaptureBudget {
     if (!Number.isSafeInteger(bytes) || bytes < 0) throw new TypeError('capture charge must be a non-negative safe integer');
     this.#usage[field] += bytes;
     if (this.#usage[field] > this.#limits[limitField]) throw new CaptureBudgetError(code);
+    if (bytes > 0) this.#progressRevision += 1;
   }
 
   chargePaths(count) {
@@ -99,7 +129,7 @@ export class CaptureBudget {
 
   snapshot() {
     return Object.freeze({
-      elapsed_ms: Math.max(0, Math.floor(performance.now() - this.#startedAt)),
+      elapsed_ms: Math.max(0, Math.floor(this.#now() - this.#startedAt)),
       ...this.#usage
     });
   }
