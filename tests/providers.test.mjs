@@ -784,6 +784,7 @@ if [ "$1" = "inspect" ]; then
   printf '%s\\n' '${JSON.stringify(grokInventory())}'
   exit 0
 fi
+/bin/cat .grok-prompt.pipe >/dev/null
 printf '%s\\n' '${JSON.stringify({
     text: JSON.stringify(reviewResult()),
     stopReason: 'end_turn',
@@ -813,6 +814,7 @@ if [ "$1" = "inspect" ]; then
   printf '%s\\n' '${JSON.stringify(grokInventory())}'
   exit 0
 fi
+/bin/cat .grok-prompt.pipe >/dev/null
 printf '%s\\n' '${cancelledEnvelope}'
 `);
   await assert.rejects(

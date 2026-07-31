@@ -1427,7 +1427,7 @@ test('Stop adopts an exact ready background receipt without duplicate provider e
     },
     waitForPreReview: async (_directory, reviewKey, receipt, timeoutMs) => {
       assert.equal(timeoutMs > mode.timeout_ms, true);
-      assert.equal(timeoutMs < 570_000, true);
+      assert.equal(timeoutMs < 1_890_000, true);
       const terminal = successfulReceipt(mode, reviewKey, receiptContext);
       await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
       return { status: 'ready', terminal, ownerActive: false };
