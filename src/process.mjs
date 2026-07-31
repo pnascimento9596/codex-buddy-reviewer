@@ -159,7 +159,12 @@ function runResolvedProcess(command, args, options = {}) {
     encoding = 'utf8',
     protectFromParentDeath = process.platform !== 'win32',
     signal,
-    processGroupCleanupImpl = forceKillAndWaitForProcessGroup
+    processGroupCleanupImpl = forceKillAndWaitForProcessGroup,
+    spawnImpl = spawn,
+    terminateImpl = terminate,
+    deadlineNowImpl = Date.now,
+    deadlineSetTimeoutImpl = setTimeout,
+    deadlineClearTimeoutImpl = clearTimeout
   } = options;
 
   assertAbortSignal(signal);
@@ -185,7 +190,7 @@ function runResolvedProcess(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const supervised = protectFromParentDeath && process.platform !== 'win32';
     const supervisorToken = supervised ? randomBytes(32).toString('hex') : null;
-    const child = spawn(supervised ? process.execPath : command, supervised ? [SUPERVISOR_FILE] : args, {
+    const child = spawnImpl(supervised ? process.execPath : command, supervised ? [SUPERVISOR_FILE] : args, {
       cwd,
       env,
       detached: process.platform !== 'win32',
@@ -199,6 +204,7 @@ function runResolvedProcess(command, args, options = {}) {
     let stderrBytes = 0;
     let settled = false;
     let timedOut = false;
+    let deadlineTerminationIssued = false;
     let timeout;
     let escalationTimer;
     let escalationFired = false;
@@ -237,7 +243,11 @@ function runResolvedProcess(command, args, options = {}) {
             forceKillOnce();
             return;
           }
-          supervisorResult = { code: message.code, signal: message.signal };
+          supervisorResult = {
+            code: message.code,
+            signal: message.signal,
+            completedBeforeDeadlineTermination: !deadlineTerminationIssued
+          };
           // The authenticated provider leader has exited, but this detached
           // supervisor is still the live process-group leader. Kill the group
           // now, before waiting for inherited stdout/stderr descriptors to
@@ -255,12 +265,16 @@ function runResolvedProcess(command, args, options = {}) {
       });
     }
 
-    const stopChild = () => {
+    const stopChild = ({ deadline = false } = {}) => {
       // Once the parent has killed a supervised group, later output, signal,
       // or deadline bookkeeping must not target the same numeric group id.
       if (supervised && groupKillIssued) return;
       if (!escalationTimer) {
-        escalationTimer = terminate(child, () => {
+        // This marker owns the termination classification. Set it in the same
+        // synchronous turn, before any deadline signal can make the provider's
+        // exit race its supervisor's signal handler and authenticated result.
+        if (deadline) deadlineTerminationIssued = true;
+        escalationTimer = terminateImpl(child, () => {
           escalationFired = true;
           groupKillIssued = true;
         });
@@ -282,7 +296,7 @@ function runResolvedProcess(command, args, options = {}) {
     const finish = (error, result) => {
       if (settled) return;
       settled = true;
-      if (timeout) clearTimeout(timeout);
+      if (timeout) deadlineClearTimeoutImpl(timeout);
       if (escalationTimer && !escalationFired) {
         clearTimeout(escalationTimer);
         if (!supervised && (timedOut || forcedError)) {
@@ -336,7 +350,7 @@ function runResolvedProcess(command, args, options = {}) {
 
     child.on('error', (error) => finish(abortFailure ?? error));
     child.on('exit', () => {
-      if (!supervised || supervisorResult || forcedError || timedOut) return;
+      if (!supervised || deadlineTerminationIssued || supervisorResult || forcedError || timedOut) return;
       // `close` waits for every inherited copy of the supervisor's output
       // descriptors. If the supervisor itself dies before authenticating the
       // provider leader result, kill its group immediately so an ordinary
@@ -346,7 +360,7 @@ function runResolvedProcess(command, args, options = {}) {
     });
     child.on('close', async (supervisorCode, supervisorSignal) => {
       if (timeout) {
-        clearTimeout(timeout);
+        deadlineClearTimeoutImpl(timeout);
         timeout = null;
       }
       if (supervised && !supervisorResult && !forcedError && !timedOut) {
@@ -386,18 +400,19 @@ function runResolvedProcess(command, args, options = {}) {
       const stderrBuffer = Buffer.concat(stderr);
       const code = supervised && supervisorResult ? supervisorResult.code : supervisorCode;
       const signal = supervised && supervisorResult ? supervisorResult.signal : supervisorSignal;
-      // Completed work is authoritative over a stale deadline flag. Supervised:
-      // the authenticated result proves the leader exited on its own. Direct
-      // spawn: a null signal with an accepted exit code proves the child
-      // terminated by its own exit call, not by any deadline kill — a killed
-      // child reports the killing signal in its wait status.
-      const naturalCompletion = supervised
-        ? Boolean(supervisorResult)
+      // A result observed before a deadline-owned kill is authoritative over a
+      // stale timer. A result delivered after that marker can have been caused
+      // by the group signal itself, even when a shell reports code 0, so it must
+      // not reclassify the kill. Direct spawn has no authenticated completion
+      // message; a null signal with an accepted code proves its own exit won.
+      const completedBeforeDeadlineTermination = supervised
+        ? Boolean(supervisorResult?.completedBeforeDeadlineTermination)
         : signal === null && acceptedExitCodes.includes(code);
+      const deadlineTimedOut = deadlineTerminationIssued && !completedBeforeDeadlineTermination;
       const result = {
         code,
         signal,
-        timedOut: timedOut && !naturalCompletion,
+        timedOut: deadlineTimedOut,
         stdout: encoding === null ? stdoutBuffer : stdoutBuffer.toString(encoding),
         stderr: encoding === null ? stderrBuffer : stderrBuffer.toString(encoding)
       };
@@ -405,7 +420,7 @@ function runResolvedProcess(command, args, options = {}) {
         finish(cleanupFailure);
       } else if (forcedError) {
         finish(forcedError);
-      } else if (timedOut && !naturalCompletion) {
+      } else if (deadlineTimedOut) {
         finish(new Error(`${command} exceeded its ${timeoutMs} ms deadline`));
       } else if (!acceptedExitCodes.includes(code)) {
         const stderrText = Buffer.isBuffer(result.stderr) ? result.stderr.toString('utf8') : result.stderr;
@@ -419,9 +434,9 @@ function runResolvedProcess(command, args, options = {}) {
 
     let deadlineRearms = 0;
     const armDeadline = (delayMs) => {
-      const scheduledFor = Date.now() + delayMs;
-      timeout = setTimeout(() => {
-        const lateness = Date.now() - scheduledFor;
+      const scheduledFor = deadlineNowImpl() + delayMs;
+      timeout = deadlineSetTimeoutImpl(() => {
+        const lateness = deadlineNowImpl() - scheduledFor;
         if (lateness > DEADLINE_STALL_SLACK_MS
             && !supervisorResult && !forcedError
             && deadlineRearms < DEADLINE_STALL_REARM_LIMIT) {
@@ -442,7 +457,7 @@ function runResolvedProcess(command, args, options = {}) {
           child.stderr.destroy();
           return;
         }
-        stopChild();
+        stopChild({ deadline: true });
       }, delayMs);
       timeout.unref();
     };
