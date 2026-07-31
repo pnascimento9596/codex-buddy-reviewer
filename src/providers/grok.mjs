@@ -418,10 +418,17 @@ sessions = false
     try {
       transport = parseGrokTransport(result.stdout);
     } catch (error) {
-      throw providerFailure({
+      const failure = providerFailure({
         provider: 'grok', model: resolvedModel, stage: 'transport',
         failureCode: 'invalid_transport_envelope', durationMs: elapsed(), cause: error
       });
+      // No-loss contract: the malformed envelope must survive for private
+      // preservation instead of vanishing with the rejection. Non-enumerable so
+      // raw provider bytes never leak into serialized failure diagnostics.
+      Object.defineProperty(failure, 'rawTransport', {
+        value: { stdout: result.stdout }, enumerable: false, configurable: true
+      });
+      throw failure;
     }
     const stdout = JSON.stringify(transport.reviewPayload);
     const stderr = [...inspections.map((item) => item.stderr), result.stderr].filter(Boolean).join('\n');

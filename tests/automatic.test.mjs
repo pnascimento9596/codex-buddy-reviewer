@@ -1076,7 +1076,7 @@ test('stale lock recovery preserves mutual exclusion for concurrent contenders',
   await assert.rejects(access(deadClaim));
 });
 
-test('legacy 540-second mode records are clamped and rewritten within the current limit', async () => {
+test('legacy 540-second mode records remain valid under the raised limit', async () => {
   const root = await makeRepository();
   const dataDir = await temporaryDirectory('codex-buddy-legacy-mode-');
   await changeMode({ root, action: 'enable', dataDir });
@@ -1084,9 +1084,9 @@ test('legacy 540-second mode records are clamped and rewritten within the curren
   const legacy = JSON.parse(await readFile(file, 'utf8'));
   legacy.timeout_ms = 540_000;
   await writeFile(file, `${JSON.stringify(legacy, null, 2)}\n`);
-  assert.equal((await readMode({ root, dataDir })).timeout_ms, 480_000);
+  assert.equal((await readMode({ root, dataDir })).timeout_ms, 540_000);
   const rewritten = await changeMode({ root, action: 'enable', dataDir });
-  assert.equal(rewritten.timeout_ms, 480_000);
+  assert.equal(rewritten.timeout_ms, 540_000);
 });
 
 test('continuation uses a unique closed JSON boundary and never re-embeds the worker message', () => {

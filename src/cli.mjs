@@ -60,7 +60,7 @@ Options:
   --cwd <path>                 Repository path (default: current directory)
   --confidence <0..1>          Publication threshold (default: 0.75)
   --max-patch-bytes <n>        Sanitized patch cap (default: 262144)
-  --timeout-seconds <n>        Reviewer deadline (default: 480)
+  --timeout-seconds <n>        Reviewer deadline (default: 1800)
   --json                       Emit machine-readable JSON
   --dry-run                    Build and print evidence metadata without calling a model
   --store                      Write a bounded local review receipt
@@ -80,7 +80,7 @@ export function parseArgs(argv) {
     effort: 'high',
     minConfidence: 0.75,
     maxPatchBytes: 256 * 1024,
-    timeoutMs: 480_000,
+    timeoutMs: 1_800_000,
     store: false,
     retainEvidence: false,
     json: false,
@@ -279,10 +279,30 @@ export async function reviewEvidence(evidence, options) {
     throw new Error('Buddy approved provider request does not match its execution options');
   }
   options.onProviderDispatch?.();
-  const response = await dispatchProviderReview(approvedRequest, {
-    platform: options.platform ?? process.platform,
-    signal: options.signal
-  });
+  let response;
+  try {
+    response = await dispatchProviderReview(approvedRequest, {
+      platform: options.platform ?? process.platform,
+      signal: options.signal
+    });
+  } catch (error) {
+    // No-loss contract: a provider that failed at the transport-envelope stage
+    // still produced bytes. Preserve them privately with the parse error so the
+    // response degrades to raw-preserved instead of vanishing.
+    if (typeof error?.rawTransport?.stdout === 'string' && error.rawTransport.stdout) {
+      try {
+        error.rawResponsePath = await preserveRejectedReviewerResponse({
+          response: { stdout: error.rawTransport.stdout, reviewPayload: null },
+          evidence,
+          error,
+          dataDir: options.dataDir
+        });
+      } catch (preservationError) {
+        error.rawResponsePreservationError = preservationError;
+      }
+    }
+    throw error;
+  }
 
   let raw;
   let result;

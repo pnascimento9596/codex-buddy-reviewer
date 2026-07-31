@@ -171,10 +171,14 @@ export function providerResult({
   };
 }
 
+// The Grok CLI has emitted both spellings across releases; preserved raw
+// evidence shows successful reviews terminating with snake_case `end_turn`.
+const GROK_END_TURN_STOP_REASONS = new Set(['EndTurn', 'end_turn']);
+
 export function parseGrokTransport(stdout) {
   const envelope = parseJsonObject(stdout);
   if (envelope.type === 'error') throw new Error('Grok returned an error envelope');
-  if (envelope.stopReason !== undefined && envelope.stopReason !== 'EndTurn') {
+  if (envelope.stopReason !== undefined && !GROK_END_TURN_STOP_REASONS.has(envelope.stopReason)) {
     throw new Error('Grok did not terminate with EndTurn');
   }
   if (envelope.num_turns !== undefined

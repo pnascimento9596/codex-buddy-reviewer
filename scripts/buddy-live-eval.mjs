@@ -21,7 +21,7 @@ const HELP = `Codex Buddy explicit live-provider evaluator
 Usage:
   buddy-live-eval.mjs live --provider <claude|grok|ollama|opencode> --model <id>
     --effort <level> --cases <id,id,...> --runs <n>
-    --timeout-seconds <1..480> --max-calls <n>
+    --timeout-seconds <1..1800> --max-calls <n>
     --max-prompt-bytes <4096..1048576> --max-total-seconds <n>
     --confidence <0..1> --output <new-file> [--corpus <manifest>]
 
@@ -81,8 +81,8 @@ export function parseLiveEvalArgs(argv) {
     throw new Error('--cases must be a comma-separated list of unique corpus case ids');
   }
   if (!Number.isInteger(options.runs) || options.runs < 1 || options.runs > 10) throw new Error('--runs must be an integer from 1 to 10');
-  if (!Number.isInteger(options.timeoutSeconds) || options.timeoutSeconds < 1 || options.timeoutSeconds > 480) {
-    throw new Error('--timeout-seconds must be an integer from 1 to 480');
+  if (!Number.isInteger(options.timeoutSeconds) || options.timeoutSeconds < 1 || options.timeoutSeconds > 1800) {
+    throw new Error('--timeout-seconds must be an integer from 1 to 1800');
   }
   if (!Number.isInteger(options.maxCalls) || options.maxCalls < 0 || options.maxCalls > 100) {
     throw new Error('--max-calls must be an integer from 0 to 100');

@@ -8,6 +8,11 @@ const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 const SUPERVISOR_FILE = fileURLToPath(new URL('./process-supervisor.mjs', import.meta.url));
 const SUPERVISOR_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 const PROCESS_GROUP_CLEANUP_MS = 2_000;
+// A deadline timer that fires this much later than scheduled proves the parent
+// event loop was suspended (host memory stall or system sleep). The child was
+// frozen alongside it, so the elapsed wall clock is not child runtime.
+const DEADLINE_STALL_SLACK_MS = 2_000;
+const DEADLINE_STALL_REARM_LIMIT = 8;
 
 function assertAbortSignal(signal) {
   if (signal === undefined) return;
@@ -378,7 +383,7 @@ function runResolvedProcess(command, args, options = {}) {
       const result = {
         code,
         signal,
-        timedOut,
+        timedOut: timedOut && !(supervised && supervisorResult),
         stdout: encoding === null ? stdoutBuffer : stdoutBuffer.toString(encoding),
         stderr: encoding === null ? stderrBuffer : stderrBuffer.toString(encoding)
       };
@@ -386,7 +391,10 @@ function runResolvedProcess(command, args, options = {}) {
         finish(cleanupFailure);
       } else if (forcedError) {
         finish(forcedError);
-      } else if (timedOut) {
+      } else if (timedOut && !(supervised && supervisorResult)) {
+        // An authenticated result proves the provider leader exited on its own
+        // before any deadline kill landed. That completed work is authoritative;
+        // the deadline error is reserved for children that never completed.
         finish(new Error(`${command} exceeded its ${timeoutMs} ms deadline`));
       } else if (!acceptedExitCodes.includes(code)) {
         const stderrText = Buffer.isBuffer(result.stderr) ? result.stderr.toString('utf8') : result.stderr;
@@ -398,19 +406,36 @@ function runResolvedProcess(command, args, options = {}) {
       }
     });
 
-    timeout = setTimeout(() => {
-      timedOut = true;
-      if (supervised && supervisorResult) {
-        // Group cleanup has already been issued. If a descriptor outside that
-        // group still prevents `close`, cap the drain at the command deadline
-        // without sending another signal to a potentially recycled group id.
-        child.stdout.destroy();
-        child.stderr.destroy();
-        return;
-      }
-      stopChild();
-    }, timeoutMs);
-    timeout.unref();
+    let deadlineRearms = 0;
+    const armDeadline = (delayMs) => {
+      const scheduledFor = Date.now() + delayMs;
+      timeout = setTimeout(() => {
+        const lateness = Date.now() - scheduledFor;
+        if (lateness > DEADLINE_STALL_SLACK_MS
+            && !supervisorResult && !forcedError
+            && deadlineRearms < DEADLINE_STALL_REARM_LIMIT) {
+          // The timer fired far past its schedule: the parent (and the child's
+          // whole group with it) was suspended, not slow. Grant the child a
+          // fresh budget of responsive-host time instead of killing work that
+          // never ran. Genuine hangs still exhaust the re-armed deadline.
+          deadlineRearms += 1;
+          armDeadline(timeoutMs);
+          return;
+        }
+        timedOut = true;
+        if (supervised && supervisorResult) {
+          // Group cleanup has already been issued. If a descriptor outside that
+          // group still prevents `close`, cap the drain at the command deadline
+          // without sending another signal to a potentially recycled group id.
+          child.stdout.destroy();
+          child.stderr.destroy();
+          return;
+        }
+        stopChild();
+      }, delayMs);
+      timeout.unref();
+    };
+    armDeadline(timeoutMs);
 
     if (input !== undefined) child.stdin.end(input);
     else child.stdin.end();

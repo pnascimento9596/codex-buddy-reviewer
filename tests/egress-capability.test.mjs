@@ -522,7 +522,7 @@ test('deadline corruption is rejected and drain options fail closed on invalid s
   );
   await assert.rejects(snapshotActiveEgressCapabilities({ ...scope, modeRevision: -1 }), /non-negative/);
   await assert.rejects(snapshotActiveEgressCapabilities({ ...scope, summaryConsentRevision: 0 }), /positive/);
-  for (const timeoutMs of [-1, Number.NaN, 570_001]) {
+  for (const timeoutMs of [-1, Number.NaN, 1_890_001]) {
     await assert.rejects(
       drainEgressCapabilities({ ...scope, capabilityIds: [first.capability_id], timeoutMs }),
       /drain timeout/

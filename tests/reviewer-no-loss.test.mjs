@@ -101,3 +101,24 @@ test('malformed reviewer output is preserved privately with its parse error', as
   assert.equal(saved.failure_code, 'invalid_review_json');
   assert.equal((await stat(file)).mode & 0o777, 0o600);
 });
+
+test('a transport-envelope failure preserves the raw provider bytes privately', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-transport-'));
+  temporaryPaths.push(dataDir);
+  const error = new Error('The provider returned an invalid transport envelope.');
+  error.failureCode = 'invalid_transport_envelope';
+  const rawEnvelope = JSON.stringify({ text: 'partial preamble only', stopReason: 'cancelled' });
+  const file = await preserveRejectedReviewerResponse({
+    response: { stdout: rawEnvelope, reviewPayload: null },
+    evidence: {
+      repository_root: '/synthetic/workspace',
+      review_id: 'synthetic-transport-id'
+    },
+    error,
+    dataDir
+  });
+  const saved = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(saved.raw_response, rawEnvelope);
+  assert.equal(saved.failure_code, 'invalid_transport_envelope');
+  assert.equal((await stat(file)).mode & 0o777, 0o600);
+});

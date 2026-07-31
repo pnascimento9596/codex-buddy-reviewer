@@ -18,7 +18,7 @@ Options:
   --no-continuous-review       Review only at the final Stop hook
   --confidence <0..1>          Publication threshold
   --max-patch-bytes <n>        Sanitized patch cap
-  --timeout-seconds <n>        Reviewer deadline, at most 480 seconds
+  --timeout-seconds <n>        Reviewer deadline, at most 1800 seconds
   --json                       Emit machine-readable mode state
   -h, --help                   Show this help
 
@@ -87,8 +87,8 @@ export function parseModeArgs(argv) {
     !Number.isInteger(options.maxPatchBytes) || options.maxPatchBytes < 4096
   )) throw new Error('--max-patch-bytes must be an integer >= 4096');
   if (options.timeoutMs !== undefined && (
-    !Number.isFinite(options.timeoutMs) || options.timeoutMs < 1_000 || options.timeoutMs > 480_000
-  )) throw new Error('--timeout-seconds must be between 1 and 480');
+    !Number.isFinite(options.timeoutMs) || options.timeoutMs < 1_000 || options.timeoutMs > 1_800_000
+  )) throw new Error('--timeout-seconds must be between 1 and 1800');
   return options;
 }
 

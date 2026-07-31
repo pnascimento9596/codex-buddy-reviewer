@@ -462,7 +462,7 @@ test('setup preserves an unchanged ordered two-reviewer mode without revision ch
     secondary_effort: 'xhigh',
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
-    timeout_ms: 480_000,
+    timeout_ms: 1_800_000,
     continuous_review_enabled: false,
     continuous_review_consented_at: null
   });
@@ -476,7 +476,7 @@ test('setup preserves an unchanged ordered two-reviewer mode without revision ch
     secondary_effort: 'xhigh',
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
-    timeout_ms: 480_000,
+    timeout_ms: 1_800_000,
     continuous_review_enabled: false,
     continuous_review_consented_at: null
   });
@@ -525,7 +525,7 @@ test('setup applies both planned reviewer connections and rollback restores the 
     secondary_effort: 'high',
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
-    timeout_ms: 480_000,
+    timeout_ms: 1_800_000,
     continuous_review_enabled: true,
     continuous_review_consented_at: before.continuous_review_consented_at
   });
@@ -683,7 +683,7 @@ test('setup validates reviewer settings before approving a plan or mutating a pe
     );
   }
   await assert.rejects(
-    createSetupPlan(setupOptions(fixture, { timeoutMs: 480_001 })),
+    createSetupPlan(setupOptions(fixture, { timeoutMs: 1_800_001 })),
     /Invalid Buddy timeout/
   );
   await assert.rejects(

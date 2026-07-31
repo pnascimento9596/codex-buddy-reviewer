@@ -73,7 +73,7 @@ const NOTE_KEYS = [
   'advice'
 ];
 const CONSENT_LOCK_TIMEOUT_MS = 30_000;
-const CONSENT_DRAIN_TIMEOUT_MS = 570_000;
+const CONSENT_DRAIN_TIMEOUT_MS = 1_890_000;
 
 function assertExactKeys(value, expected, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {

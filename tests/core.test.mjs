@@ -1288,6 +1288,42 @@ test('subprocess runner enforces its deadline', async () => {
   );
 });
 
+test('a fast child that completed while the parent event loop was stalled still succeeds', {
+  skip: process.platform === 'win32'
+}, async () => {
+  // Reproduces the host-stall flake: in a real freeze the child is suspended
+  // with the parent, so its result lands only after the parent's expired
+  // deadline timer has already fired. The thawed timer must re-arm (the child
+  // consumed none of its budget during the stall), not kill completing work.
+  const promise = runProcess(
+    process.execPath,
+    ['-e', 'setTimeout(() => { process.stdout.write("stall-done"); }, 5_150)'],
+    { timeoutMs: 500 }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const gate = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(gate, 0, 0, 5_000);
+  const result = await promise;
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, 'stall-done');
+  assert.equal(result.timedOut, false);
+});
+
+test('an authenticated result received after a stalled deadline fire is not discarded', {
+  skip: process.platform === 'win32'
+}, async () => {
+  // The stall here stays inside the re-arm slack, so the deadline flag is set
+  // before the buffered supervisor result is dispatched. The authenticated
+  // result must win over the stale deadline flag.
+  const promise = runProcess(process.execPath, ['-e', 'process.stdout.write("photo-finish")'], { timeoutMs: 100 });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const gate = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(gate, 0, 0, 1_500);
+  const result = await promise;
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, 'photo-finish');
+});
+
 test('subprocess timeout escalation kills signal-resistant process-group descendants', { skip: process.platform === 'win32' }, async () => {
   const root = await temporaryDirectory('codex-buddy-process-group-');
   const script = path.join(root, 'parent.mjs');

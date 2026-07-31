@@ -405,6 +405,18 @@ test('OpenCode JSONL transport selects the final completed non-empty text event'
   assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, final);
 });
 
+test('OpenCode JSONL transport tolerates reasoning events from high-reasoning runs', () => {
+  const expected = reviewResult('Reviewed with reasoning enabled.');
+  const stdout = [
+    event('step_start', { part: { type: 'step-start' } }),
+    event('reasoning', { part: { type: 'reasoning', text: 'thinking through the diff', time: { start: 1, end: 2 } } }),
+    completedText(JSON.stringify(expected), 3),
+    event('reasoning', { part: { type: 'reasoning', text: 'post-answer reflection', time: { start: 4, end: 5 } } }),
+    event('step_finish', { part: { type: 'step-finish', reason: 'stop' } })
+  ].join('\n');
+  assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, expected);
+});
+
 test('OpenCode rejects tool, error, malformed, unknown, and incomplete transports', () => {
   const expected = reviewResult();
   for (const [name, stdout, pattern] of [
@@ -424,7 +436,7 @@ test('OpenCode rejects tool, error, malformed, unknown, and incomplete transport
       /error event/
     ],
     ['malformed JSONL', '{not-json}\n', /invalid JSON event/],
-    ['unknown event', event('reasoning', { part: { type: 'reasoning' } }), /unknown event/],
+    ['unknown event', event('tool_result', { part: { type: 'tool-result' } }), /unknown event/],
     [
       'incomplete text',
       event('text', { part: { type: 'text', text: JSON.stringify(expected), time: { start: 1 } } }),

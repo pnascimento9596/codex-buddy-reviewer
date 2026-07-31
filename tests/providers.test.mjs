@@ -314,6 +314,14 @@ test('Grok transport parser accepts only known envelopes and preserves complete 
     () => parseGrokTransport(JSON.stringify({ type: 'error', message: 'private diagnostic' })),
     /error envelope/
   );
+  assert.deepEqual(
+    parseGrokTransport(JSON.stringify({ text: JSON.stringify(expected), stopReason: 'end_turn', num_turns: 1 })).reviewPayload,
+    expected
+  );
+  assert.throws(
+    () => parseGrokTransport(JSON.stringify({ text: 'partial', stopReason: 'cancelled' })),
+    /did not terminate with EndTurn/
+  );
 });
 
 test('partial or incomplete Grok usage never becomes an exact cost claim', () => {
@@ -764,6 +772,66 @@ printf '%s\\n' '${JSON.stringify({
   assert.equal(response.run.ok, true);
   assert.equal(response.run.cleanup_status, 'failed');
   assert.doesNotMatch(JSON.stringify(response.run), /SECRET|CLEANUP|codex-buddy-grok/);
+});
+
+test('Grok accepts the real CLI snake_case end_turn terminal envelope', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const fixture = await temporaryDirectory('codex-buddy-grok-end-turn-');
+  const authPath = await syntheticGrokAuth(fixture);
+  const fakeGrok = await fakeExecutable(fixture, 'grok', `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  printf '%s\\n' '${JSON.stringify(grokInventory())}'
+  exit 0
+fi
+printf '%s\\n' '${JSON.stringify({
+    text: JSON.stringify(reviewResult()),
+    stopReason: 'end_turn',
+    num_turns: 1
+  })}'
+`);
+  const response = await reviewWithGrok({
+    root: fixture,
+    prompt: 'packet',
+    timeoutMs: 5_000,
+    grokBin: fakeGrok,
+    grokAuthPath: authPath,
+    responseSchema: REVIEW_RESULT_SCHEMA
+  });
+  assert.deepEqual(response.reviewPayload, reviewResult());
+  assert.equal(response.run.ok, true);
+});
+
+test('a malformed Grok envelope carries its raw bytes out for private preservation', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const fixture = await temporaryDirectory('codex-buddy-grok-cancelled-');
+  const authPath = await syntheticGrokAuth(fixture);
+  const cancelledEnvelope = JSON.stringify({ text: 'partial preamble only', stopReason: 'cancelled' });
+  const fakeGrok = await fakeExecutable(fixture, 'grok', `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  printf '%s\\n' '${JSON.stringify(grokInventory())}'
+  exit 0
+fi
+printf '%s\\n' '${cancelledEnvelope}'
+`);
+  await assert.rejects(
+    reviewWithGrok({
+      root: fixture,
+      prompt: 'packet',
+      timeoutMs: 5_000,
+      grokBin: fakeGrok,
+      grokAuthPath: authPath,
+      responseSchema: REVIEW_RESULT_SCHEMA
+    }),
+    (error) => {
+      assert.equal(error instanceof ProviderFailure, true);
+      assert.equal(error.failureCode, 'invalid_transport_envelope');
+      assert.equal(JSON.parse(error.rawTransport.stdout).stopReason, 'cancelled');
+      assert.doesNotMatch(JSON.stringify(error), /partial preamble|cancelled/);
+      return true;
+    }
+  );
 });
 
 test('Grok cleanup failure never replaces an inference failure', {

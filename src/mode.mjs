@@ -27,7 +27,9 @@ const LEGACY_MODE_POLICY_VERSIONS = new Set(['2', '3']);
 const VALID_ACTIONS = new Set(['enable', 'disable', 'toggle', 'status']);
 const VALID_PROVIDERS = new Set(supportedProviderIds());
 const MODE_LOCK_TIMEOUT_MS = 30_000;
-const MODE_DRAIN_TIMEOUT_MS = 570_000;
+// Sized above the 1800 s provider deadline (+90 s margin) so a legitimately
+// long reasoning review is never drained out from under itself.
+const MODE_DRAIN_TIMEOUT_MS = 1_890_000;
 
 export function providerDefaultModel(provider) {
   if (!VALID_PROVIDERS.has(provider)) throw new Error('Invalid Buddy mode provider');
@@ -55,7 +57,11 @@ function validateReviewerDescriptor(configuration, label = 'Buddy mode') {
 }
 
 export function validateReviewerConfiguration(configuration, options = {}) {
-  const maximumTimeout = options.allowLegacyTimeout ? 540_000 : 480_000;
+  // Reasoning models (observed: Grok 4.5 high, GLM 5.2 high) regularly need
+  // more than the old 480 s ceiling. 1800 s trades slower failure detection
+  // for reviews that actually complete; the legacy 540 s allowance is
+  // subsumed by the higher cap.
+  const maximumTimeout = 1_800_000;
   validateReviewerDescriptor(configuration);
   if (!Number.isFinite(configuration.min_confidence)
       || configuration.min_confidence < 0 || configuration.min_confidence > 1) {
@@ -87,7 +93,7 @@ function defaultMode(root) {
     secondary_effort: null,
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
-    timeout_ms: 480_000,
+    timeout_ms: 1_800_000,
     continuous_review_enabled: false,
     continuous_review_consented_at: null,
     consented_at: null,
@@ -208,7 +214,7 @@ export async function readMode({ root, dataDir }) {
     allowLegacyTimeout: true,
     allowLegacyPolicy: true
   });
-  return validated.timeout_ms > 480_000 ? { ...validated, timeout_ms: 480_000 } : validated;
+  return validated.timeout_ms > 1_800_000 ? { ...validated, timeout_ms: 1_800_000 } : validated;
 }
 
 export async function withModeLock({ root, dataDir }, callback) {
