@@ -235,10 +235,17 @@ export async function reviewWithClaude({
     try {
       transport = parseClaudeTransport(result.stdout);
     } catch (error) {
-      throw providerFailure({
+      const failure = providerFailure({
         provider: 'claude', model, stage: 'transport',
         failureCode: 'invalid_transport_envelope', durationMs: elapsed(), cause: error
       });
+      // No-loss contract: the malformed transport must survive for private
+      // preservation instead of vanishing with the rejection. Non-enumerable
+      // so raw provider bytes never leak into serialized failure diagnostics.
+      Object.defineProperty(failure, 'rawTransport', {
+        value: { stdout: result.stdout }, enumerable: false, configurable: true
+      });
+      throw failure;
     }
 
     const stdout = JSON.stringify(transport.reviewPayload);

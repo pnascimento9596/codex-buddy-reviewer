@@ -12,6 +12,12 @@ const PROCESS_GROUP_CLEANUP_MS = 2_000;
 // event loop was suspended (host memory stall or system sleep). The child was
 // frozen alongside it, so the elapsed wall clock is not child runtime.
 const DEADLINE_STALL_SLACK_MS = 2_000;
+// After a stall the re-armed budget is a short completion grace, never another
+// full deadline: a child that thawed with us finishes in seconds, while a
+// genuinely hung child must still die promptly. The limit bounds the total
+// extension at 8 × 30 s of responsive time regardless of the configured
+// deadline, so a stuck provider cannot outlive its lane by hours.
+const DEADLINE_STALL_REARM_GRACE_MS = 30_000;
 const DEADLINE_STALL_REARM_LIMIT = 8;
 
 function assertAbortSignal(signal) {
@@ -380,10 +386,18 @@ function runResolvedProcess(command, args, options = {}) {
       const stderrBuffer = Buffer.concat(stderr);
       const code = supervised && supervisorResult ? supervisorResult.code : supervisorCode;
       const signal = supervised && supervisorResult ? supervisorResult.signal : supervisorSignal;
+      // Completed work is authoritative over a stale deadline flag. Supervised:
+      // the authenticated result proves the leader exited on its own. Direct
+      // spawn: a null signal with an accepted exit code proves the child
+      // terminated by its own exit call, not by any deadline kill — a killed
+      // child reports the killing signal in its wait status.
+      const naturalCompletion = supervised
+        ? Boolean(supervisorResult)
+        : signal === null && acceptedExitCodes.includes(code);
       const result = {
         code,
         signal,
-        timedOut: timedOut && !(supervised && supervisorResult),
+        timedOut: timedOut && !naturalCompletion,
         stdout: encoding === null ? stdoutBuffer : stdoutBuffer.toString(encoding),
         stderr: encoding === null ? stderrBuffer : stderrBuffer.toString(encoding)
       };
@@ -391,10 +405,7 @@ function runResolvedProcess(command, args, options = {}) {
         finish(cleanupFailure);
       } else if (forcedError) {
         finish(forcedError);
-      } else if (timedOut && !(supervised && supervisorResult)) {
-        // An authenticated result proves the provider leader exited on its own
-        // before any deadline kill landed. That completed work is authoritative;
-        // the deadline error is reserved for children that never completed.
+      } else if (timedOut && !naturalCompletion) {
         finish(new Error(`${command} exceeded its ${timeoutMs} ms deadline`));
       } else if (!acceptedExitCodes.includes(code)) {
         const stderrText = Buffer.isBuffer(result.stderr) ? result.stderr.toString('utf8') : result.stderr;
@@ -415,11 +426,11 @@ function runResolvedProcess(command, args, options = {}) {
             && !supervisorResult && !forcedError
             && deadlineRearms < DEADLINE_STALL_REARM_LIMIT) {
           // The timer fired far past its schedule: the parent (and the child's
-          // whole group with it) was suspended, not slow. Grant the child a
-          // fresh budget of responsive-host time instead of killing work that
-          // never ran. Genuine hangs still exhaust the re-armed deadline.
+          // whole group with it) was suspended, not slow. Grant a bounded
+          // completion grace instead of killing work that never ran. Genuine
+          // hangs still die once the grace expires without another stall.
           deadlineRearms += 1;
-          armDeadline(timeoutMs);
+          armDeadline(Math.min(timeoutMs, DEADLINE_STALL_REARM_GRACE_MS));
           return;
         }
         timedOut = true;

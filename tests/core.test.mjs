@@ -1324,6 +1324,46 @@ test('an authenticated result received after a stalled deadline fire is not disc
   assert.equal(result.stdout, 'photo-finish');
 });
 
+test('a genuinely hung child still dies after a stall re-arm grace', {
+  skip: process.platform === 'win32'
+}, async () => {
+  // One stall re-arms the deadline with a bounded grace, not a fresh full
+  // budget. A child that never completes must die once the grace expires.
+  const started = Date.now();
+  const promise = runProcess(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { timeoutMs: 100 });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const gate = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(gate, 0, 0, 2_500);
+  await assert.rejects(promise, /exceeded its 100 ms deadline/);
+  // grace is min(timeoutMs, 30s) = 100ms: the kill lands promptly after thaw,
+  // not after another unbounded budget.
+  assert.ok(Date.now() - started < 15_000);
+});
+
+test('an unsupervised child that exited before the deadline kill is a natural completion', {
+  skip: process.platform === 'win32'
+}, async () => {
+  // Direct-spawn parallel of the supervised photo-finish: the child completes
+  // and dies DURING the stall, the thawed timer phase runs before the buffered
+  // close is dispatched (as in a real freeze), and ESRCH on the kill proves
+  // the child was already gone — its work must not be discarded.
+  const promise = runProcess(
+    process.execPath,
+    ['-e', 'setTimeout(() => { process.stdout.write("direct-done"); }, 200)'],
+    { timeoutMs: 100, protectFromParentDeath: false }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const gate = new Int32Array(new SharedArrayBuffer(4));
+  await new Promise((resolve) => setImmediate(() => {
+    Atomics.wait(gate, 0, 0, 1_500);
+    resolve();
+  }));
+  const result = await promise;
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, 'direct-done');
+  assert.equal(result.timedOut, false);
+});
+
 test('subprocess timeout escalation kills signal-resistant process-group descendants', { skip: process.platform === 'win32' }, async () => {
   const root = await temporaryDirectory('codex-buddy-process-group-');
   const script = path.join(root, 'parent.mjs');

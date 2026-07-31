@@ -122,3 +122,28 @@ test('a transport-envelope failure preserves the raw provider bytes privately', 
   assert.equal(saved.failure_code, 'invalid_transport_envelope');
   assert.equal((await stat(file)).mode & 0o777, 0o600);
 });
+
+test('transport-failure preservation strips raw bytes from the propagating error', async () => {
+  const { preserveTransportFailure } = await import('../src/cli.mjs');
+  const { inspect } = await import('node:util');
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-transport-strip-'));
+  temporaryPaths.push(dataDir);
+  const rawEnvelope = JSON.stringify({ text: 'raw provider bytes', stopReason: 'cancelled' });
+  const error = new Error('The provider returned an invalid transport envelope.');
+  error.failureCode = 'invalid_transport_envelope';
+  Object.defineProperty(error, 'rawTransport', {
+    value: { stdout: rawEnvelope }, enumerable: false, configurable: true
+  });
+  await preserveTransportFailure(error, {
+    repository_root: '/synthetic/workspace',
+    review_id: 'synthetic-strip-id'
+  }, dataDir);
+  const saved = JSON.parse(await readFile(error.rawResponsePath, 'utf8'));
+  assert.equal(saved.raw_response, rawEnvelope);
+  assert.equal((await stat(error.rawResponsePath)).mode & 0o777, 0o600);
+  // The disk copy is now the only copy: no enumeration or inspection of the
+  // propagating error may surface the raw bytes.
+  assert.equal(Object.getOwnPropertyNames(error).includes('rawTransport'), false);
+  assert.equal(Reflect.ownKeys(error).includes('rawTransport'), false);
+  assert.doesNotMatch(inspect(error, { showHidden: true, depth: 4 }), /raw provider bytes/);
+});

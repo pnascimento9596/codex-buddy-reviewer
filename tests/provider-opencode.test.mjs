@@ -417,6 +417,15 @@ test('OpenCode JSONL transport tolerates reasoning events from high-reasoning ru
   assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, expected);
 });
 
+test('OpenCode reasoning events are never a source of completed review text', () => {
+  const stdout = [
+    event('step_start', { part: { type: 'step-start' } }),
+    event('reasoning', { part: { type: 'reasoning', text: '{"schema_version":"2"}', time: { start: 1, end: 2 } } }),
+    event('step_finish', { part: { type: 'step-finish', reason: 'stop' } })
+  ].join('\n');
+  assert.throws(() => parseOpenCodeTransport(stdout), /no completed text/);
+});
+
 test('OpenCode rejects tool, error, malformed, unknown, and incomplete transports', () => {
   const expected = reviewResult();
   for (const [name, stdout, pattern] of [
