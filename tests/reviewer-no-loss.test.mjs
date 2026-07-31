@@ -60,6 +60,12 @@ function evidence() {
   };
 }
 
+async function assertPrivateMode(file) {
+  if (process.platform !== 'win32') {
+    assert.equal((await stat(file)).mode & 0o777, 0o600);
+  }
+}
+
 test('review schema and local validation accept six and forty findings completely', () => {
   assert.equal(Object.hasOwn(REVIEW_RESULT_SCHEMA.properties.findings, 'maxItems'), false);
   for (const count of [6, 40]) {
@@ -99,7 +105,7 @@ test('malformed reviewer output is preserved privately with its parse error', as
   assert.equal(saved.raw_response, '{not valid json');
   assert.equal(saved.parse_error, 'synthetic parse error');
   assert.equal(saved.failure_code, 'invalid_review_json');
-  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  await assertPrivateMode(file);
 });
 
 test('a transport-envelope failure preserves the raw provider bytes privately', async () => {
@@ -120,7 +126,7 @@ test('a transport-envelope failure preserves the raw provider bytes privately', 
   const saved = JSON.parse(await readFile(file, 'utf8'));
   assert.equal(saved.raw_response, rawEnvelope);
   assert.equal(saved.failure_code, 'invalid_transport_envelope');
-  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  await assertPrivateMode(file);
 });
 
 test('transport-failure preservation strips raw bytes from the propagating error', async () => {
@@ -140,7 +146,7 @@ test('transport-failure preservation strips raw bytes from the propagating error
   }, dataDir);
   const saved = JSON.parse(await readFile(error.rawResponsePath, 'utf8'));
   assert.equal(saved.raw_response, rawEnvelope);
-  assert.equal((await stat(error.rawResponsePath)).mode & 0o777, 0o600);
+  await assertPrivateMode(error.rawResponsePath);
   // The disk copy is now the only copy: no enumeration or inspection of the
   // propagating error may surface the raw bytes.
   assert.equal(Object.getOwnPropertyNames(error).includes('rawTransport'), false);
