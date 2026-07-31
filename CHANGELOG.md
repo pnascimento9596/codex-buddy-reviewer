@@ -2,6 +2,20 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
+## 0.5.0-rc.2
+
+### Fixed
+
+- Reviewer schemas, runtime validation, outbox input, and source-result retention now preserve complete verbose responses instead of rejecting or truncating them at five findings; the compact aggregate remains deliberately bounded to five displayed findings.
+- Malformed or transport-invalid provider responses are written once to private mode-`0600` evidence with a safe parse error, then removed from propagating error objects so raw bytes cannot leak through diagnostics.
+- OpenCode accepts high-reasoning JSONL events without treating reasoning as completed review text, and Grok accepts its observed `end_turn` envelope without weakening the closed transport contract.
+- Provider deadline re-arm uses bounded completion grace, and an authenticated completed process result wins over a stale deadline flag while cancellation, containment, temporary-state cleanup, and the POSIX Grok FIFO bridge retain their post-rc.1 behavior.
+- The consumer-proof harness resolves and validates an absolute installation root and exits nonzero unless all three no-loss transport probes are strictly `true`.
+
+### Release status
+
+- This remains an RC. The artifact contains the five public pets Byte, Mochi, Orbit, Bella, and Lupo under their checked-in Apache-2.0 provenance grants. Artifact-bound host evidence remains a stable `v0.5.0` gate and is not required for this RC.
+
 ## 0.5.0-rc.1
 
 ### Added

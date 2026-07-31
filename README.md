@@ -12,7 +12,7 @@
     <a href="CONTRIBUTING.md">Contributing</a>
   </p>
   <p>
-    <a href="#status"><img alt="Version v0.5.0-rc.1" src="https://img.shields.io/badge/version-v0.5.0--rc.1-7c3aed" /></a>
+    <a href="#status"><img alt="Version v0.5.0-rc.2" src="https://img.shields.io/badge/version-v0.5.0--rc.2-7c3aed" /></a>
     <a href="#quick-start"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&amp;logoColor=white" /></a>
     <a href="#connection-support"><img alt="Four reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-4-0891b2" /></a>
     <a href="#pets"><img alt="Five public pets" src="https://img.shields.io/badge/public_pets-5-f59e0b" /></a>
@@ -37,7 +37,7 @@ Run the first-party `/pet` command once to keep the selected companion open. `/b
 
 ## Status
 
-Current version: `v0.5.0-rc.1`
+Current version: `v0.5.0-rc.2`
 
 This is a release candidate, not a stable release. Provider egress remains experimental until the frozen tree passes the complete security, cross-platform, independent-review, packaging, and Codex host gates below. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
 
@@ -165,16 +165,16 @@ Prerequisites:
 After the repository and release tag are public, install the reviewed release through Codex's Git marketplace support:
 
 ```bash
-codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.1
+codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.2
 codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
 codex plugin list
 ```
 
-This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0-rc.1`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
+This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0-rc.2`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
 
 The public default branch remains the contributor-friendly source repository. A release version tag is intended to resolve to a separate parentless distribution commit whose tree contains only the byte-verified positive artifact, including its `release-manifest.json`. It does not point at the full development checkout or inherit its objects and history. Install a pinned release tag, never a moving source branch.
 
-The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0-rc.1` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only release candidate. The stable `v0.5.0` tag remains unavailable until the security, platform, and five-pet Codex host gates close. During private development, use the existing `personal` marketplace flow.
+The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0-rc.2` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only release candidate. The stable `v0.5.0` tag remains unavailable until the security, platform, and five-pet Codex host gates close. During private development, use the existing `personal` marketplace flow.
 
 ```mermaid
 flowchart TD
@@ -487,11 +487,11 @@ Python would add a second required runtime without improving the host or securit
 npm run validate
 npm run security:secrets
 npm run security:publication
-npm run release:build -- --output /tmp/codex-buddy-public-rc1
-npm run release:verify -- --input /tmp/codex-buddy-public-rc1
+npm run release:build -- --output /tmp/codex-buddy-public-rc2
+npm run release:verify -- --input /tmp/codex-buddy-public-rc2
 npm run release:distribution -- \
-  --artifact /tmp/codex-buddy-public-rc1 \
-  --output /tmp/codex-buddy-v0.5.0-rc.1-distribution \
+  --artifact /tmp/codex-buddy-public-rc2 \
+  --output /tmp/codex-buddy-v0.5.0-rc.2-distribution \
   --policy-root .
 ```
 
