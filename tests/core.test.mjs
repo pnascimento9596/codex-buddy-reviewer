@@ -930,7 +930,7 @@ test('CLI arguments default safely and require an explicit branch base', () => {
     /Invalid Buddy mode model/
   );
   assert.throws(() => parseArgs(['review', '--effort', 'ultra']), /Invalid Buddy reasoning effort/);
-  assert.throws(() => parseArgs(['review', '--timeout-seconds', '481']), /Invalid Buddy timeout/);
+  assert.throws(() => parseArgs(['review', '--timeout-seconds', '1801']), /Invalid Buddy timeout/);
 });
 
 test('manual live review blocks Windows before repository evidence collection', async () => {
