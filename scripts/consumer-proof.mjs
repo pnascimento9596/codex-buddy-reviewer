@@ -1,10 +1,26 @@
 // Consumer-path proof: run the 40-finding no-loss shapes and the defect
 // probes against a given codex-buddy-reviewer installation root.
-const root = process.argv[2];
-const { validateReviewResult } = await import(`${root}/src/result.mjs`);
-const { aggregateReviewOutcomes } = await import(`${root}/src/review-aggregate.mjs`);
-const { parseOpenCodeTransport } = await import(`${root}/src/providers/opencode.mjs`);
-const { parseGrokTransport } = await import(`${root}/src/provider-contract.mjs`);
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const suppliedRoot = process.argv[2];
+if (!suppliedRoot) throw new Error('consumer proof root is required');
+const root = path.resolve(suppliedRoot);
+let rootStat;
+try {
+  rootStat = await stat(root);
+} catch (error) {
+  if (error?.code === 'ENOENT') throw new Error(`consumer proof root does not exist: ${root}`);
+  throw error;
+}
+if (!rootStat.isDirectory()) throw new Error(`consumer proof root is not a directory: ${root}`);
+
+const moduleUrl = (...segments) => pathToFileURL(path.join(root, ...segments)).href;
+const { validateReviewResult } = await import(moduleUrl('src', 'result.mjs'));
+const { aggregateReviewOutcomes } = await import(moduleUrl('src', 'review-aggregate.mjs'));
+const { parseOpenCodeTransport } = await import(moduleUrl('src', 'providers', 'opencode.mjs'));
+const { parseGrokTransport } = await import(moduleUrl('src', 'provider-contract.mjs'));
 
 const finding = (i) => ({ severity: 'low', confidence: 0.99, title: `Finding ${i}`, body: 'Synthetic body.',
   impact: 'Synthetic impact.', path: 'src/app.js', line_side: 'new', line_start: 1, line_end: 1,
@@ -36,3 +52,6 @@ try {
   out.endTurnAccepted = true;
 } catch (e) { out.endTurnAccepted = `REJECTED: ${e.message}`; }
 console.log(JSON.stringify(out, null, 2));
+if (![out.fortyFindingComplete, out.reasoningTolerated, out.endTurnAccepted].every((value) => value === true)) {
+  process.exitCode = 1;
+}
