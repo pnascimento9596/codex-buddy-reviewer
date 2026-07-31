@@ -2,10 +2,13 @@ import path from 'node:path';
 
 import { escapeDiagnosticLine } from './policy.mjs';
 import {
+  ensurePrivateStatePath,
   resolveDataDir,
   workspaceKey,
   writePrivateJsonAtomic
 } from './state.mjs';
+
+const REVIEW_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/u;
 
 function rawResponse(response) {
   if (response?.reviewPayload !== null && response?.reviewPayload !== undefined) {
@@ -22,14 +25,17 @@ export async function preserveRejectedReviewerResponse({
   error,
   dataDir
 }) {
+  if (typeof evidence?.review_id !== 'string' || !REVIEW_ID_PATTERN.test(evidence.review_id)) {
+    throw new TypeError('Buddy rejected response review id is invalid');
+  }
   const root = resolveDataDir(dataDir);
-  const file = path.join(
+  const directory = await ensurePrivateStatePath(root, path.join(
     root,
     'rejected-responses',
     workspaceKey(evidence.repository_root),
-    evidence.review_id,
-    'response.json'
-  );
+    evidence.review_id
+  ));
+  const file = path.join(directory, 'response.json');
   await writePrivateJsonAtomic(file, {
     schema_version: '1',
     review_id: evidence.review_id,

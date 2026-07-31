@@ -108,6 +108,27 @@ test('malformed reviewer output is preserved privately with its parse error', as
   await assertPrivateMode(file);
 });
 
+test('rejected-response preservation refuses a review id that escapes its workspace directory', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-response-escape-'));
+  temporaryPaths.push(dataDir);
+  const escaped = path.join(dataDir, 'rejected-responses', 'escaped-review', 'response.json');
+  await assert.rejects(
+    preserveRejectedReviewerResponse({
+      response: { stdout: '{not valid json', reviewPayload: null },
+      evidence: {
+        repository_root: '/synthetic/workspace',
+        review_id: '../escaped-review'
+      },
+      error: Object.assign(new Error('synthetic parse error'), {
+        failureCode: 'invalid_review_json'
+      }),
+      dataDir
+    }),
+    /review id is invalid/
+  );
+  await assert.rejects(stat(escaped), { code: 'ENOENT' });
+});
+
 test('a transport-envelope failure preserves the raw provider bytes privately', async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-transport-'));
   temporaryPaths.push(dataDir);
