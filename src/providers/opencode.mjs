@@ -11,6 +11,7 @@ import {
   providerFailure,
   providerResult
 } from '../provider-contract.mjs';
+import { parseReviewerOutput } from '../result.mjs';
 import { cleanupProviderTempRun, createProviderTempRun } from './temp-state.mjs';
 
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
@@ -313,7 +314,7 @@ export function parseOpenCodeTransport(stdout) {
   }
   let reviewPayload;
   try {
-    reviewPayload = JSON.parse(completedText.trim());
+    reviewPayload = parseReviewerOutput(completedText);
   } catch (error) {
     throw new Error('OpenCode completed text was not valid review JSON', { cause: error });
   }

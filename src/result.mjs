@@ -81,14 +81,28 @@ function parseJsonString(value) {
   }
 }
 
+function normalizeRecoverableReviewShape(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  if ((value.status === 'no_findings' || value.status === 'abstain')
+      && !Object.hasOwn(value, 'findings')) {
+    return { ...value, findings: [] };
+  }
+  return value;
+}
+
 export function parseReviewerOutput(stdout) {
   const outer = parseJsonString(stdout);
+  let result = outer;
   if (outer && typeof outer === 'object') {
-    if (outer.structured_output && typeof outer.structured_output === 'object') return outer.structured_output;
-    if (typeof outer.result === 'string') return parseJsonString(outer.result);
-    if (typeof outer.content === 'string') return parseJsonString(outer.content);
+    if (outer.structured_output && typeof outer.structured_output === 'object') {
+      result = outer.structured_output;
+    } else if (typeof outer.result === 'string') {
+      result = parseJsonString(outer.result);
+    } else if (typeof outer.content === 'string') {
+      result = parseJsonString(outer.content);
+    }
   }
-  return outer;
+  return normalizeRecoverableReviewShape(result);
 }
 
 function assertString(value, field, maxLength) {

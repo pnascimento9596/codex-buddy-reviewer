@@ -417,6 +417,16 @@ test('OpenCode JSONL transport tolerates reasoning events from high-reasoning ru
   assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, expected);
 });
 
+test('OpenCode JSONL transport preserves a completed fenced-JSON review', () => {
+  const expected = reviewResult('Complete verdict wrapped in a JSON fence.');
+  const stdout = [
+    event('step_start', { part: { type: 'step-start' } }),
+    completedText(`\`\`\`json\n${JSON.stringify(expected)}\n\`\`\``),
+    event('step_finish', { part: { type: 'step-finish', reason: 'stop' } })
+  ].join('\n');
+  assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, expected);
+});
+
 test('OpenCode reasoning events are never a source of completed review text', () => {
   const stdout = [
     event('step_start', { part: { type: 'step-start' } }),
@@ -453,7 +463,7 @@ test('OpenCode rejects tool, error, malformed, unknown, and incomplete transport
     ],
     ['empty output', '\n', /did not contain JSON events/],
     ['non-object result', completedText('[]'), /must be one object/],
-    ['markdown result', completedText('```json\n{}\n```'), /not valid review JSON/]
+    ['malformed fenced result', completedText('```json\n{not-json}\n```'), /not valid review JSON/]
   ]) {
     assert.throws(() => parseOpenCodeTransport(stdout), pattern, name);
   }
