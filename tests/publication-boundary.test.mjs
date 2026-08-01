@@ -242,6 +242,16 @@ test('the committed allowlist binds reviewed email and historical path dispositi
   assert.equal(result.reviewed_email_dispositions, 1);
   assert.equal(result.historical_path_dispositions, 1);
 
+  const shallow = await mkdtemp(path.join(os.tmpdir(), 'buddy-publication-allowlist-shallow-'));
+  temporaryPaths.push(shallow);
+  await execFileAsync('git', [
+    'clone', '--quiet', '--depth=1', `file://${root}`, shallow
+  ], { windowsHide: true });
+  const treeResult = await checkPublicationBoundary({ root: shallow, treeOnly: true });
+  assert.equal(treeResult.mode, 'tree-only');
+  assert.equal(treeResult.reviewed_email_dispositions, 1);
+  assert.equal(treeResult.historical_path_dispositions, 1);
+
   await writeFile(destination, `HOME=${privateLinuxPath}\n`);
   await commit(root, noreply, 'introduce a different current violation');
   await rejectsWithCode(checkPublicationBoundary({ root }), 'ABSOLUTE_USER_PATH');

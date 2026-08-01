@@ -517,7 +517,7 @@ function parseCommittedAllowlist(bytes) {
   });
 }
 
-async function committedAllowlist(root, entries, limits) {
+async function committedAllowlist(root, entries, limits, validateHistoricalObjects) {
   const entry = entries.find((item) => item.path === COMMITTED_ALLOWLIST_PATH);
   if (!entry) {
     return Object.freeze({ reviewedEmails: Object.freeze([]), historicalPathViolations: Object.freeze([]) });
@@ -533,7 +533,7 @@ async function committedAllowlist(root, entries, limits) {
   if (stdout.length !== metadata.size) fail('GIT_OUTPUT_MALFORMED', 'Git returned incomplete allowlist bytes.');
   const parsed = parseCommittedAllowlist(stdout);
   const objectIds = parsed.historicalPathViolations.flatMap((item) => [item.blob_oid, item.fixed_at]);
-  if (objectIds.length > 0) {
+  if (validateHistoricalObjects && objectIds.length > 0) {
     const objectMetadata = await batchMetadata(
       root,
       objectIds.map((oid) => ({ oid })),
@@ -1052,7 +1052,7 @@ export async function checkPublicationBoundary(options = {}) {
   const root = await validateTopLevel(options.root ?? process.cwd(), limits);
   if (!treeOnly) await validateClean(root, limits);
   const entries = await currentIndex(root, limits);
-  const allowlist = await committedAllowlist(root, entries, limits);
+  const allowlist = await committedAllowlist(root, entries, limits, !treeOnly);
   const safeEmails = validateSafeEmails([
     ...(options.safeEmails ?? []),
     ...allowlist.reviewedEmails.map((item) => item.email)
