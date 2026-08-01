@@ -600,6 +600,41 @@ test('an exhausted turn-scan budget cannot starve rejected-response expiry', asy
   await assert.rejects(lstat(response));
 });
 
+test('rejected-response pruning preserves live atomic temps and removes only aged orphans', async () => {
+  const { runtimeDataDir, root } = await fixture();
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-temp-pruner-'));
+  roots.push(modeDataDir);
+  const responseDirectory = path.join(
+    modeDataDir,
+    'rejected-responses',
+    workspaceKey(root),
+    'atomic-write-review'
+  );
+  await mkdir(responseDirectory, { recursive: true });
+  const fresh = path.join(
+    responseDirectory,
+    '.response-fresh.json.1234.11111111-1111-4111-8111-111111111111.tmp'
+  );
+  const old = path.join(
+    responseDirectory,
+    '.response-old.json.1234.22222222-2222-4222-8222-222222222222.tmp'
+  );
+  await writeFile(fresh, '{"in_flight":true}\n');
+  await writeFile(old, '{"orphaned":true}\n');
+  await utimes(fresh, new Date('2020-01-01T12:00:00.001Z'), new Date('2020-01-01T12:00:00.001Z'));
+  await utimes(old, new Date('2020-01-01T00:00:00.000Z'), new Date('2020-01-01T00:00:00.000Z'));
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    modeDataDir,
+    root,
+    now: Date.parse('2020-01-02T00:00:00.000Z')
+  });
+  assert.equal(result.rejectedResponsePruned, 1);
+  await lstat(fresh);
+  await assert.rejects(lstat(old));
+});
+
 test('aged v2 and legacy v1 outbox content expire without a renderer', async () => {
   const { runtimeDataDir, root } = await fixture();
   const common = {

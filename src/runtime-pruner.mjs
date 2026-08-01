@@ -232,8 +232,22 @@ async function pruneExpiredRejectedResponses(options) {
       }
       scanned += 1;
       if (responseEntry.isFile() && /^\.response(?:-.+)?\.json\..+\.tmp$/u.test(responseEntry.name)) {
-        await rm(path.join(reviewDirectory, responseEntry.name), { force: true });
-        pruned += 1;
+        const temporary = path.join(reviewDirectory, responseEntry.name);
+        let details;
+        try {
+          details = await lstat(temporary);
+        } catch (error) {
+          if (error.code === 'ENOENT') continue;
+          throw error;
+        }
+        if (details.isSymbolicLink() || !details.isFile()) {
+          ambiguous += 1;
+          continue;
+        }
+        if (options.now - details.mtimeMs >= options.contentTtlMs) {
+          await rm(temporary, { force: true });
+          pruned += 1;
+        }
         continue;
       }
       if (responseEntry.isSymbolicLink() || !responseEntry.isFile()
