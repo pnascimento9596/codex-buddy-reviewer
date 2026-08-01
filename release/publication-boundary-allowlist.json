@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "reviewed_emails": [
+    {
+      "email": "pnascimento9596@gmail.com",
+      "disposition": "Reviewed public contributor address; not a credential."
+    }
+  ],
+  "historical_path_violations": [
+    {
+      "path_id": "7a7559ba1cd3",
+      "blob_oid": "8b148b68379b385dd506840a898b1cf0dcaefbe8",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical fixture blob; not a credential; content fixed at 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    }
+  ]
+}
