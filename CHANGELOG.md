@@ -2,7 +2,7 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
-## 0.5.0-rc.2
+## 0.5.0-rc.2 (Unreleased)
 
 ### Fixed
 
@@ -11,10 +11,12 @@ All notable changes to Codex Buddy Reviewer are documented here. Release candida
 - OpenCode accepts high-reasoning JSONL events without treating reasoning as completed review text, and Grok accepts its observed `end_turn` envelope without weakening the closed transport contract.
 - Provider deadline re-arm uses bounded completion grace, and an authenticated completed process result wins over a stale deadline flag while cancellation, containment, temporary-state cleanup, and the POSIX Grok FIFO bridge retain their post-rc.1 behavior.
 - The consumer-proof harness resolves and validates an absolute installation root and exits nonzero unless all three no-loss transport probes are strictly `true`.
+- Structured results that omit the schema-required `findings` property now fail strict local validation instead of being normalized into apparent clean or abstaining outcomes.
+- Rejected provider responses are kept outside the reviewed repository, appear in workspace status and purge coverage, retain concurrent responses without collision, and expire under the same 24-hour content ceiling as automatic receipts and outbox events.
 
 ### Release status
 
-- This remains an RC. The artifact contains the five public pets Byte, Mochi, Orbit, Bella, and Lupo under their checked-in Apache-2.0 provenance grants. Artifact-bound host evidence remains a stable `v0.5.0` gate and is not required for this RC.
+- This remains an RC. Local public-builder output contains the five public pets Byte, Mochi, Orbit, Bella, and Lupo under their checked-in Apache-2.0 provenance grants. This source entry is not evidence that an rc.2 artifact was published. Artifact-bound host evidence remains a stable `v0.5.0` gate and is not required for this RC.
 
 ## 0.5.0-rc.1
 

@@ -27,7 +27,7 @@
 
 Keep Codex as the main coding agent, then let one or two separately configured reviewer connections inspect privacy-filtered repository changes while the turn is still running. Buddy validates and attributes their findings, preserves useful disagreement, reports partial failures honestly, and ends with one compact review paragraph beside a persistent animated Codex pet.
 
-> Keep codex and GPT-5.6 Sol as your main implementer, then put an underused subscription, for example: Ollama cloud, Claude, SuperGrok, Opencode, Zai, Kimi Code, etc...with any model, and even a secondary subscription/agent connection to work as two independent reviewers. The same pattern works with Claude Max, ChatGPT Pro through OpenCode, Kimi through OpenCode, local Ollama, or any supported mix you already have.
+> Keep Codex and GPT-5.6 Sol as your main implementer, then use one or two authenticated connections through Buddy's four adapters: Claude, Grok, Ollama, or OpenCode. Models are available only through those adapters and their configured connections. The same pattern works with Claude Max, ChatGPT Pro through OpenCode, Kimi through OpenCode, local Ollama, or any supported mix already configured on your machine.
 
 Buddy never asks you to paste tokens into its configuration. Authentication remains owned by Claude Code, Grok CLI, Ollama, or OpenCode.
 
@@ -37,7 +37,7 @@ Run the first-party `/pet` command once to keep the selected companion open. `/b
 
 ## Status
 
-Current version: `v0.5.0-rc.2`
+Source candidate: `0.5.0-rc.2`. Published release: `v0.5.0-rc.1`.
 
 This is a release candidate, not a stable release. Provider egress remains experimental until the frozen tree passes the complete security, cross-platform, independent-review, packaging, and Codex host gates below. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
 
@@ -162,13 +162,15 @@ Prerequisites:
 - At least one supported reviewer CLI installed and authenticated through its own normal login flow
 - Windows v0.5 RC supports nonprovider commands and offline validation, but live reviewer contact is disabled pending current-user-only DACL implementation and real Windows evidence
 
-After the repository and release tag are public, install the reviewed release through Codex's Git marketplace support:
+Install the published `v0.5.0-rc.1` release through Codex's Git marketplace support:
 
 ```bash
-codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.2
+codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.1
 codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
 codex plugin list
 ```
+
+The `0.5.0-rc.2` source tree is an unpublished candidate. Use the published `v0.5.0-rc.1` tag for marketplace installs until an rc.2 artifact is separately verified and published.
 
 This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0-rc.2`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
 
