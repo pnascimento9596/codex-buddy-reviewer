@@ -2,6 +2,7 @@ import path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import {
   drainEgressCapabilities,
+  REVIEW_SUPERVISION_TIMEOUT_MS,
   snapshotActiveEgressCapabilities
 } from './egress-capability.mjs';
 import { runProcess } from './process.mjs';
@@ -27,9 +28,9 @@ const LEGACY_MODE_POLICY_VERSIONS = new Set(['2', '3']);
 const VALID_ACTIONS = new Set(['enable', 'disable', 'toggle', 'status']);
 const VALID_PROVIDERS = new Set(supportedProviderIds());
 const MODE_LOCK_TIMEOUT_MS = 30_000;
-// Sized above the 1800 s provider deadline (+90 s margin) so a legitimately
-// long reasoning review is never drained out from under itself.
-const MODE_DRAIN_TIMEOUT_MS = 1_890_000;
+// Includes the process layer's bounded stall-recovery extension plus the
+// existing 90 s settlement margin.
+const MODE_DRAIN_TIMEOUT_MS = REVIEW_SUPERVISION_TIMEOUT_MS;
 
 export function providerDefaultModel(provider) {
   if (!VALID_PROVIDERS.has(provider)) throw new Error('Invalid Buddy mode provider');

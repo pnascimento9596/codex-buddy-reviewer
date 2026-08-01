@@ -14,6 +14,7 @@ import { prepareReviewRequest, reviewEvidence } from './cli.mjs';
 import {
   egressConfigurationHash,
   issueEgressCapabilityBatch,
+  REVIEW_SUPERVISION_TIMEOUT_MS,
   spendEgressCapability,
   withProviderLane
 } from './egress-capability.mjs';
@@ -27,6 +28,7 @@ import { appendOutboxEvent } from './outbox.mjs';
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
 import { approveProviderReviewRequest } from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
+import { DEADLINE_STALL_MAX_EXTENSION_MS } from './process.mjs';
 import { aggregateReviewOutcomes, ReviewAggregationError } from './review-aggregate.mjs';
 import { REVIEW_SCHEMA_VERSION } from './review-schema.mjs';
 import { pruneWorkspaceTurns } from './runtime-pruner.mjs';
@@ -73,9 +75,9 @@ import {
 
 const MAX_CONTINUATION_CHARS = 1_800;
 const STOP_LEASE_HELD = Symbol('Buddy stop lease held');
-const STOP_LEASE_TIMEOUT_MS = 1_890_000;
+const STOP_LEASE_TIMEOUT_MS = REVIEW_SUPERVISION_TIMEOUT_MS;
 const DELIVERY_RETRY_MS = 30_000;
-const PRE_REVIEW_SETTLEMENT_GRACE_MS = 15_000;
+const PRE_REVIEW_SETTLEMENT_GRACE_MS = DEADLINE_STALL_MAX_EXTENSION_MS + 15_000;
 const STOP_LEASE_HEADROOM_MS = 60_000;
 const REVIEW_KEY_PATTERN = /^[0-9a-f]{64}$/;
 

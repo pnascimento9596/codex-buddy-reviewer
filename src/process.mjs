@@ -17,8 +17,10 @@ const DEADLINE_STALL_SLACK_MS = 2_000;
 // genuinely hung child must still die promptly. The limit bounds the total
 // extension at 8 × 30 s of responsive time regardless of the configured
 // deadline, so a stuck provider cannot outlive its lane by hours.
-const DEADLINE_STALL_REARM_GRACE_MS = 30_000;
-const DEADLINE_STALL_REARM_LIMIT = 8;
+export const DEADLINE_STALL_REARM_GRACE_MS = 30_000;
+export const DEADLINE_STALL_REARM_LIMIT = 8;
+export const DEADLINE_STALL_MAX_EXTENSION_MS =
+  DEADLINE_STALL_REARM_GRACE_MS * DEADLINE_STALL_REARM_LIMIT;
 
 function assertAbortSignal(signal) {
   if (signal === undefined) return;

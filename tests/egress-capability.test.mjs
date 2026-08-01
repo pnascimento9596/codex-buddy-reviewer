@@ -11,10 +11,16 @@ import {
   issueEgressCapability,
   issueEgressCapabilityBatch,
   readEgressRegistry,
+  REVIEW_SUPERVISION_TIMEOUT_MS,
   snapshotActiveEgressCapabilities,
   spendEgressCapability
 } from '../src/egress-capability.mjs';
 import { changeMode, readMode } from '../src/mode.mjs';
+import {
+  DEADLINE_STALL_MAX_EXTENSION_MS,
+  DEADLINE_STALL_REARM_GRACE_MS,
+  DEADLINE_STALL_REARM_LIMIT
+} from '../src/process.mjs';
 import {
   approveProviderReviewRequest,
   inspectApprovedProviderReviewRequest
@@ -27,6 +33,13 @@ import { withFileLock, workspaceKey } from '../src/state.mjs';
 
 const temporaryPaths = [];
 const REVIEW_KEY = 'c'.repeat(64);
+
+test('review supervision covers every bounded process stall re-arm plus settlement margin', () => {
+  assert.equal(DEADLINE_STALL_REARM_GRACE_MS, 30_000);
+  assert.equal(DEADLINE_STALL_REARM_LIMIT, 8);
+  assert.equal(DEADLINE_STALL_MAX_EXTENSION_MS, 8 * 30_000);
+  assert.equal(REVIEW_SUPERVISION_TIMEOUT_MS, 1_800_000 + (8 * 30_000) + 90_000);
+});
 
 test.after(async () => {
   await Promise.all(temporaryPaths.map((item) => rm(item, { recursive: true, force: true })));
@@ -522,7 +535,7 @@ test('deadline corruption is rejected and drain options fail closed on invalid s
   );
   await assert.rejects(snapshotActiveEgressCapabilities({ ...scope, modeRevision: -1 }), /non-negative/);
   await assert.rejects(snapshotActiveEgressCapabilities({ ...scope, summaryConsentRevision: 0 }), /positive/);
-  for (const timeoutMs of [-1, Number.NaN, 1_890_001]) {
+  for (const timeoutMs of [-1, Number.NaN, 2_130_001]) {
     await assert.rejects(
       drainEgressCapabilities({ ...scope, capabilityIds: [first.capability_id], timeoutMs }),
       /drain timeout/
