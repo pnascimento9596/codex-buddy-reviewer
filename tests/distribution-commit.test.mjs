@@ -118,8 +118,8 @@ test('distribution repository is one parentless byte-exact artifact commit with 
   const { output, result } = firstDistribution;
   assert.equal(result.source_commit, sourceCommit);
   assert.equal(result.branch_ref, DISTRIBUTION_BRANCH_REF);
-  assert.equal(result.tag, 'v0.5.0-rc.1');
-  assert.equal(result.tag_ref, 'refs/tags/v0.5.0-rc.1');
+  assert.equal(result.tag, 'v0.5.0-rc.2');
+  assert.equal(result.tag_ref, 'refs/tags/v0.5.0-rc.2');
   assert.match(result.commit, /^[0-9a-f]{40}$/u);
   assert.match(result.tag_object, /^[0-9a-f]{40}$/u);
   assert.match(result.tree, /^[0-9a-f]{40}$/u);

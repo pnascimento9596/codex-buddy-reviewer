@@ -118,7 +118,7 @@ Defaults:
 | speculative generation cap | 2 per turn |
 | confidence | `0.75` |
 | patch cap | 256 KiB |
-| provider timeout | 480 seconds |
+| provider timeout | 1800 seconds |
 | presentation profile | separate local state; `native:selected` / `precise` |
 | summary-claim advisory | disabled; separate explicit consent; final-only when enabled |
 

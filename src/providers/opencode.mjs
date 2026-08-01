@@ -11,6 +11,7 @@ import {
   providerFailure,
   providerResult
 } from '../provider-contract.mjs';
+import { parseReviewerText } from '../result.mjs';
 import { cleanupProviderTempRun, createProviderTempRun } from './temp-state.mjs';
 
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
@@ -31,7 +32,10 @@ const DENIED_TOOLS = Object.freeze([
   'websearch',
   'write'
 ]);
-const KNOWN_EVENT_TYPES = new Set(['step_start', 'step_finish', 'text', 'tool_use', 'error']);
+// `reasoning` events arrive whenever the model runs with reasoning enabled
+// (e.g. --variant high). They are interstitial thinking output, never the
+// review result: tolerate and skip them so high-reasoning reviews complete.
+const KNOWN_EVENT_TYPES = new Set(['step_start', 'step_finish', 'text', 'tool_use', 'error', 'reasoning']);
 
 function plainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -310,7 +314,7 @@ export function parseOpenCodeTransport(stdout) {
   }
   let reviewPayload;
   try {
-    reviewPayload = JSON.parse(completedText.trim());
+    reviewPayload = parseReviewerText(completedText);
   } catch (error) {
     throw new Error('OpenCode completed text was not valid review JSON', { cause: error });
   }
@@ -455,10 +459,17 @@ export async function reviewWithOpenCode({
       try {
         transport = parseOpenCodeTransport(result.stdout);
       } catch (error) {
-        throw providerFailure({
+        const failure = providerFailure({
           provider: 'opencode', model: resolvedModel, stage: 'transport',
           failureCode: 'invalid_transport_envelope', durationMs: elapsed(), cause: error
         });
+        // No-loss contract: the malformed transport must survive for private
+        // preservation instead of vanishing with the rejection. Non-enumerable
+        // so raw provider bytes never leak into serialized failure diagnostics.
+        Object.defineProperty(failure, 'rawTransport', {
+          value: { stdout: result.stdout }, enumerable: false, configurable: true
+        });
+        throw failure;
       }
       const stdout = JSON.stringify(transport.reviewPayload);
       outcome = providerResult({

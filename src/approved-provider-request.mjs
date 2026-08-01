@@ -149,7 +149,7 @@ function buildState(candidate, options = {}) {
   }
   if (!EFFORTS.has(candidate.effort)) fail('effort is invalid');
   if (!Number.isSafeInteger(candidate.timeoutMs)
-      || candidate.timeoutMs < 1_000 || candidate.timeoutMs > 480_000) {
+      || candidate.timeoutMs < 1_000 || candidate.timeoutMs > 1_800_000) {
     fail('timeout is invalid');
   }
   if (candidate.responseSchema !== undefined

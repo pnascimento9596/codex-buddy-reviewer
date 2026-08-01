@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Exact RC or final-candidate version already declared in package.json (for example, 0.5.0-rc.1 or 0.5.0)
+        description: Exact RC or final-candidate version already declared in package.json (for example, 0.5.0-rc.2 or 0.5.0)
         required: true
         type: string
       publish:
@@ -112,7 +112,7 @@ jobs:
               require_host_evidence='false'
             fi
           else
-            echo 'Manual builds and publications require an exact RC (0.5.0-rc.1) or final version (0.5.0).' >&2
+            echo 'Manual builds and publications require an exact RC (0.5.0-rc.2) or final version (0.5.0).' >&2
             exit 1
           fi
 

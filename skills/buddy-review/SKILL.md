@@ -106,7 +106,7 @@ Only pass these flags when the user explicitly requests them:
 - `--effort <level>`
 - `--confidence <0..1>`
 - `--max-patch-bytes <integer>`
-- `--timeout-seconds <1..480>`
+- `--timeout-seconds <1..1800>`
 
 The supported adapter IDs are exactly `claude`, `grok`, `ollama`, and `opencode`. Claude Pro or Max uses only the direct Claude adapter with Claude Code. Grok or SuperGrok can use the direct Grok adapter; an exact configured OpenCode xAI route is also allowed. Ollama local and Ollama Cloud can use the direct Ollama adapter, while an exact configured OpenCode Ollama Cloud route is also allowed. ChatGPT Plus or Pro uses `opencode` with an OpenCode ChatGPT OAuth connection. Kimi or Moonshot is allowed only through `opencode` with the exact API-backed `provider/model` identifier already configured in the user's OpenCode connection. These routed connections are not native Buddy adapters. Direct `codex` and direct `kimi` adapters are unsupported because strict no-tools and no-inherited-context isolation has not been proven for those subscription routes. OpenCode projects only the selected provider auth entry; never copy, print, or request the user's auth store or ambient credentials.
 

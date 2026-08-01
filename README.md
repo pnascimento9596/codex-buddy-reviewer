@@ -12,7 +12,7 @@
     <a href="CONTRIBUTING.md">Contributing</a>
   </p>
   <p>
-    <a href="#status"><img alt="Version v0.5.0-rc.1" src="https://img.shields.io/badge/version-v0.5.0--rc.1-7c3aed" /></a>
+    <a href="#status"><img alt="Version v0.5.0-rc.2" src="https://img.shields.io/badge/version-v0.5.0--rc.2-7c3aed" /></a>
     <a href="#quick-start"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&amp;logoColor=white" /></a>
     <a href="#connection-support"><img alt="Four reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-4-0891b2" /></a>
     <a href="#pets"><img alt="Five public pets" src="https://img.shields.io/badge/public_pets-5-f59e0b" /></a>
@@ -27,7 +27,7 @@
 
 Keep Codex as the main coding agent, then let one or two separately configured reviewer connections inspect privacy-filtered repository changes while the turn is still running. Buddy validates and attributes their findings, preserves useful disagreement, reports partial failures honestly, and ends with one compact review paragraph beside a persistent animated Codex pet.
 
-> Keep codex and GPT-5.6 Sol as your main implementer, then put an underused subscription, for example: Ollama cloud, Claude, SuperGrok, Opencode, Zai, Kimi Code, etc...with any model, and even a secondary subscription/agent connection to work as two independent reviewers. The same pattern works with Claude Max, ChatGPT Pro through OpenCode, Kimi through OpenCode, local Ollama, or any supported mix you already have.
+> Keep Codex and GPT-5.6 Sol as your main implementer, then use one or two authenticated connections through Buddy's four adapters: Claude, Grok, Ollama, or OpenCode. Models are available only through those adapters and their configured connections. The same pattern works with Claude Max, ChatGPT Pro through OpenCode, Kimi through OpenCode, local Ollama, or any supported mix already configured on your machine.
 
 Buddy never asks you to paste tokens into its configuration. Authentication remains owned by Claude Code, Grok CLI, Ollama, or OpenCode.
 
@@ -37,7 +37,7 @@ Run the first-party `/pet` command once to keep the selected companion open. `/b
 
 ## Status
 
-Current version: `v0.5.0-rc.1`
+Source candidate: `0.5.0-rc.2`. Published release: `v0.5.0-rc.1`.
 
 This is a release candidate, not a stable release. Provider egress remains experimental until the frozen tree passes the complete security, cross-platform, independent-review, packaging, and Codex host gates below. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
 
@@ -162,7 +162,7 @@ Prerequisites:
 - At least one supported reviewer CLI installed and authenticated through its own normal login flow
 - Windows v0.5 RC supports nonprovider commands and offline validation, but live reviewer contact is disabled pending current-user-only DACL implementation and real Windows evidence
 
-After the repository and release tag are public, install the reviewed release through Codex's Git marketplace support:
+Install the published `v0.5.0-rc.1` release through Codex's Git marketplace support:
 
 ```bash
 codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.1
@@ -170,11 +170,13 @@ codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
 codex plugin list
 ```
 
-This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0-rc.1`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
+The `0.5.0-rc.2` source tree is an unpublished candidate. Use the published `v0.5.0-rc.1` tag for marketplace installs until an rc.2 artifact is separately verified and published.
+
+This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0-rc.2`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
 
 The public default branch remains the contributor-friendly source repository. A release version tag is intended to resolve to a separate parentless distribution commit whose tree contains only the byte-verified positive artifact, including its `release-manifest.json`. It does not point at the full development checkout or inherit its objects and history. Install a pinned release tag, never a moving source branch.
 
-The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0-rc.1` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only release candidate. The stable `v0.5.0` tag remains unavailable until the security, platform, and five-pet Codex host gates close. During private development, use the existing `personal` marketplace flow.
+The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0-rc.2` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only release candidate. The stable `v0.5.0` tag remains unavailable until the security, platform, and five-pet Codex host gates close. During private development, use the existing `personal` marketplace flow.
 
 ```mermaid
 flowchart TD
@@ -487,11 +489,11 @@ Python would add a second required runtime without improving the host or securit
 npm run validate
 npm run security:secrets
 npm run security:publication
-npm run release:build -- --output /tmp/codex-buddy-public-rc1
-npm run release:verify -- --input /tmp/codex-buddy-public-rc1
+npm run release:build -- --output /tmp/codex-buddy-public-rc2
+npm run release:verify -- --input /tmp/codex-buddy-public-rc2
 npm run release:distribution -- \
-  --artifact /tmp/codex-buddy-public-rc1 \
-  --output /tmp/codex-buddy-v0.5.0-rc.1-distribution \
+  --artifact /tmp/codex-buddy-public-rc2 \
+  --output /tmp/codex-buddy-v0.5.0-rc.2-distribution \
   --policy-root .
 ```
 

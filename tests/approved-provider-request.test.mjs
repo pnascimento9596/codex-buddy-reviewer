@@ -67,6 +67,16 @@ test('approval binds policy, provider configuration, exact content, and channel 
   ]) assert.match(digest, /^[0-9a-f]{64}$/u);
 });
 
+test('approval accepts the reasoning deadline cap and rejects any larger request', () => {
+  const authority = createApprovedProviderRequestAuthority();
+  const approved = authority.approve(candidate({ timeoutMs: 1_800_000 }));
+  assert.equal(authority.inspect(approved).timeoutMs, 1_800_000);
+  assert.throws(
+    () => authority.approve(candidate({ timeoutMs: 1_800_001 })),
+    /timeout is invalid/
+  );
+});
+
 test('approval rejects provider-bound credentials and incomplete content scans', () => {
   const authority = createApprovedProviderRequestAuthority();
   const basicCredential = Buffer.from('reviewer:A9_bC7-dE5_fG3-hJ1_kL8').toString('base64');

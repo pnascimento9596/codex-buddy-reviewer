@@ -196,3 +196,31 @@ test('enabled continuous mode rejects missing, malformed, or noncanonical consen
     await assert.rejects(readMode(options), /continuous review (?:consent|requires explicit consent)/);
   }
 });
+
+test('reasoning reviewer deadline is 1800 seconds by default and at its cap', async () => {
+  const options = await fixture();
+  const mode = await changeMode({ ...options, action: 'enable' });
+  // Single mode-level deadline: per-reviewer timeouts are not part of the
+  // schema, so this one value governs every configured reviewer channel.
+  assert.equal(mode.timeout_ms, 1_800_000);
+  const { validateReviewerConfiguration } = await import('../src/mode.mjs');
+  assert.equal(validateReviewerConfiguration({ ...mode, timeout_ms: 1_800_000 }).timeout_ms, 1_800_000);
+  assert.throws(
+    () => validateReviewerConfiguration({ ...mode, timeout_ms: 1_800_001 }),
+    /Invalid Buddy timeout/
+  );
+  const { egressConfigurationHash } = await import('../src/egress-capability.mjs');
+  const configuration = {
+    provider: mode.provider,
+    model: mode.model,
+    effort: mode.effort,
+    timeout_ms: 1_800_000,
+    min_confidence: mode.min_confidence,
+    max_patch_bytes: mode.max_patch_bytes
+  };
+  assert.match(egressConfigurationHash(configuration), /^[0-9a-f]{64}$/);
+  assert.throws(
+    () => egressConfigurationHash({ ...configuration, timeout_ms: 1_800_001 }),
+    /egress configuration is invalid/
+  );
+});

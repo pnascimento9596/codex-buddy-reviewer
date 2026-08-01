@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { lstat, readFile, readlink } from 'node:fs/promises';
 import path from 'node:path';
-import { CaptureBudget } from './capture-budget.mjs';
+import { CaptureBudget, DEFAULT_CAPTURE_DEADLINE_MS } from './capture-budget.mjs';
 import { pathPolicy, isProbablyText, SENSITIVE_IGNORED_PATHSPECS } from './policy.mjs';
 import {
   classifyPaths as classifyRepoPaths,
@@ -727,8 +727,17 @@ async function collectEvidenceWithinBudget(options = {}) {
 }
 
 export async function collectEvidence(options = {}) {
-  const budget = options.budget ?? new CaptureBudget(options.budgetOptions);
-  return captureBudgetContext.run(budget, () => collectEvidenceWithinBudget(options));
+  const budgetOptions = { ...(options.budgetOptions ?? {}) };
+  if (!Object.hasOwn(budgetOptions, 'deadlineMs')
+      && Number.isSafeInteger(options.timeoutMs) && options.timeoutMs > 0) {
+    budgetOptions.deadlineMs = Math.min(options.timeoutMs, DEFAULT_CAPTURE_DEADLINE_MS);
+  }
+  const budget = options.budget ?? new CaptureBudget(budgetOptions);
+  const evidence = await captureBudgetContext.run(budget, () => collectEvidenceWithinBudget(options));
+  // A fully constructed evidence object is authoritative. Do not apply a
+  // trailing deadline check that could discard completed work after a stale
+  // timer boundary; callers that reuse the budget still retain enforcement.
+  return evidence;
 }
 
 export function receiptEvidence(evidence, retainEvidence = false) {

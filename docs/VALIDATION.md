@@ -2,11 +2,11 @@
 
 Date: 2026-07-20
 
-This document records the current evidence state for `v0.5.0-rc.1`. It distinguishes implemented contracts from tests that have actually run, independent-review outcomes and limitations, real Windows evidence, installation state, and the manual Codex host gate. It does not treat source inspection, a skipped platform test, or an older release result as current proof.
+This document records the current evidence state for `v0.5.0-rc.2`. It distinguishes implemented contracts from tests that have actually run, independent-review outcomes and limitations, real Windows evidence, installation state, and the manual Codex host gate. It does not treat source inspection, a skipped platform test, or an older release result as current proof.
 
 ## Release stance
 
-The source version is `0.5.0-rc.1`. The generated positive public artifact normalizes the plugin manifest to that canonical package version; the private development manifest uses a separate `+codex.<cachebuster>` suffix so Codex installs a new immutable snapshot after source changes.
+The source version is `0.5.0-rc.2`. The generated positive public artifact normalizes the plugin manifest to that canonical package version; the private development manifest uses a separate `+codex.<cachebuster>` suffix so Codex installs a new immutable snapshot after source changes.
 
 This RC is not eligible for a final `v0.5.0` tag until:
 

@@ -6,10 +6,12 @@ import { MAX_SPECULATIVE_GENERATIONS, readPreReviewState } from './pre-review-st
 
 import {
   acquireFileLease,
+  assertStateOutsideRepository,
   ensurePrivateStatePath,
   opaqueKey,
   readPrivateJson,
   releaseFileLease,
+  resolveDataDir,
   resolveRuntimeDataDir,
   withFileLock,
   workspaceKey,
@@ -19,6 +21,8 @@ import {
 export const DEFAULT_CONTENT_TTL_MS = 24 * 60 * 60_000;
 const DEFAULT_TTL_MS = DEFAULT_CONTENT_TTL_MS;
 const REVIEW_KEY_PATTERN = /^[0-9a-f]{64}$/;
+const REJECTED_REVIEW_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/u;
+const REJECTED_RESPONSE_FILE_PATTERN = /^response(?:-.+)?\.json$/u;
 const SNAPSHOT_ACTIVITY_LOCK_TIMEOUT_MS = 120_000;
 const SPECULATIVE_ATTEMPT_KEYS = Object.freeze([
   'generation',
@@ -182,6 +186,75 @@ async function pruneUnclaimedReceipts(receiptDirectory, options) {
   }
   for (const file of candidates) await rm(file, { force: true });
   return { pruned: candidates.length, ambiguous: 0 };
+}
+
+async function pruneExpiredRejectedResponses(options) {
+  if (options.modeDataDir === undefined) {
+    return { scanned: 0, pruned: 0, ambiguous: 0, limited: false };
+  }
+  const dataRoot = resolveDataDir(options.modeDataDir);
+  await assertStateOutsideRepository(options.root, dataRoot, 'mode state');
+  const directory = path.join(dataRoot, 'rejected-responses', options.workspace);
+  let directoryDetails;
+  try {
+    directoryDetails = await lstat(directory);
+  } catch (error) {
+    if (error.code === 'ENOENT') return { scanned: 0, pruned: 0, ambiguous: 0, limited: false };
+    throw error;
+  }
+  if (directoryDetails.isSymbolicLink() || !directoryDetails.isDirectory()) {
+    return { scanned: 0, pruned: 0, ambiguous: 1, limited: false };
+  }
+
+  let scanned = 0;
+  let pruned = 0;
+  let ambiguous = 0;
+  let limited = false;
+  const budgetAvailable = () => scanned < options.maxEntries && Date.now() < options.deadline;
+  const reviewDirectories = await readdir(directory, { withFileTypes: true });
+  outer: for (const reviewEntry of reviewDirectories) {
+    if (!budgetAvailable()) {
+      limited = true;
+      break;
+    }
+    scanned += 1;
+    if (reviewEntry.isSymbolicLink() || !reviewEntry.isDirectory()
+        || !REJECTED_REVIEW_ID_PATTERN.test(reviewEntry.name)) {
+      ambiguous += 1;
+      continue;
+    }
+    const reviewDirectory = path.join(directory, reviewEntry.name);
+    for (const responseEntry of await readdir(reviewDirectory, { withFileTypes: true })) {
+      if (!budgetAvailable()) {
+        limited = true;
+        break outer;
+      }
+      scanned += 1;
+      if (responseEntry.isFile() && /^\.response(?:-.+)?\.json\..+\.tmp$/u.test(responseEntry.name)) {
+        await rm(path.join(reviewDirectory, responseEntry.name), { force: true });
+        pruned += 1;
+        continue;
+      }
+      if (responseEntry.isSymbolicLink() || !responseEntry.isFile()
+          || !REJECTED_RESPONSE_FILE_PATTERN.test(responseEntry.name)) {
+        ambiguous += 1;
+        continue;
+      }
+      const file = path.join(reviewDirectory, responseEntry.name);
+      const record = await safeJson(file);
+      if (record.kind === 'unsafe') {
+        ambiguous += 1;
+        continue;
+      }
+      if (record.kind === 'missing') continue;
+      const recordedAt = record.kind === 'file' ? Date.parse(record.value?.recorded_at ?? '') : Number.NaN;
+      if (!Number.isFinite(recordedAt) || options.now - recordedAt >= options.contentTtlMs) {
+        await rm(file, { force: true });
+        pruned += 1;
+      }
+    }
+  }
+  return { scanned, pruned, ambiguous, limited };
 }
 
 const SNAPSHOT_DIRECTORY_NAMES = Object.freeze(['snapshot', 'pre-review-snapshot']);
@@ -353,7 +426,8 @@ export async function pruneWorkspaceTurns(options) {
   if (!lease) {
     return {
       acquired: false, scanned: 0, pruned: 0, receiptPruned: 0,
-      outboxPruned: 0, retainedLegacyOutbox: 0, live: 0, ambiguous: 0, limited: false
+      outboxPruned: 0, rejectedResponsePruned: 0,
+      retainedLegacyOutbox: 0, live: 0, ambiguous: 0, limited: false
     };
   }
 
@@ -408,6 +482,21 @@ export async function pruneWorkspaceTurns(options) {
       receiptPruned += orphanReceipts.pruned;
       ambiguous += orphanReceipts.ambiguous;
     }
+    let rejectedResponses = { scanned: 0, pruned: 0, ambiguous: 0, limited: false };
+    if (!limited && live === 0 && ambiguous === 0) {
+      rejectedResponses = await pruneExpiredRejectedResponses({
+        root: options.root,
+        modeDataDir: options.modeDataDir,
+        workspace,
+        now: options.now ?? Date.now(),
+        contentTtlMs: options.contentTtlMs ?? DEFAULT_CONTENT_TTL_MS,
+        maxEntries: Math.max(0, maxEntries - scanned),
+        deadline
+      });
+      scanned += rejectedResponses.scanned;
+      ambiguous += rejectedResponses.ambiguous;
+      limited ||= rejectedResponses.limited;
+    }
     const outbox = await pruneExpiredOutboxEvents({
       repositoryRoot: options.root,
       runtimeDataDir: options.runtimeDataDir,
@@ -419,6 +508,7 @@ export async function pruneWorkspaceTurns(options) {
     retainedLegacyOutbox = outbox.retained_legacy_count;
     return {
       acquired: true, scanned, pruned, receiptPruned, outboxPruned,
+      rejectedResponsePruned: rejectedResponses.pruned,
       retainedLegacyOutbox, live, ambiguous, limited
     };
   } finally {

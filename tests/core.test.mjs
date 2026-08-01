@@ -911,6 +911,26 @@ test('reviewer parser accepts Grok structured output envelopes', () => {
   assert.deepEqual(parseReviewerOutput(JSON.stringify({ result: JSON.stringify(expected) })), expected);
 });
 
+test('reviewer parser leaves a missing required findings array invalid', () => {
+  const noFindings = {
+    schema_version: '2',
+    status: 'no_findings',
+    summary: 'Complete review with no validated defects.'
+  };
+  const parsed = parseReviewerOutput(JSON.stringify(noFindings));
+  assert.deepEqual(parsed, noFindings);
+  assert.throws(
+    () => validateReviewResult(parsed, evidenceFixture()),
+    /findings must be an array/
+  );
+
+  const explicitEmptyFindings = { ...noFindings, findings: [] };
+  assert.equal(
+    validateReviewResult(parseReviewerOutput(JSON.stringify(explicitEmptyFindings)), evidenceFixture()).status,
+    'no_findings'
+  );
+});
+
 test('CLI arguments default safely and require an explicit branch base', () => {
   const defaults = parseArgs(['review']);
   assert.equal(defaults.provider, 'grok');
@@ -930,7 +950,7 @@ test('CLI arguments default safely and require an explicit branch base', () => {
     /Invalid Buddy mode model/
   );
   assert.throws(() => parseArgs(['review', '--effort', 'ultra']), /Invalid Buddy reasoning effort/);
-  assert.throws(() => parseArgs(['review', '--timeout-seconds', '481']), /Invalid Buddy timeout/);
+  assert.throws(() => parseArgs(['review', '--timeout-seconds', '1801']), /Invalid Buddy timeout/);
 });
 
 test('manual live review blocks Windows before repository evidence collection', async () => {
@@ -1286,6 +1306,78 @@ test('subprocess runner enforces its deadline', async () => {
     runProcess(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { timeoutMs: 50 }),
     /exceeded its 50 ms deadline/
   );
+});
+
+test('a fast child that completed while the parent event loop was stalled still succeeds', {
+  skip: process.platform === 'win32'
+}, async () => {
+  // Reproduces the host-stall flake: in a real freeze the child is suspended
+  // with the parent, so its result lands only after the parent's expired
+  // deadline timer has already fired. The thawed timer must re-arm (the child
+  // consumed none of its budget during the stall), not kill completing work.
+  const promise = runProcess(
+    process.execPath,
+    ['-e', 'setTimeout(() => { process.stdout.write("stall-done"); }, 5_150)'],
+    { timeoutMs: 500 }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const gate = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(gate, 0, 0, 5_000);
+  const result = await promise;
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, 'stall-done');
+  assert.equal(result.timedOut, false);
+});
+
+test('an authenticated result received after a stalled deadline fire is not discarded', {
+  skip: process.platform === 'win32'
+}, async () => {
+  // The stall here stays inside the re-arm slack, so the deadline flag is set
+  // before the buffered supervisor result is dispatched. The authenticated
+  // result must win over the stale deadline flag.
+  const promise = runProcess(process.execPath, ['-e', 'process.stdout.write("photo-finish")'], { timeoutMs: 100 });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const gate = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(gate, 0, 0, 1_500);
+  const result = await promise;
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, 'photo-finish');
+});
+
+test('a genuinely hung child still dies after a stall re-arm grace', {
+  skip: process.platform === 'win32'
+}, async () => {
+  // One stall re-arms the deadline with a bounded grace, not a fresh full
+  // budget. A child that never completes must die once the grace expires.
+  const started = Date.now();
+  const promise = runProcess(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { timeoutMs: 100 });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const gate = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(gate, 0, 0, 2_500);
+  await assert.rejects(promise, /exceeded its 100 ms deadline/);
+  // grace is min(timeoutMs, 30s) = 100ms: the kill lands promptly after thaw,
+  // not after another unbounded budget.
+  assert.ok(Date.now() - started < 15_000);
+});
+
+test('an unsupervised child cannot override an authoritative deadline kill marker', {
+  skip: process.platform === 'win32'
+}, async () => {
+  // A direct child has no authenticated completion message. Even when its
+  // buffered close later reports code 0, it cannot prove that completion won
+  // before the deadline-owned kill marker was set.
+  const promise = runProcess(
+    process.execPath,
+    ['-e', 'setTimeout(() => { process.stdout.write("direct-done"); }, 200)'],
+    { timeoutMs: 100, protectFromParentDeath: false }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const gate = new Int32Array(new SharedArrayBuffer(4));
+  await new Promise((resolve) => setImmediate(() => {
+    Atomics.wait(gate, 0, 0, 1_500);
+    resolve();
+  }));
+  await assert.rejects(promise, /exceeded its 100 ms deadline/);
 });
 
 test('subprocess timeout escalation kills signal-resistant process-group descendants', { skip: process.platform === 'win32' }, async () => {
