@@ -1125,6 +1125,7 @@ export async function reviewTurnStop(input, options = {}) {
               platform: options.platform ?? process.platform,
               minConfidence: authorizedMode.min_confidence,
               timeoutMs: authorizedMode.timeout_ms,
+              dataDir: options.modeDataDir,
               store: false,
               retainEvidence: false,
               summaryGuardPacket: lane.sourceIndex === 0 ? summaryGuardPacket : null,
@@ -1211,6 +1212,7 @@ export async function reviewTurnStop(input, options = {}) {
           effort: primaryReviewer.effort,
           minConfidence: authorizedMode.min_confidence,
           timeoutMs: authorizedMode.timeout_ms,
+          dataDir: options.modeDataDir,
           store: false,
           retainEvidence: false,
           summaryGuardPacket: null

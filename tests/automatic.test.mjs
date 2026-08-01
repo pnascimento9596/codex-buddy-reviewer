@@ -1303,6 +1303,7 @@ test('continuous review launch failure leaves the normal final Stop review avail
     runtimeDataDir,
     review: async (evidence, options) => {
       reviewCalls += 1;
+      assert.equal(options.dataDir, modeDataDir);
       return {
         evidence,
         provider: options.provider,

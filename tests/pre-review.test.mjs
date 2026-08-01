@@ -299,6 +299,19 @@ test('debounces exact checkpoint changes and reviews only the stable generation'
   assert.ok(index >= 4);
 });
 
+test('speculative review routes rejected-response evidence to the mode data root', async () => {
+  let reviewDataDir;
+  const seed = await harness({
+    review: async (options) => {
+      reviewDataDir = options.dataDir;
+      return reviewResult();
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
+  assert.equal(reviewDataDir, seed.modeDataDir);
+});
+
 test('writes an exact immutable receipt and no completed or XP state', async () => {
   const seed = await harness();
   const result = await runPreReviewWorker(seed.input, seed.options);

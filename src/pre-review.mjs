@@ -650,6 +650,7 @@ async function executeProviders({
           platform: deps.platform,
           minConfidence: mode.min_confidence,
           timeoutMs: mode.timeout_ms,
+          dataDir: modeDataDir,
           store: false,
           retainEvidence: false,
           summaryGuardPacket: null,
