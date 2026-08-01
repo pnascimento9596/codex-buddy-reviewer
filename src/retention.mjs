@@ -55,6 +55,7 @@ function exactWorkspaceTargets({ root, dataDir, runtimeDataDir }) {
     runtimeRoot,
     content: [
       { id: 'manual_reviews', root: dataRoot, target: path.join(dataRoot, 'reviews', workspace) },
+      { id: 'rejected_responses', root: dataRoot, target: path.join(dataRoot, 'rejected-responses', workspace) },
       { id: 'automatic_reviews', root: runtimeRoot, target: path.join(runtimeRoot, 'automatic-reviews', workspace) },
       { id: 'renderer_outbox', root: runtimeRoot, target: path.join(runtimeRoot, 'outbox', workspace) },
       { id: 'renderer_cursors', root: runtimeRoot, target: path.join(runtimeRoot, 'renderers', workspace) }

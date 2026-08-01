@@ -170,6 +170,13 @@ test('workspace purge removes content and legacy outbox state but retains conten
   const reviewKey = 'd'.repeat(64);
 
   const manualReceipt = path.join(dataDir, 'reviews', workspace, 'manual-review', 'evidence.json');
+  const rejectedResponse = path.join(
+    dataDir,
+    'rejected-responses',
+    workspace,
+    'rejected-review',
+    'response-fixture.json'
+  );
   const automaticReceipt = path.join(runtimeDataDir, 'automatic-reviews', workspace, `${reviewKey}.json`);
   const rendererCursor = path.join(runtimeDataDir, 'renderers', workspace, 'local.json');
   const modeFile = path.join(dataDir, 'mode', `${workspace}.json`);
@@ -187,6 +194,7 @@ test('workspace purge removes content and legacy outbox state but retains conten
   );
   await Promise.all([
     mkdir(path.dirname(manualReceipt), { recursive: true }),
+    mkdir(path.dirname(rejectedResponse), { recursive: true }),
     mkdir(path.dirname(automaticReceipt), { recursive: true }),
     mkdir(path.dirname(rendererCursor), { recursive: true }),
     mkdir(path.dirname(modeFile), { recursive: true }),
@@ -199,6 +207,7 @@ test('workspace purge removes content and legacy outbox state but retains conten
   ]);
   await Promise.all([
     writeFile(manualReceipt, '{"patch":"PRIVATE_MANUAL_CONTENT"}\n'),
+    writeFile(rejectedResponse, '{"raw_response":"PRIVATE_REJECTED_RESPONSE"}\n'),
     writeFile(automaticReceipt, '{"result":"PRIVATE_AUTOMATIC_CONTENT"}\n'),
     writeFile(rendererCursor, '{"cursor":"private"}\n'),
     writeFile(modeFile, '{"enabled":true}\n'),
@@ -233,6 +242,10 @@ test('workspace purge removes content and legacy outbox state but retains conten
   const before = await workspaceDataStatus({ root, dataDir, runtimeDataDir, providerTempBase });
   assert.equal(before.complete, true);
   assert.equal(before.totals.content_files > 0, true);
+  assert.equal(
+    before.content.find((item) => item.id === 'rejected_responses')?.files,
+    1
+  );
   assert.equal(before.totals.outside_scope_files > 0, true);
   assert.equal(
     before.preserved_outside_scope.find((item) => item.id === 'setup_plans_and_journals')?.files,
@@ -249,12 +262,13 @@ test('workspace purge removes content and legacy outbox state but retains conten
   });
   assert.equal(result.include_settings, false);
   assert.equal(result.removed.includes('manual_reviews'), true);
+  assert.equal(result.removed.includes('rejected_responses'), true);
   assert.equal(result.removed.includes('renderer_outbox'), true);
   assert.equal(
     result.preserved_outside_scope.some((item) => item.id === 'setup_plans_and_journals'),
     true
   );
-  for (const target of [manualReceipt, automaticReceipt, rendererCursor, legacy.file]) {
+  for (const target of [manualReceipt, rejectedResponse, automaticReceipt, rendererCursor, legacy.file]) {
     await assert.rejects(lstat(target));
   }
   for (const target of [modeFile, summaryGuardFile, presentationFile, circuitFile, egressFile]) {
