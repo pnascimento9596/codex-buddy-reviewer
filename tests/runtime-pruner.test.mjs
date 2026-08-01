@@ -566,6 +566,40 @@ test('rejected-response expiry removes the emptied review directory', async () =
   await assert.rejects(lstat(responseDirectory));
 });
 
+test('an exhausted turn-scan budget cannot starve rejected-response expiry', async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  const sessionDirectory = path.dirname(turnDir);
+  for (const turnId of ['turn-budget-2', 'turn-budget-3']) {
+    await mkdir(path.join(sessionDirectory, opaqueKey(turnId), 'snapshot', 'objects'), { recursive: true });
+  }
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-budget-pruner-'));
+  roots.push(modeDataDir);
+  const responseDirectory = path.join(
+    modeDataDir,
+    'rejected-responses',
+    workspaceKey(root),
+    'expired-after-turn-budget'
+  );
+  await mkdir(responseDirectory, { recursive: true });
+  const response = path.join(responseDirectory, 'response.json');
+  await writeJson(response, {
+    schema_version: '1',
+    recorded_at: '2020-01-01T00:00:00.000Z',
+    raw_response: 'expired'
+  });
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    modeDataDir,
+    root,
+    maxEntries: 2,
+    now: Date.parse('2020-01-02T00:00:00.000Z')
+  });
+  assert.equal(result.limited, true);
+  assert.equal(result.rejectedResponsePruned, 1);
+  await assert.rejects(lstat(response));
+});
+
 test('aged v2 and legacy v1 outbox content expire without a renderer', async () => {
   const { runtimeDataDir, root } = await fixture();
   const common = {

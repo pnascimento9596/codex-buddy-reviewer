@@ -442,7 +442,8 @@ export async function pruneWorkspaceTurns(options) {
     };
   }
 
-  const deadline = Date.now() + (options.deadlineMs ?? 500);
+  const deadlineMs = options.deadlineMs ?? 500;
+  const deadline = Date.now() + deadlineMs;
   const maxEntries = options.maxEntries ?? 1_000;
   const skipSession = options.sessionId === undefined ? null : opaqueKey(options.sessionId);
   const skipTurn = options.turnId === undefined ? null : opaqueKey(options.turnId);
@@ -494,20 +495,20 @@ export async function pruneWorkspaceTurns(options) {
       ambiguous += orphanReceipts.ambiguous;
     }
     let rejectedResponses = { scanned: 0, pruned: 0, ambiguous: 0, limited: false };
-    if (!limited) {
-      rejectedResponses = await pruneExpiredRejectedResponses({
-        root: options.root,
-        modeDataDir: options.modeDataDir,
-        workspace,
-        now: options.now ?? Date.now(),
-        contentTtlMs: options.contentTtlMs ?? DEFAULT_CONTENT_TTL_MS,
-        maxEntries: Math.max(0, maxEntries - scanned),
-        deadline
-      });
-      scanned += rejectedResponses.scanned;
-      ambiguous += rejectedResponses.ambiguous;
-      limited ||= rejectedResponses.limited;
-    }
+    rejectedResponses = await pruneExpiredRejectedResponses({
+      root: options.root,
+      modeDataDir: options.modeDataDir,
+      workspace,
+      now: options.now ?? Date.now(),
+      contentTtlMs: options.contentTtlMs ?? DEFAULT_CONTENT_TTL_MS,
+      // Rejected responses are an independent content domain. Give them their
+      // own bounded slice so a saturated turn inventory cannot starve expiry.
+      maxEntries,
+      deadline: Date.now() + deadlineMs
+    });
+    scanned += rejectedResponses.scanned;
+    ambiguous += rejectedResponses.ambiguous;
+    limited ||= rejectedResponses.limited;
     const outbox = await pruneExpiredOutboxEvents({
       repositoryRoot: options.root,
       runtimeDataDir: options.runtimeDataDir,
