@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "pet_id": "buddy-orbit",
+  "scope": "public",
+  "status": "validated",
+  "redistribution": "cleared",
+  "binary_asset_present": true,
+  "source_type": "original AI-assisted artwork generated for this project",
+  "validation": "V2 8x11 atlas; 1536x2288; transparent WebP; deterministic atlas validation passed with no errors or warnings",
+  "rights": {
+    "basis": "original-project-asset",
+    "rights_holder_role": "project-owner",
+    "authorization": {
+      "status": "recorded",
+      "date": null,
+      "date_status": "not-recorded",
+      "source": "project-original-asset-record",
+      "source_reference": "docs/PROVENANCE.md#pet-asset-rights-records"
+    },
+    "license": {
+      "spdx_expression": "Apache-2.0",
+      "repository_license_file": "LICENSE",
+      "grant": "The rights holder licenses this asset and its derivative works to the public under the Apache License, Version 2.0."
+    }
+  },
+  "asset_lineage": {
+    "source_asset": {
+      "description": "Original AI-assisted Orbit source artwork created for this project.",
+      "sha256": null,
+      "sha256_status": "not-recorded"
+    },
+    "transformation": {
+      "method": "AI-assisted original sprite generation and V2 atlas assembly",
+      "tool": null,
+      "tool_status": "not-recorded",
+      "date": null,
+      "date_status": "not-recorded",
+      "first_repository_recorded_on": "2026-07-18"
+    },
+    "derived_asset": {
+      "path": "spritesheet.webp",
+      "sha256": "26efcaa8fc2b96999db2bbc2b82d934df6660de8c45997a16b11f3b1c7c389f7"
+    }
+  },
+  "notes": "Original Orbit artwork created for Codex Buddy Reviewer. It is distributed with this repository under the repository license."
+}
