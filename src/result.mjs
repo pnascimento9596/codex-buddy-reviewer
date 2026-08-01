@@ -90,8 +90,12 @@ function normalizeRecoverableReviewShape(value) {
   return value;
 }
 
+export function parseReviewerText(stdout) {
+  return normalizeRecoverableReviewShape(parseJsonString(stdout));
+}
+
 export function parseReviewerOutput(stdout) {
-  const outer = parseJsonString(stdout);
+  const outer = parseReviewerText(stdout);
   let result = outer;
   if (outer && typeof outer === 'object') {
     if (outer.structured_output && typeof outer.structured_output === 'object') {

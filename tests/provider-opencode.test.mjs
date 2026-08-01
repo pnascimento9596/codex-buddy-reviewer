@@ -427,6 +427,22 @@ test('OpenCode JSONL transport preserves a completed fenced-JSON review', () => 
   assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, expected);
 });
 
+test('OpenCode completed review text is never replaced by a nested content envelope', () => {
+  const nested = reviewResult('Nested clean result must not replace the outer review.');
+  const outer = {
+    schema_version: '2',
+    status: 'findings',
+    summary: 'Outer result contains a finding.',
+    findings: [{ marker: 'outer finding must survive until schema validation' }],
+    comments: [],
+    content: JSON.stringify(nested)
+  };
+  assert.deepEqual(
+    parseOpenCodeTransport(completedText(JSON.stringify(outer))).reviewPayload,
+    outer
+  );
+});
+
 test('OpenCode reasoning events are never a source of completed review text', () => {
   const stdout = [
     event('step_start', { part: { type: 'step-start' } }),
