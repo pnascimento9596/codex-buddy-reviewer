@@ -8,6 +8,7 @@ import { aggregateReviewOutcomes } from '../src/review-aggregate.mjs';
 import { REVIEW_RESULT_SCHEMA } from '../src/review-schema.mjs';
 import { preserveRejectedReviewerResponse } from '../src/rejected-response.mjs';
 import { validateReviewResult } from '../src/result.mjs';
+import { writePrivateJsonAtomic } from '../src/state.mjs';
 
 const temporaryPaths = [];
 
@@ -244,4 +245,36 @@ test('transport-failure cleanup strips an empty raw transport envelope', async (
   });
   assert.equal(Object.getOwnPropertyNames(error).includes('rawTransport'), false);
   assert.equal(Reflect.ownKeys(error).includes('rawTransport'), false);
+});
+
+test('rejected-response preservation retries a directory removed before the atomic open', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-response-recreate-'));
+  temporaryPaths.push(dataDir);
+  const error = new Error('Synthetic rejected response.');
+  error.failureCode = 'invalid_review_schema';
+  let attempts = 0;
+
+  const file = await preserveRejectedReviewerResponse({
+    response: { stdout: '{"status":"no_findings"}', reviewPayload: null },
+    evidence: {
+      repository_root: '/synthetic/workspace',
+      review_id: 'synthetic-directory-retry-id'
+    },
+    error,
+    dataDir,
+    writeJsonAtomic: async (target, value) => {
+      attempts += 1;
+      if (attempts === 1) {
+        await rm(path.dirname(target), { recursive: true, force: true });
+        const missing = new Error('synthetic directory removal');
+        missing.code = 'ENOENT';
+        throw missing;
+      }
+      return writePrivateJsonAtomic(target, value);
+    }
+  });
+
+  assert.equal(attempts, 2);
+  assert.equal(JSON.parse(await readFile(file, 'utf8')).raw_response, '{"status":"no_findings"}');
+  await assertPrivateMode(file);
 });

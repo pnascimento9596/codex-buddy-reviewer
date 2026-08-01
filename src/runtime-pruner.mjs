@@ -247,6 +247,7 @@ async function pruneExpiredRejectedResponses(options) {
         if (options.now - details.mtimeMs >= options.contentTtlMs) {
           await rm(temporary, { force: true });
           pruned += 1;
+          expiredResponsePruned = true;
         }
         continue;
       }

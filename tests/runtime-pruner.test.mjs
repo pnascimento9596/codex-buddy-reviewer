@@ -635,6 +635,34 @@ test('rejected-response pruning preserves live atomic temps and removes only age
   await assert.rejects(lstat(old));
 });
 
+test('aged rejected-response temp cleanup removes its emptied review directory', async () => {
+  const { runtimeDataDir, root } = await fixture();
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-temp-only-pruner-'));
+  roots.push(modeDataDir);
+  const responseDirectory = path.join(
+    modeDataDir,
+    'rejected-responses',
+    workspaceKey(root),
+    'orphan-temp-only-review'
+  );
+  await mkdir(responseDirectory, { recursive: true });
+  const old = path.join(
+    responseDirectory,
+    '.response-old.json.1234.33333333-3333-4333-8333-333333333333.tmp'
+  );
+  await writeFile(old, '{"orphaned":true}\n');
+  await utimes(old, new Date('2020-01-01T00:00:00.000Z'), new Date('2020-01-01T00:00:00.000Z'));
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    modeDataDir,
+    root,
+    now: Date.parse('2020-01-02T00:00:00.000Z')
+  });
+  assert.equal(result.rejectedResponsePruned, 1);
+  await assert.rejects(lstat(responseDirectory));
+});
+
 test('aged v2 and legacy v1 outbox content expire without a renderer', async () => {
   const { runtimeDataDir, root } = await fixture();
   const common = {
