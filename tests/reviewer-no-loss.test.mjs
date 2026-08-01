@@ -108,6 +108,41 @@ test('malformed reviewer output is preserved privately with its parse error', as
   await assertPrivateMode(file);
 });
 
+test('concurrent rejected reviewer responses retain every raw response', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-response-concurrent-'));
+  temporaryPaths.push(dataDir);
+  const error = Object.assign(new Error('synthetic parse error'), {
+    failureCode: 'invalid_review_json'
+  });
+  const evidence = {
+    repository_root: '/synthetic/workspace',
+    review_id: 'synthetic-shared-review-id'
+  };
+  const files = await Promise.all([
+    preserveRejectedReviewerResponse({
+      response: { stdout: 'first raw response', reviewPayload: null },
+      evidence,
+      error,
+      dataDir
+    }),
+    preserveRejectedReviewerResponse({
+      response: { stdout: 'second raw response', reviewPayload: null },
+      evidence,
+      error,
+      dataDir
+    })
+  ]);
+  assert.notEqual(files[0], files[1]);
+  const saved = await Promise.all(files.map(async (file) => {
+    await assertPrivateMode(file);
+    return JSON.parse(await readFile(file, 'utf8'));
+  }));
+  assert.deepEqual(
+    new Set(saved.map((item) => item.raw_response)),
+    new Set(['first raw response', 'second raw response'])
+  );
+});
+
 test('rejected-response preservation refuses a review id that escapes its workspace directory', async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-response-escape-'));
   temporaryPaths.push(dataDir);

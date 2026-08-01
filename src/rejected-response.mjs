@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { escapeDiagnosticLine } from './policy.mjs';
@@ -35,7 +36,10 @@ export async function preserveRejectedReviewerResponse({
     workspaceKey(evidence.repository_root),
     evidence.review_id
   ));
-  const file = path.join(directory, 'response.json');
+  // A single review id can fan out to multiple provider lanes. Each rejected
+  // transport is independent evidence, so never let concurrent failures race
+  // to replace one shared response file.
+  const file = path.join(directory, `response-${randomUUID()}.json`);
   await writePrivateJsonAtomic(file, {
     schema_version: '1',
     review_id: evidence.review_id,
