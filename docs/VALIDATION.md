@@ -4,7 +4,7 @@ This document separates validation evidence into three explicitly labeled layers
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` is `6975a04a697bfe65602f34e790501058481b992a`, merged by PR #13 after the earlier PR #11 protected-main head `90dab8d9fa48842f15164d19bd45c7355469015c`. The requested `90dab8d9` evidence is preserved here because it was protected main after PR #11, but it is no longer the default-branch head.
+Current protected `main` is `6975a04a697bfe65602f34e790501058481b992a`. The range `90dab8d9..6975a04` contains exactly one first-parent commit: `6975a04 Close rc.2 review-path retention races (#13)`. PR #13 merged head `abcbd0475684523ec5e10ed5420787573ef5f57a` into base `90dab8d9fa48842f15164d19bd45c7355469015c` at `2026-08-01T09:38:44Z`, producing squash commit `6975a04a697bfe65602f34e790501058481b992a`. Its PR-head validation run `30693726400` passed every matrix lane, the validation gate, repository credential scan, and GitGuardian. Protected-main push run `30694148219` then passed at the squash commit.
 
 ### Local exact-HEAD validation on `6975a04a697bfe65602f34e790501058481b992a`
 
@@ -15,10 +15,35 @@ The following commands were run on branch `docs/validation-reconciliation` befor
 | `npm run check:syntax` | 0 | `Syntax checked 84 modules.` |
 | `npm run check` | 0 | `tests 754`; `suites 0`; `pass 736`; `fail 0`; `cancelled 0`; `skipped 18`; `todo 0`; `duration_ms 270139.536834`; portable subchecks included `Syntax checked 84 modules.` and `Public release boundary verified from an isolated clean snapshot (126 files).` |
 | `npm run security:secrets` | 0 | `81 commits scanned`; scanned approximately `7.43 MB` of history with `no leaks found`; scanned approximately `14.81 MB` of the current directory with `no leaks found`. |
-| `npm run security:publication` | 1 | `Publication boundary failed [UNSAFE_HISTORY_EMAIL]: Commit author uses a non-public email that is not explicitly allowlisted.` |
+| `npm run security:publication` | 0 | Post-fix branch evidence at `4a5fad7cb7e27a4d9a0063de96094b6b13f508f7`: `Publication boundary passed (history, 729 text blobs scanned).` |
 | `npm run release:boundary` | 0 | `Public release boundary verified from an isolated clean snapshot (126 files).` |
 
 Current module count: `84` syntax-checked modules. Current positive release-boundary artifact count: `126` files.
+
+### Identity and publication-boundary dispositions
+
+| Commit | Author | Committer | Identity disposition |
+|---|---|---|---|
+| `0344e13a457ab27f334819cb4686f137c7d13bb3` | `Paulo Nascimento <pnascimento9596@gmail.com>` | `GitHub <noreply@github.com>` | public Gmail author; GitHub noreply committer |
+| `90dab8d9fa48842f15164d19bd45c7355469015c` | `dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>` | `GitHub <noreply@github.com>` | GitHub noreply author and committer |
+| `6975a04a697bfe65602f34e790501058481b992a` | `Paulo Nascimento <pnascimento9596@gmail.com>` | `GitHub <noreply@github.com>` | public Gmail author; GitHub noreply committer |
+| `e6cd1d737eda20a7485d1e10ac7894e959cb0bae` | `Paulo Nascimento <pnascimento9596@users.noreply.github.com>` | `Paulo Nascimento <pnascimento9596@users.noreply.github.com>` | GitHub noreply author and committer |
+
+The authenticated API attempt to set email visibility to private returned HTTP `404` because the token lacks the `user` scope. The account owner must make that durable account-level change in the GitHub browser settings; repository history was not rewritten.
+
+The committed publication allowlist records the reviewed public Gmail address and exact historical path/blob dispositions. It permits only exact reviewed identities and exact historical blob OIDs, requires a clean replacement blob at each recorded `fixed_at` commit, refuses current-tree suppression, and leaves every other publication check fail-closed. The current Claude fixture path is derived from the platform temporary directory as of `1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa`; its isolated test passed `12` tests with `0` failures.
+
+### Focused validators at current exact HEAD
+
+The documented focused validators from the source checkout also passed on this host:
+
+| Command | Exit | Verbatim totals / result |
+|---|---:|---|
+| `node scripts/buddy-eval.mjs validate --json` | 0 | `case_count: 5`; categories `abstain`, `clean`, `defect`, `deletion`, `privacy` |
+| `node scripts/validate-pet-atlases.mjs --json` | 0 | `pet_count: 5`; `validation_scope: container-structure-and-catalog-integrity`; `full_pixel_decode: false` |
+| `python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/review` | 0 | `Skill is valid!` |
+| `python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/buddy-review` | 0 | `Skill is valid!` |
+| `python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .` | 0 | `Plugin validation passed` |
 
 ### Protected-main GitHub validation evidence
 
@@ -26,7 +51,7 @@ Current module count: `84` syntax-checked modules. Current positive release-boun
 |---|---:|---|---|
 | PR #12, squash merge of the rc.2 reconciliation stack | `30683824617` | `0344e13a457ab27f334819cb4686f137c7d13bb3` | success |
 | PR #11, action-pin update after PR #12 | `30684263733` | `90dab8d9fa48842f15164d19bd45c7355469015c` | success |
-| PR #13, review-path retention race closure after PR #11 | `30694148219` | `6975a04a697bfe65602f34e790501058481b992a` | success |
+| PR #13, review-path retention race closure after PR #11; PR-head run `30693726400` | `30694148219` | `6975a04a697bfe65602f34e790501058481b992a` | success |
 
 PR #12 and PR #11 are cited by number because their individual stack SHAs are not reachable from `main`'s first-parent history after squash merges. PR #13 is cited for the same reason.
 
@@ -34,9 +59,11 @@ PR #12 and PR #11 are cited by number because their individual stack SHAs are no
 
 The strict `findings`-required rejection path is covered by local parser/schema tests, but it remains unverified against live OpenCode and Ollama Cloud responses. OpenCode does not enforce the review-result schema at transport, and Ollama Cloud uses JSON formatting plus strict local validation rather than a schema argument.
 
-`IDEA.md` is excluded locally through `.git/info/exclude`, so it no longer makes the working checkout dirty. The remaining no-argument `npm run security:publication` failure is the intentional publication-boundary identity policy for a non-allowlisted public email in reachable history. This document records that result; it does not rewrite history or relax the policy.
+The private planning-note file is excluded locally through the repository-local exclude file, so it no longer makes the working checkout dirty. Bare `npm run security:publication` now passes through the committed reviewed dispositions; no flag, environment-only suppression, history rewrite, or tag change is required.
 
 ## Layer B - frozen `v0.5.0-rc.1` publication evidence, historical
+
+<a id="post-publication-addendum-2026-07-23"></a>
 
 This layer preserves the historical `v0.5.0-rc.1` publication evidence. These values are not current-head claims and must not be overwritten with current `main` numbers.
 
@@ -105,6 +132,6 @@ The following gates remain unresolved for stable promotion or for stronger curre
 - Live Windows provider egress after the DACL gate is implemented and verified.
 - Stable artifact requirements: rebuild from exact protected `main`, reverify after deterministic archive/re-extraction, install from the positive artifact boundary, and bind host evidence to that artifact rather than to the private checkout.
 - POSIX end-to-end provider execution evidence at the exact stable candidate.
-- Codex skill/plugin validator gate: the repository currently has no automatable entry point for this gate, so it cannot be counted as a repeatable validation command until one is added.
-- Publication-boundary history identity disposition for exact current reachable history: no-argument `npm run security:publication` fails until the public personal author email in reachable history is explicitly allowlisted or otherwise dispositioned.
+- Repository-owned Codex validator wiring: the documented skill and plugin validator commands passed on this host, but the repository still has no package-script entry point that makes those checks part of the ordinary npm validation chain.
+- GitHub account email visibility: the authenticated API token lacks the required `user` scope, so the account owner must set the durable visibility preference in the browser.
 - The Windows Node 22 preservation assertion flake from run `30682892670` is tracked in issue #14 and remains unexplained. Because it is a preservation assertion, it is higher-signal than a generic timing flake given the rc.2 no-loss work.
