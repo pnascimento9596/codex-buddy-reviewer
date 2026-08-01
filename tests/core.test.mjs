@@ -911,20 +911,23 @@ test('reviewer parser accepts Grok structured output envelopes', () => {
   assert.deepEqual(parseReviewerOutput(JSON.stringify({ result: JSON.stringify(expected) })), expected);
 });
 
-test('reviewer parser recovers an omitted empty findings array only for terminal non-finding statuses', () => {
+test('reviewer parser leaves a missing required findings array invalid', () => {
   const noFindings = {
     schema_version: '2',
     status: 'no_findings',
     summary: 'Complete review with no validated defects.'
   };
-  const recovered = parseReviewerOutput(JSON.stringify(noFindings));
-  assert.deepEqual(recovered, { ...noFindings, findings: [] });
-  assert.equal(validateReviewResult(recovered, evidenceFixture()).status, 'no_findings');
-
-  const invalidFindings = { ...noFindings, status: 'findings' };
+  const parsed = parseReviewerOutput(JSON.stringify(noFindings));
+  assert.deepEqual(parsed, noFindings);
   assert.throws(
-    () => validateReviewResult(parseReviewerOutput(JSON.stringify(invalidFindings)), evidenceFixture()),
+    () => validateReviewResult(parsed, evidenceFixture()),
     /findings must be an array/
+  );
+
+  const explicitEmptyFindings = { ...noFindings, findings: [] };
+  assert.equal(
+    validateReviewResult(parseReviewerOutput(JSON.stringify(explicitEmptyFindings)), evidenceFixture()).status,
+    'no_findings'
   );
 });
 

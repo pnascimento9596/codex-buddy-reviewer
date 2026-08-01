@@ -81,17 +81,8 @@ function parseJsonString(value) {
   }
 }
 
-function normalizeRecoverableReviewShape(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  if ((value.status === 'no_findings' || value.status === 'abstain')
-      && !Object.hasOwn(value, 'findings')) {
-    return { ...value, findings: [] };
-  }
-  return value;
-}
-
 export function parseReviewerText(stdout) {
-  return normalizeRecoverableReviewShape(parseJsonString(stdout));
+  return parseJsonString(stdout);
 }
 
 export function parseReviewerOutput(stdout) {
@@ -106,7 +97,7 @@ export function parseReviewerOutput(stdout) {
       result = parseJsonString(outer.content);
     }
   }
-  return normalizeRecoverableReviewShape(result);
+  return result;
 }
 
 function assertString(value, field, maxLength) {
