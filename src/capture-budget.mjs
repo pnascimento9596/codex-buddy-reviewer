@@ -95,24 +95,25 @@ export class CaptureBudget {
     return Math.max(1, remaining);
   }
 
-  #charge(field, bytes, limitField, code) {
-    this.remainingMs();
+  #charge(field, bytes, limitField, code, { completedProgress = false } = {}) {
+    if (!completedProgress) this.remainingMs();
     if (!Number.isSafeInteger(bytes) || bytes < 0) throw new TypeError('capture charge must be a non-negative safe integer');
     this.#usage[field] += bytes;
     if (this.#usage[field] > this.#limits[limitField]) throw new CaptureBudgetError(code);
     if (bytes > 0) this.#progressRevision += 1;
+    if (completedProgress) this.remainingMs();
   }
 
   chargePaths(count) {
-    this.#charge('paths', count, 'maxPaths', 'capture_path_limit_exceeded');
+    this.#charge('paths', count, 'maxPaths', 'capture_path_limit_exceeded', { completedProgress: true });
   }
 
   chargeFileBytes(bytes) {
-    this.#charge('fileBytes', bytes, 'maxFileBytes', 'capture_file_bytes_exceeded');
+    this.#charge('fileBytes', bytes, 'maxFileBytes', 'capture_file_bytes_exceeded', { completedProgress: true });
   }
 
   chargeGitBytes(bytes) {
-    this.#charge('gitBytes', bytes, 'maxGitBytes', 'capture_git_bytes_exceeded');
+    this.#charge('gitBytes', bytes, 'maxGitBytes', 'capture_git_bytes_exceeded', { completedProgress: true });
   }
 
   chargeGitInputBytes(bytes) {
@@ -120,7 +121,7 @@ export class CaptureBudget {
   }
 
   chargeObjectBytes(bytes) {
-    this.#charge('objectBytes', bytes, 'maxObjectBytes', 'capture_object_bytes_exceeded');
+    this.#charge('objectBytes', bytes, 'maxObjectBytes', 'capture_object_bytes_exceeded', { completedProgress: true });
   }
 
   chargeGitOperation() {

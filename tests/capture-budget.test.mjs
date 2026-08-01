@@ -68,6 +68,26 @@ test('capture progress re-arm is limited to eight 30-second responsive graces', 
   });
 });
 
+test('completed capture work can re-arm when its charge lands after the grace boundary', () => {
+  let monotonicNow = 0;
+  const budget = new CaptureBudget({
+    deadlineMs: 60_000,
+    startedAt: 0,
+    now: () => monotonicNow,
+    maxFileBytes: 10
+  });
+  budget.chargeFileBytes(1);
+  monotonicNow = 60_001;
+  assert.doesNotThrow(() => budget.remainingMs());
+
+  // Model a productive read that began within the grace and completed after
+  // it. The completed bytes are proof of progress and must win over the stale
+  // deadline observation made when the operation reports its charge.
+  monotonicNow += 30_001;
+  assert.doesNotThrow(() => budget.chargeFileBytes(1));
+  assert.equal(budget.snapshot().fileBytes, 2);
+});
+
 test('stable turn capture charges both passes and removes newly-created private state on failure', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'buddy-budget-repo-'));
   const privateRoot = await mkdtemp(path.join(os.tmpdir(), 'buddy-budget-state-'));
