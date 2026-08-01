@@ -307,6 +307,7 @@ export async function purgeWorkspaceData(options) {
   const turnResult = await pruneWorkspaceTurns({
     root: options.root,
     runtimeDataDir: options.runtimeDataDir,
+    modeDataDir: options.dataDir,
     now: options.now ?? Date.now(),
     ttlMs: 0,
     contentTtlMs: 0,

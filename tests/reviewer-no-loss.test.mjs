@@ -164,6 +164,27 @@ test('rejected-response preservation refuses a review id that escapes its worksp
   await assert.rejects(stat(escaped), { code: 'ENOENT' });
 });
 
+test('rejected-response preservation refuses a data root inside the reviewed repository', async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-response-repository-'));
+  temporaryPaths.push(repositoryRoot);
+  const dataDir = path.join(repositoryRoot, '.buddy-private');
+  await assert.rejects(
+    preserveRejectedReviewerResponse({
+      response: { stdout: '{not valid json', reviewPayload: null },
+      evidence: {
+        repository_root: repositoryRoot,
+        review_id: 'synthetic-contained-review'
+      },
+      error: Object.assign(new Error('synthetic parse error'), {
+        failureCode: 'invalid_review_json'
+      }),
+      dataDir
+    }),
+    /rejected-response state directory must be outside the reviewed repository/
+  );
+  await assert.rejects(stat(dataDir), { code: 'ENOENT' });
+});
+
 test('a transport-envelope failure preserves the raw provider bytes privately', async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-transport-'));
   temporaryPaths.push(dataDir);

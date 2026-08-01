@@ -39,6 +39,7 @@ import {
   ensurePrivateStatePath,
   opaqueKey,
   readPrivateJson,
+  resolveDataDir,
   resolveRuntimeDataDir,
   withFileLock,
   writePrivateJsonAtomic,
@@ -504,6 +505,7 @@ export async function captureTurnStart(input, options = {}) {
   if (!mode.enabled) {
     await (options.pruneTurns ?? pruneWorkspaceTurns)({
       runtimeDataDir: options.runtimeDataDir,
+      modeDataDir: resolveDataDir(options.modeDataDir),
       root,
       sessionId: input.session_id,
       turnId: input.turn_id,
@@ -527,6 +529,7 @@ export async function captureTurnStart(input, options = {}) {
   }
   await (options.pruneTurns ?? pruneWorkspaceTurns)({
     runtimeDataDir: options.runtimeDataDir,
+    modeDataDir: resolveDataDir(options.modeDataDir),
     root,
     sessionId: input.session_id,
     turnId: input.turn_id,

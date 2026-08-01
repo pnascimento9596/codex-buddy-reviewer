@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { escapeDiagnosticLine } from './policy.mjs';
 import {
+  assertStateOutsideRepository,
   ensurePrivateStatePath,
   resolveDataDir,
   workspaceKey,
@@ -30,6 +31,7 @@ export async function preserveRejectedReviewerResponse({
     throw new TypeError('Buddy rejected response review id is invalid');
   }
   const root = resolveDataDir(dataDir);
+  await assertStateOutsideRepository(evidence.repository_root, root, 'rejected-response state');
   const directory = await ensurePrivateStatePath(root, path.join(
     root,
     'rejected-responses',

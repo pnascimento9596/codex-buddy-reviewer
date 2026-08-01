@@ -446,6 +446,61 @@ test('orphaned automatic receipts from an interrupted publication still reach th
   await assert.rejects(lstat(receipt));
 });
 
+test('rejected responses share the 24-hour content ceiling without disturbing other state', async () => {
+  const { runtimeDataDir, root } = await fixture();
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-pruner-'));
+  roots.push(modeDataDir);
+  const workspace = workspaceKey(root);
+  const rejectedRoot = path.join(modeDataDir, 'rejected-responses', workspace);
+  const unrelatedWorkspace = path.join(modeDataDir, 'rejected-responses', workspaceKey('/other/repository'));
+  const response = async (base, reviewId, value) => {
+    const directory = path.join(base, reviewId);
+    await mkdir(directory, { recursive: true });
+    const file = path.join(directory, 'response.json');
+    if (typeof value === 'string') await writeFile(file, value);
+    else await writeJson(file, value);
+    return file;
+  };
+  const old = await response(rejectedRoot, 'old-review', {
+    schema_version: '1', recorded_at: '2020-01-01T00:00:00.000Z', raw_response: 'old'
+  });
+  const fresh = await response(rejectedRoot, 'fresh-review', {
+    schema_version: '1', recorded_at: '2020-01-01T12:00:00.001Z', raw_response: 'fresh'
+  });
+  const missingTimestamp = await response(rejectedRoot, 'missing-timestamp', {
+    schema_version: '1', raw_response: 'missing timestamp'
+  });
+  const malformed = await response(rejectedRoot, 'malformed-review', '{not-json\n');
+  const unrelated = await response(unrelatedWorkspace, 'unrelated-review', {
+    schema_version: '1', recorded_at: '2020-01-01T00:00:00.000Z', raw_response: 'unrelated'
+  });
+
+  const receiptDirectory = path.join(runtimeDataDir, 'automatic-reviews', workspace);
+  await mkdir(receiptDirectory, { recursive: true });
+  const receipt = path.join(receiptDirectory, `${'f'.repeat(64)}.json`);
+  await writeJson(receipt, { private_review_content: 'fresh receipt' });
+  const outbox = await appendOutboxEvent({
+    runtimeDataDir,
+    repositoryRoot: root,
+    sessionId: 'rejected-retention-session',
+    turnId: 'rejected-retention-turn',
+    state: 'working',
+    type: 'turn_started',
+    headline: 'Fresh event',
+    occurredAt: '2020-01-01T12:00:00.001Z'
+  });
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    modeDataDir,
+    root,
+    now: Date.parse('2020-01-02T00:00:00.000Z')
+  });
+  assert.equal(result.rejectedResponsePruned, 3);
+  for (const file of [old, missingTimestamp, malformed]) await assert.rejects(lstat(file));
+  for (const file of [fresh, unrelated, receipt, outbox.file]) await lstat(file);
+});
+
 test('aged v2 and legacy v1 outbox content expire without a renderer', async () => {
   const { runtimeDataDir, root } = await fixture();
   const common = {
