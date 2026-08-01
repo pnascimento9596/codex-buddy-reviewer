@@ -224,6 +224,7 @@ async function pruneExpiredRejectedResponses(options) {
       continue;
     }
     const reviewDirectory = path.join(directory, reviewEntry.name);
+    let expiredResponsePruned = false;
     for (const responseEntry of await readdir(reviewDirectory, { withFileTypes: true })) {
       if (!budgetAvailable()) {
         limited = true;
@@ -251,6 +252,16 @@ async function pruneExpiredRejectedResponses(options) {
       if (!Number.isFinite(recordedAt) || options.now - recordedAt >= options.contentTtlMs) {
         await rm(file, { force: true });
         pruned += 1;
+        expiredResponsePruned = true;
+      }
+    }
+    if (expiredResponsePruned) {
+      try {
+        await rmdir(reviewDirectory);
+      } catch (error) {
+        // A fresh or otherwise preserved entry wins a concurrent empty-directory
+        // cleanup. Missing means another safe cleanup already completed.
+        if (error.code !== 'ENOTEMPTY' && error.code !== 'EEXIST' && error.code !== 'ENOENT') throw error;
       }
     }
   }
@@ -483,7 +494,7 @@ export async function pruneWorkspaceTurns(options) {
       ambiguous += orphanReceipts.ambiguous;
     }
     let rejectedResponses = { scanned: 0, pruned: 0, ambiguous: 0, limited: false };
-    if (!limited && live === 0 && ambiguous === 0) {
+    if (!limited) {
       rejectedResponses = await pruneExpiredRejectedResponses({
         root: options.root,
         modeDataDir: options.modeDataDir,

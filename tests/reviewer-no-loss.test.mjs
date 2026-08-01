@@ -230,3 +230,18 @@ test('transport-failure preservation strips raw bytes from the propagating error
   assert.equal(Reflect.ownKeys(error).includes('rawTransport'), false);
   assert.doesNotMatch(inspect(error, { showHidden: true, depth: 4 }), /raw provider bytes/);
 });
+
+test('transport-failure cleanup strips an empty raw transport envelope', async () => {
+  const { preserveTransportFailure } = await import('../src/cli.mjs');
+  const error = new Error('The provider returned no transport output.');
+  Object.defineProperty(error, 'rawTransport', {
+    value: { stdout: '' }, enumerable: false, configurable: true
+  });
+
+  await preserveTransportFailure(error, {
+    repository_root: '/synthetic/workspace',
+    review_id: 'synthetic-empty-transport-id'
+  });
+  assert.equal(Object.getOwnPropertyNames(error).includes('rawTransport'), false);
+  assert.equal(Reflect.ownKeys(error).includes('rawTransport'), false);
+});
