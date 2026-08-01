@@ -25,7 +25,8 @@ export async function preserveRejectedReviewerResponse({
   response,
   evidence,
   error,
-  dataDir
+  dataDir,
+  writeJsonAtomic = writePrivateJsonAtomic
 }) {
   if (typeof evidence?.review_id !== 'string' || !REVIEW_ID_PATTERN.test(evidence.review_id)) {
     throw new TypeError('Buddy rejected response review id is invalid');
@@ -42,13 +43,24 @@ export async function preserveRejectedReviewerResponse({
   // transport is independent evidence, so never let concurrent failures race
   // to replace one shared response file.
   const file = path.join(directory, `response-${randomUUID()}.json`);
-  await writePrivateJsonAtomic(file, {
+  const record = {
     schema_version: '1',
     review_id: evidence.review_id,
     failure_code: error.failureCode,
     parse_error: escapeDiagnosticLine(error.message),
     raw_response: rawResponse(response),
     recorded_at: new Date().toISOString()
-  });
+  };
+  try {
+    await writeJsonAtomic(file, record);
+  } catch (writeError) {
+    if (writeError.code !== 'ENOENT') throw writeError;
+    // A concurrent expiry pass can remove an emptied review directory in the
+    // narrow ensure-to-open gap. Re-verify the private path and retry once;
+    // the workspace prune lease serializes directory removal, so it has
+    // already moved past this review before the failed open is observed.
+    await ensurePrivateStatePath(root, directory);
+    await writeJsonAtomic(file, record);
+  }
   return file;
 }

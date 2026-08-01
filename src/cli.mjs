@@ -218,8 +218,8 @@ export function prepareReviewRequest(evidence, options = {}) {
 // bytes from the propagating error so no later serializer or inspector can
 // surface them — the disk copy at 0600 is the only surviving copy.
 export async function preserveTransportFailure(error, evidence, dataDir) {
-  if (typeof error?.rawTransport?.stdout !== 'string' || !error.rawTransport.stdout) return;
   try {
+    if (typeof error?.rawTransport?.stdout !== 'string' || !error.rawTransport.stdout) return;
     error.rawResponsePath = await preserveRejectedReviewerResponse({
       response: { stdout: error.rawTransport.stdout, reviewPayload: null },
       evidence,

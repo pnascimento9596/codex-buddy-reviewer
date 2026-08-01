@@ -224,6 +224,7 @@ async function pruneExpiredRejectedResponses(options) {
       continue;
     }
     const reviewDirectory = path.join(directory, reviewEntry.name);
+    let expiredResponsePruned = false;
     for (const responseEntry of await readdir(reviewDirectory, { withFileTypes: true })) {
       if (!budgetAvailable()) {
         limited = true;
@@ -231,8 +232,23 @@ async function pruneExpiredRejectedResponses(options) {
       }
       scanned += 1;
       if (responseEntry.isFile() && /^\.response(?:-.+)?\.json\..+\.tmp$/u.test(responseEntry.name)) {
-        await rm(path.join(reviewDirectory, responseEntry.name), { force: true });
-        pruned += 1;
+        const temporary = path.join(reviewDirectory, responseEntry.name);
+        let details;
+        try {
+          details = await lstat(temporary);
+        } catch (error) {
+          if (error.code === 'ENOENT') continue;
+          throw error;
+        }
+        if (details.isSymbolicLink() || !details.isFile()) {
+          ambiguous += 1;
+          continue;
+        }
+        if (options.now - details.mtimeMs >= options.contentTtlMs) {
+          await rm(temporary, { force: true });
+          pruned += 1;
+          expiredResponsePruned = true;
+        }
         continue;
       }
       if (responseEntry.isSymbolicLink() || !responseEntry.isFile()
@@ -251,6 +267,16 @@ async function pruneExpiredRejectedResponses(options) {
       if (!Number.isFinite(recordedAt) || options.now - recordedAt >= options.contentTtlMs) {
         await rm(file, { force: true });
         pruned += 1;
+        expiredResponsePruned = true;
+      }
+    }
+    if (expiredResponsePruned) {
+      try {
+        await rmdir(reviewDirectory);
+      } catch (error) {
+        // A fresh or otherwise preserved entry wins a concurrent empty-directory
+        // cleanup. Missing means another safe cleanup already completed.
+        if (error.code !== 'ENOTEMPTY' && error.code !== 'EEXIST' && error.code !== 'ENOENT') throw error;
       }
     }
   }
@@ -431,7 +457,8 @@ export async function pruneWorkspaceTurns(options) {
     };
   }
 
-  const deadline = Date.now() + (options.deadlineMs ?? 500);
+  const deadlineMs = options.deadlineMs ?? 500;
+  const deadline = Date.now() + deadlineMs;
   const maxEntries = options.maxEntries ?? 1_000;
   const skipSession = options.sessionId === undefined ? null : opaqueKey(options.sessionId);
   const skipTurn = options.turnId === undefined ? null : opaqueKey(options.turnId);
@@ -483,20 +510,20 @@ export async function pruneWorkspaceTurns(options) {
       ambiguous += orphanReceipts.ambiguous;
     }
     let rejectedResponses = { scanned: 0, pruned: 0, ambiguous: 0, limited: false };
-    if (!limited && live === 0 && ambiguous === 0) {
-      rejectedResponses = await pruneExpiredRejectedResponses({
-        root: options.root,
-        modeDataDir: options.modeDataDir,
-        workspace,
-        now: options.now ?? Date.now(),
-        contentTtlMs: options.contentTtlMs ?? DEFAULT_CONTENT_TTL_MS,
-        maxEntries: Math.max(0, maxEntries - scanned),
-        deadline
-      });
-      scanned += rejectedResponses.scanned;
-      ambiguous += rejectedResponses.ambiguous;
-      limited ||= rejectedResponses.limited;
-    }
+    rejectedResponses = await pruneExpiredRejectedResponses({
+      root: options.root,
+      modeDataDir: options.modeDataDir,
+      workspace,
+      now: options.now ?? Date.now(),
+      contentTtlMs: options.contentTtlMs ?? DEFAULT_CONTENT_TTL_MS,
+      // Rejected responses are an independent content domain. Give them their
+      // own bounded slice so a saturated turn inventory cannot starve expiry.
+      maxEntries,
+      deadline: Date.now() + deadlineMs
+    });
+    scanned += rejectedResponses.scanned;
+    ambiguous += rejectedResponses.ambiguous;
+    limited ||= rejectedResponses.limited;
     const outbox = await pruneExpiredOutboxEvents({
       repositoryRoot: options.root,
       runtimeDataDir: options.runtimeDataDir,

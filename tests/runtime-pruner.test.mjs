@@ -501,6 +501,168 @@ test('rejected responses share the 24-hour content ceiling without disturbing ot
   for (const file of [fresh, unrelated, receipt, outbox.file]) await lstat(file);
 });
 
+test('live turn state cannot extend rejected-response retention beyond 24 hours', async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-live-pruner-'));
+  roots.push(modeDataDir);
+  await writeJson(path.join(turnDir, 'baseline.json'), {
+    snapshot: { captured_at: '2020-01-02T00:00:00.000Z' }
+  });
+  const responseDirectory = path.join(
+    modeDataDir,
+    'rejected-responses',
+    workspaceKey(root),
+    'expired-during-live-turn'
+  );
+  await mkdir(responseDirectory, { recursive: true });
+  const response = path.join(responseDirectory, 'response.json');
+  await writeJson(response, {
+    schema_version: '1',
+    recorded_at: '2020-01-01T00:00:00.000Z',
+    raw_response: 'expired'
+  });
+
+  const stopLease = await acquireFileLease(path.join(turnDir, 'stop'), { wait: false });
+  assert.ok(stopLease);
+  try {
+    const result = await pruneWorkspaceTurns({
+      runtimeDataDir,
+      modeDataDir,
+      root,
+      now: Date.parse('2020-01-02T00:00:00.000Z')
+    });
+    assert.equal(result.live, 1);
+    assert.equal(result.rejectedResponsePruned, 1);
+    await assert.rejects(lstat(response));
+  } finally {
+    await releaseFileLease(stopLease);
+  }
+});
+
+test('rejected-response expiry removes the emptied review directory', async () => {
+  const { runtimeDataDir, root } = await fixture();
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-empty-pruner-'));
+  roots.push(modeDataDir);
+  const responseDirectory = path.join(
+    modeDataDir,
+    'rejected-responses',
+    workspaceKey(root),
+    'expired-review'
+  );
+  await mkdir(responseDirectory, { recursive: true });
+  await writeJson(path.join(responseDirectory, 'response.json'), {
+    schema_version: '1',
+    recorded_at: '2020-01-01T00:00:00.000Z',
+    raw_response: 'expired'
+  });
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    modeDataDir,
+    root,
+    now: Date.parse('2020-01-02T00:00:00.000Z')
+  });
+  assert.equal(result.rejectedResponsePruned, 1);
+  await assert.rejects(lstat(responseDirectory));
+});
+
+test('an exhausted turn-scan budget cannot starve rejected-response expiry', async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  const sessionDirectory = path.dirname(turnDir);
+  for (const turnId of ['turn-budget-2', 'turn-budget-3']) {
+    await mkdir(path.join(sessionDirectory, opaqueKey(turnId), 'snapshot', 'objects'), { recursive: true });
+  }
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-budget-pruner-'));
+  roots.push(modeDataDir);
+  const responseDirectory = path.join(
+    modeDataDir,
+    'rejected-responses',
+    workspaceKey(root),
+    'expired-after-turn-budget'
+  );
+  await mkdir(responseDirectory, { recursive: true });
+  const response = path.join(responseDirectory, 'response.json');
+  await writeJson(response, {
+    schema_version: '1',
+    recorded_at: '2020-01-01T00:00:00.000Z',
+    raw_response: 'expired'
+  });
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    modeDataDir,
+    root,
+    maxEntries: 2,
+    now: Date.parse('2020-01-02T00:00:00.000Z')
+  });
+  assert.equal(result.limited, true);
+  assert.equal(result.rejectedResponsePruned, 1);
+  await assert.rejects(lstat(response));
+});
+
+test('rejected-response pruning preserves live atomic temps and removes only aged orphans', async () => {
+  const { runtimeDataDir, root } = await fixture();
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-temp-pruner-'));
+  roots.push(modeDataDir);
+  const responseDirectory = path.join(
+    modeDataDir,
+    'rejected-responses',
+    workspaceKey(root),
+    'atomic-write-review'
+  );
+  await mkdir(responseDirectory, { recursive: true });
+  const fresh = path.join(
+    responseDirectory,
+    '.response-fresh.json.1234.11111111-1111-4111-8111-111111111111.tmp'
+  );
+  const old = path.join(
+    responseDirectory,
+    '.response-old.json.1234.22222222-2222-4222-8222-222222222222.tmp'
+  );
+  await writeFile(fresh, '{"in_flight":true}\n');
+  await writeFile(old, '{"orphaned":true}\n');
+  await utimes(fresh, new Date('2020-01-01T12:00:00.001Z'), new Date('2020-01-01T12:00:00.001Z'));
+  await utimes(old, new Date('2020-01-01T00:00:00.000Z'), new Date('2020-01-01T00:00:00.000Z'));
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    modeDataDir,
+    root,
+    now: Date.parse('2020-01-02T00:00:00.000Z')
+  });
+  assert.equal(result.rejectedResponsePruned, 1);
+  await lstat(fresh);
+  await assert.rejects(lstat(old));
+});
+
+test('aged rejected-response temp cleanup removes its emptied review directory', async () => {
+  const { runtimeDataDir, root } = await fixture();
+  const modeDataDir = await mkdtemp(path.join(os.tmpdir(), 'buddy-rejected-temp-only-pruner-'));
+  roots.push(modeDataDir);
+  const responseDirectory = path.join(
+    modeDataDir,
+    'rejected-responses',
+    workspaceKey(root),
+    'orphan-temp-only-review'
+  );
+  await mkdir(responseDirectory, { recursive: true });
+  const old = path.join(
+    responseDirectory,
+    '.response-old.json.1234.33333333-3333-4333-8333-333333333333.tmp'
+  );
+  await writeFile(old, '{"orphaned":true}\n');
+  await utimes(old, new Date('2020-01-01T00:00:00.000Z'), new Date('2020-01-01T00:00:00.000Z'));
+
+  const result = await pruneWorkspaceTurns({
+    runtimeDataDir,
+    modeDataDir,
+    root,
+    now: Date.parse('2020-01-02T00:00:00.000Z')
+  });
+  assert.equal(result.rejectedResponsePruned, 1);
+  await assert.rejects(lstat(responseDirectory));
+});
+
 test('aged v2 and legacy v1 outbox content expire without a renderer', async () => {
   const { runtimeDataDir, root } = await fixture();
   const common = {
