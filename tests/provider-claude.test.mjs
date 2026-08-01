@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { access, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import { ProviderFailure } from '../src/provider-contract.mjs';
@@ -42,9 +44,11 @@ async function removeThenFailCleanup(target, options) {
 }
 
 test('Claude invokes the verified isolated CLI contract with schema-bound stdin', async () => {
+  const fixtureHome = path.join(os.tmpdir(), 'codex-buddy-claude-home');
+  const fixtureRepository = path.join(os.tmpdir(), 'codex-buddy-claude-repository');
   const ambient = {
     PATH: '/usr/bin:/bin',
-    HOME: '/private/fixture-home',
+    HOME: fixtureHome,
     USER: 'fixture-user',
     LOGNAME: 'fixture-user',
     TMPDIR: '/tmp',
@@ -87,7 +91,7 @@ test('Claude invokes the verified isolated CLI contract with schema-bound stdin'
     assert.equal(options.maxOutputBytes, 4 * 1024 * 1024);
     assert.deepEqual(options.env, {
       PATH: '/usr/bin:/bin',
-      HOME: '/private/fixture-home',
+      HOME: fixtureHome,
       USER: 'fixture-user',
       LOGNAME: 'fixture-user',
       TMPDIR: '/tmp',
@@ -107,7 +111,7 @@ test('Claude invokes the verified isolated CLI contract with schema-bound stdin'
   };
 
   const response = await reviewWithClaude({
-    root: '/private/repository-that-must-not-be-cwd',
+    root: fixtureRepository,
     prompt: 'bounded review packet',
     model: 'claude-opus-4-8',
     effort: 'high',
@@ -120,7 +124,7 @@ test('Claude invokes the verified isolated CLI contract with schema-bound stdin'
   });
 
   assert.equal(calls, 1);
-  assert.notEqual(isolatedCwd, '/private/repository-that-must-not-be-cwd');
+  assert.notEqual(isolatedCwd, fixtureRepository);
   await assert.rejects(access(isolatedCwd));
   assert.deepEqual(response.reviewPayload, reviewResult());
   assert.deepEqual(JSON.parse(response.stdout), reviewResult());

@@ -82,6 +82,8 @@ const SENSITIVE_STATE_EXTENSIONS = new Set([
 
 const GITHUB_NOREPLY = /^(?:[0-9]+\+)?[A-Z0-9_.+\-[\]]+@users\.noreply\.github\.com$/i;
 const EMAIL_ADDRESS = /[A-Z0-9._%+\-[\]]+@[A-Z0-9.-]+\.[A-Z]{2,63}\b/gi;
+const COMMITTED_ALLOWLIST_PATH = 'release/publication-boundary-allowlist.json';
+const HISTORICAL_PATH_CODES = new Set(['ABSOLUTE_USER_PATH', 'SCAN_TEMP_PATH']);
 const NON_CONTINUABLE_METADATA_FIELDS = new Set([
   'tree', 'parent', 'author', 'committer', 'encoding', 'object', 'type', 'tag', 'tagger'
 ]);
@@ -434,6 +436,118 @@ function validateSafeEmails(emails) {
   return normalized;
 }
 
+function validateDisposition(value, label) {
+  if (typeof value !== 'string' || value.length < 8 || value.length > 240
+      || /[\r\n\0]/.test(value) || !/^[\x20-\x7e]+$/.test(value)) {
+    fail('ALLOWLIST_INVALID', `${label} must be one bounded printable-ASCII line.`);
+  }
+  return value;
+}
+
+function requireExactKeys(value, keys, label) {
+  if (value === null || Array.isArray(value) || typeof value !== 'object') {
+    fail('ALLOWLIST_INVALID', `${label} must be an object.`);
+  }
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  if (actual.length !== expected.length || actual.some((item, index) => item !== expected[index])) {
+    fail('ALLOWLIST_INVALID', `${label} has unexpected or missing fields.`);
+  }
+}
+
+function parseCommittedAllowlist(bytes) {
+  let value;
+  try {
+    value = JSON.parse(fatalUtf8.decode(bytes));
+  } catch {
+    fail('ALLOWLIST_INVALID', 'The committed publication allowlist must be valid UTF-8 JSON.');
+  }
+  requireExactKeys(
+    value,
+    ['schema_version', 'reviewed_emails', 'historical_path_violations'],
+    'The committed publication allowlist'
+  );
+  if (value.schema_version !== '1'
+      || !Array.isArray(value.reviewed_emails)
+      || !Array.isArray(value.historical_path_violations)) {
+    fail('ALLOWLIST_INVALID', 'The committed publication allowlist has an unsupported schema.');
+  }
+
+  const reviewedEmails = [];
+  const seenEmails = new Set();
+  for (const [index, entry] of value.reviewed_emails.entries()) {
+    requireExactKeys(entry, ['email', 'disposition'], `reviewed_emails[${index}]`);
+    const normalized = validateSafeEmails([entry.email]).values().next().value;
+    if (seenEmails.has(normalized)) fail('ALLOWLIST_INVALID', 'The committed email allowlist contains a duplicate.');
+    seenEmails.add(normalized);
+    reviewedEmails.push(Object.freeze({
+      email: normalized,
+      disposition: validateDisposition(entry.disposition, `reviewed_emails[${index}].disposition`)
+    }));
+  }
+
+  const historicalPathViolations = [];
+  const seenViolations = new Set();
+  for (const [index, entry] of value.historical_path_violations.entries()) {
+    requireExactKeys(
+      entry,
+      ['path_id', 'blob_oid', 'fixed_at', 'code', 'disposition'],
+      `historical_path_violations[${index}]`
+    );
+    if (!/^[0-9a-f]{12}$/.test(entry.path_id)
+        || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(entry.blob_oid)
+        || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(entry.fixed_at)
+        || !HISTORICAL_PATH_CODES.has(entry.code)) {
+      fail('ALLOWLIST_INVALID', `historical_path_violations[${index}] is malformed or unsupported.`);
+    }
+    const key = `${entry.code}:${entry.path_id}:${entry.blob_oid}`;
+    if (seenViolations.has(key)) fail('ALLOWLIST_INVALID', 'The committed historical allowlist contains a duplicate.');
+    seenViolations.add(key);
+    historicalPathViolations.push(Object.freeze({
+      ...entry,
+      disposition: validateDisposition(
+        entry.disposition,
+        `historical_path_violations[${index}].disposition`
+      )
+    }));
+  }
+  return Object.freeze({
+    reviewedEmails: Object.freeze(reviewedEmails),
+    historicalPathViolations: Object.freeze(historicalPathViolations)
+  });
+}
+
+async function committedAllowlist(root, entries, limits, validateHistoricalObjects) {
+  const entry = entries.find((item) => item.path === COMMITTED_ALLOWLIST_PATH);
+  if (!entry) {
+    return Object.freeze({ reviewedEmails: Object.freeze([]), historicalPathViolations: Object.freeze([]) });
+  }
+  if (entry.mode !== '100644') fail('ALLOWLIST_INVALID', 'The committed publication allowlist must be a regular non-executable file.');
+  const [metadata] = await batchMetadata(root, [entry], limits);
+  if (metadata.type !== 'blob' || metadata.size > 64 * 1024) {
+    fail('ALLOWLIST_INVALID', 'The committed publication allowlist is not a bounded regular blob.');
+  }
+  const { stdout } = await runGit(root, ['cat-file', 'blob', entry.oid], {
+    maxBuffer: Math.min(limits.maxGitOutputBytes, metadata.size + 1024)
+  });
+  if (stdout.length !== metadata.size) fail('GIT_OUTPUT_MALFORMED', 'Git returned incomplete allowlist bytes.');
+  const parsed = parseCommittedAllowlist(stdout);
+  const objectIds = parsed.historicalPathViolations.flatMap((item) => [item.blob_oid, item.fixed_at]);
+  if (validateHistoricalObjects && objectIds.length > 0) {
+    const objectMetadata = await batchMetadata(
+      root,
+      objectIds.map((oid) => ({ oid })),
+      limits
+    );
+    for (let index = 0; index < parsed.historicalPathViolations.length; index += 1) {
+      if (objectMetadata[index * 2].type !== 'blob' || objectMetadata[index * 2 + 1].type !== 'commit') {
+        fail('ALLOWLIST_INVALID', 'A committed historical disposition references the wrong Git object types.');
+      }
+    }
+  }
+  return parsed;
+}
+
 async function validateTopLevel(root, limits) {
   const resolvedRoot = await realpath(path.resolve(root));
   const { stdout } = await runGit(resolvedRoot, ['rev-parse', '--show-toplevel'], {
@@ -703,7 +817,77 @@ async function scanMetadataCandidates(root, candidates, safeEmails, expectedComm
   return Object.freeze({ commitsScanned, tagsScanned, bytesScanned: totalBytes });
 }
 
-async function scanBlobCandidates(root, candidates, safeEmails, limits) {
+async function blobBytes(root, oid, size, limits) {
+  const { stdout } = await runGit(root, ['cat-file', 'blob', oid], {
+    maxBuffer: Math.min(limits.maxGitOutputBytes, size + 1024)
+  });
+  if (stdout.length !== size) fail('GIT_OUTPUT_MALFORMED', 'Git returned incomplete blob bytes.');
+  return stdout;
+}
+
+async function fixedPathBlob(root, fixedAt, repoPath, limits) {
+  const { stdout } = await runGit(root, ['ls-tree', '-z', fixedAt, '--', repoPath], {
+    maxBuffer: limits.maxGitOutputBytes
+  });
+  const records = nullRecords(stdout);
+  if (records.length !== 1) fail('ALLOWLIST_INVALID', 'A historical disposition fixed_at tree does not contain exactly one path.');
+  const tab = records[0].indexOf(0x09);
+  if (tab <= 0) fail('ALLOWLIST_INVALID', 'A historical disposition fixed_at tree entry is malformed.');
+  const metadata = strictUtf8(records[0].subarray(0, tab), 'GIT_OUTPUT_MALFORMED');
+  const match = metadata.match(/^100644 blob ([0-9a-f]{40}|[0-9a-f]{64})$/);
+  const foundPath = strictUtf8(records[0].subarray(tab + 1));
+  if (!match || foundPath !== repoPath) {
+    fail('ALLOWLIST_INVALID', 'A historical disposition fixed_at tree entry is not the expected regular path.');
+  }
+  const [details] = await batchMetadata(root, [{ oid: match[1] }], limits);
+  if (details.type !== 'blob') fail('ALLOWLIST_INVALID', 'A historical disposition fixed_at path is not a blob.');
+  return Object.freeze({
+    oid: match[1],
+    bytes: await blobBytes(root, match[1], details.size, limits)
+  });
+}
+
+async function preparedHistoricalPathAllowlist(root, candidates, entries, dispositions, limits) {
+  const allowed = new Map();
+  const currentByPath = new Map(entries.map((entry) => [entry.path, entry]));
+  for (const disposition of dispositions) {
+    const matchingPaths = [...new Set(candidates
+      .filter((item) => item.path !== null && safePathId(item.path) === disposition.path_id)
+      .map((item) => item.path))];
+    if (matchingPaths.length !== 1) {
+      fail('ALLOWLIST_INVALID', 'A historical disposition path-id is missing or ambiguous in reachable history.');
+    }
+    const repoPath = matchingPaths[0];
+    const historical = candidates.find((item) => (
+      item.path === repoPath && item.oid === disposition.blob_oid
+    ));
+    if (!historical) fail('ALLOWLIST_INVALID', 'A historical disposition blob is not reachable at its reviewed path-id.');
+    const current = currentByPath.get(repoPath);
+    if (!current || current.oid === disposition.blob_oid) {
+      fail('ALLOWLIST_INVALID', 'A historical disposition cannot suppress a missing or current-tree violation.');
+    }
+    const fixed = await fixedPathBlob(root, disposition.fixed_at, repoPath, limits);
+    if (fixed.oid === disposition.blob_oid
+        || pathTextViolation(fixed.bytes.toString('latin1')) === disposition.code) {
+      fail('ALLOWLIST_INVALID', 'A historical disposition does not bind a clean replacement blob at fixed_at.');
+    }
+    allowed.set(
+      `${disposition.code}:${disposition.path_id}:${disposition.blob_oid}`,
+      disposition
+    );
+  }
+  return allowed;
+}
+
+function acceptsHistoricalPathViolation(item, code, allowed, used) {
+  if (item.path === null || !HISTORICAL_PATH_CODES.has(code)) return false;
+  const key = `${code}:${safePathId(item.path)}:${item.oid}`;
+  if (!allowed.has(key)) return false;
+  used.add(key);
+  return true;
+}
+
+async function scanBlobCandidates(root, candidates, safeEmails, historicalPathAllowlist, limits) {
   const scannable = candidates;
   if (scannable.length > limits.maxFiles) fail('WORK_LIMIT_EXCEEDED', 'Blob candidate count exceeded the publication scan work limit.');
   let totalBlobBytes = 0;
@@ -737,6 +921,7 @@ async function scanBlobCandidates(root, candidates, safeEmails, limits) {
   if (scannable.length === 0) return { textFilesScanned: 0, textBytesScanned: 0 };
   let textFilesScanned = 0;
   let textBytesScanned = 0;
+  const usedHistoricalPathAllowances = new Set();
   for (const items of batches) {
     const input = Buffer.from(`${items.map((item) => item.oid).join('\n')}\n`, 'ascii');
     const outputLimit = Math.min(
@@ -748,7 +933,9 @@ async function scanBlobCandidates(root, candidates, safeEmails, limits) {
     for (let index = 0; index < blobs.length; index += 1) {
       const bytes = blobs[index];
       const rawViolation = pathTextViolation(bytes.toString('latin1'));
-      if (rawViolation) {
+      if (rawViolation && !acceptsHistoricalPathViolation(
+        items[index], rawViolation, historicalPathAllowlist, usedHistoricalPathAllowances
+      )) {
         const id = items[index].path === null ? 'unattributed' : safePathId(items[index].path);
         fail(rawViolation, `A tracked blob contains non-public data (path-id ${id}).`);
       }
@@ -761,7 +948,9 @@ async function scanBlobCandidates(root, candidates, safeEmails, limits) {
         fail('TEXT_ENCODING_AMBIGUOUS', 'A candidate text blob is not valid UTF-8.');
       }
       const decodedViolation = textViolation(text, safeEmails);
-      if (decodedViolation) {
+      if (decodedViolation && !acceptsHistoricalPathViolation(
+        items[index], decodedViolation, historicalPathAllowlist, usedHistoricalPathAllowances
+      )) {
         const id = items[index].path === null ? 'unattributed' : safePathId(items[index].path);
         fail(decodedViolation, `A tracked blob contains non-public data (path-id ${id}).`);
       }
@@ -780,6 +969,9 @@ async function scanBlobCandidates(root, candidates, safeEmails, limits) {
       textFilesScanned += 1;
       textBytesScanned += bytes.length;
     }
+  }
+  if (usedHistoricalPathAllowances.size !== historicalPathAllowlist.size) {
+    fail('ALLOWLIST_UNUSED', 'A committed historical path disposition did not match an observed violation.');
   }
   return { textFilesScanned, textBytesScanned };
 }
@@ -857,15 +1049,20 @@ async function historyCandidates(root, limits) {
 export async function checkPublicationBoundary(options = {}) {
   const limits = normalizedLimits(options.limits);
   const treeOnly = options.treeOnly === true;
-  const safeEmails = validateSafeEmails(options.safeEmails ?? []);
   const root = await validateTopLevel(options.root ?? process.cwd(), limits);
   if (!treeOnly) await validateClean(root, limits);
   const entries = await currentIndex(root, limits);
+  const allowlist = await committedAllowlist(root, entries, limits, !treeOnly);
+  const safeEmails = validateSafeEmails([
+    ...(options.safeEmails ?? []),
+    ...allowlist.reviewedEmails.map((item) => item.email)
+  ]);
 
   let commitCount = null;
   let refCount = null;
   let objectCount = null;
   let metadataScan = null;
+  let historicalPathAllowlist = new Map();
   let candidates;
   if (treeOnly) {
     candidates = await treeCandidates(root, entries, limits);
@@ -877,6 +1074,13 @@ export async function checkPublicationBoundary(options = {}) {
     const history = await historyCandidates(root, limits);
     objectCount = history.objects;
     candidates = history.blobs;
+    historicalPathAllowlist = await preparedHistoricalPathAllowlist(
+      root,
+      candidates,
+      entries,
+      allowlist.historicalPathViolations,
+      limits
+    );
     metadataScan = await scanMetadataCandidates(
       root,
       history.metadata,
@@ -885,7 +1089,13 @@ export async function checkPublicationBoundary(options = {}) {
       limits
     );
   }
-  const scan = await scanBlobCandidates(root, candidates, safeEmails, limits);
+  const scan = await scanBlobCandidates(
+    root,
+    candidates,
+    safeEmails,
+    historicalPathAllowlist,
+    limits
+  );
   return Object.freeze({
     ok: true,
     mode: treeOnly ? 'tree-only' : 'history',
@@ -896,6 +1106,8 @@ export async function checkPublicationBoundary(options = {}) {
     annotated_tags_scanned: metadataScan?.tagsScanned ?? null,
     metadata_bytes_scanned: metadataScan?.bytesScanned ?? null,
     candidate_blobs: candidates.length,
+    reviewed_email_dispositions: allowlist.reviewedEmails.length,
+    historical_path_dispositions: allowlist.historicalPathViolations.length,
     text_files_scanned: scan.textFilesScanned,
     text_bytes_scanned: scan.textBytesScanned
   });

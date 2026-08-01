@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -198,6 +199,62 @@ test('the explicit safe-email allowlist covers reviewed contributor metadata and
   const result = await checkPublicationBoundary({ root, safeEmails: [contributorEmail] });
   assert.equal(result.annotated_tags_scanned, 1);
   assert.equal(result.reachable_refs, 2);
+});
+
+test('the committed allowlist binds reviewed email and historical path dispositions exactly', async () => {
+  const root = await temporaryRepository('buddy-publication-allowlist-');
+  const repoPath = 'tests/provider-claude.test.mjs';
+  const destination = path.join(root, repoPath);
+  await mkdir(path.dirname(destination), { recursive: true });
+  await writeFile(destination, `HOME=${privateMacPath}\n`);
+  await commit(root, contributorEmail, 'reviewed historical fixture');
+  const { stdout: historicalBlobOutput } = await execFileAsync(
+    'git', ['rev-parse', `HEAD:${repoPath}`], { cwd: root, windowsHide: true }
+  );
+  const historicalBlob = historicalBlobOutput.trim();
+
+  await writeFile(destination, 'HOME=synthetic-fixture-home\n');
+  await commit(root, noreply, 'sanitize fixture path');
+  const { stdout: fixedAtOutput } = await execFileAsync(
+    'git', ['rev-parse', 'HEAD'], { cwd: root, windowsHide: true }
+  );
+  const fixedAt = fixedAtOutput.trim();
+  const pathId = createHash('sha256').update(repoPath, 'utf8').digest('hex').slice(0, 12);
+  const allowlistPath = path.join(root, 'release', 'publication-boundary-allowlist.json');
+  await mkdir(path.dirname(allowlistPath), { recursive: true });
+  await writeFile(allowlistPath, `${JSON.stringify({
+    schema_version: '1',
+    reviewed_emails: [{
+      email: contributorEmail,
+      disposition: 'Reviewed public contributor address; not a credential.'
+    }],
+    historical_path_violations: [{
+      path_id: pathId,
+      blob_oid: historicalBlob,
+      fixed_at: fixedAt,
+      code: 'ABSOLUTE_USER_PATH',
+      disposition: `Reviewed historical fixture blob; content fixed at ${fixedAt}.`
+    }]
+  }, null, 2)}\n`);
+  await commit(root, noreply, 'record reviewed publication dispositions');
+
+  const result = await checkPublicationBoundary({ root });
+  assert.equal(result.reviewed_email_dispositions, 1);
+  assert.equal(result.historical_path_dispositions, 1);
+
+  const shallow = await mkdtemp(path.join(os.tmpdir(), 'buddy-publication-allowlist-shallow-'));
+  temporaryPaths.push(shallow);
+  await execFileAsync('git', [
+    'clone', '--quiet', '--depth=1', `file://${root}`, shallow
+  ], { windowsHide: true });
+  const treeResult = await checkPublicationBoundary({ root: shallow, treeOnly: true });
+  assert.equal(treeResult.mode, 'tree-only');
+  assert.equal(treeResult.reviewed_email_dispositions, 1);
+  assert.equal(treeResult.historical_path_dispositions, 1);
+
+  await writeFile(destination, `HOME=${privateLinuxPath}\n`);
+  await commit(root, noreply, 'introduce a different current violation');
+  await rejectsWithCode(checkPublicationBoundary({ root }), 'ABSOLUTE_USER_PATH');
 });
 
 test('reserved invalid-domain fixtures remain safe without weakening real email checks', async () => {
