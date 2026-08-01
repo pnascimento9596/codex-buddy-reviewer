@@ -12,7 +12,70 @@
       "blob_oid": "8b148b68379b385dd506840a898b1cf0dcaefbe8",
       "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
       "code": "ABSOLUTE_USER_PATH",
-      "disposition": "Reviewed historical fixture blob; not a credential; content fixed at 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+      "disposition": "Reviewed historical provider fixture blob; not a credential; content fixed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "ee02e563c6b0",
+      "blob_oid": "01b50106fb91b00902cf3e6604b11baec5f48d5e",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical provider fixture blob; not a credential; content fixed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "ee02e563c6b0",
+      "blob_oid": "f993e72dc89c88aca55a4fe3924630256f9d51c8",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical provider fixture blob; not a credential; content fixed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "81cf95d5c07b",
+      "blob_oid": "011806b34e851bbf27de724732f33a4f162b259e",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "SCAN_TEMP_PATH",
+      "disposition": "Reviewed historical validation record; no credential content; local paths removed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "81cf95d5c07b",
+      "blob_oid": "b8c3ae8b31462e2405543351975a78c3e697a184",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical validation record; no credential content; local paths removed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "81cf95d5c07b",
+      "blob_oid": "a1be7931ac40a9d86e6529e0a113784f2b060ffd",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical validation record; no credential content; local paths removed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "b33563055168",
+      "blob_oid": "151cbcb57677b936451edca3ad54da2cc0704d42",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical README command example; no credential content; paths fixed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "b33563055168",
+      "blob_oid": "88fb11d7fed4adeab0ba0e2120dcf11f9b7b8c8f",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical README command example; no credential content; paths fixed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "b33563055168",
+      "blob_oid": "71a4c7908286b509b094dfce19b92cb94658a382",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical README command example; no credential content; paths fixed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
+    },
+    {
+      "path_id": "b33563055168",
+      "blob_oid": "72df5cba302b9ff750989036e6bba3c600c83b3e",
+      "fixed_at": "1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa",
+      "code": "ABSOLUTE_USER_PATH",
+      "disposition": "Reviewed historical README command example; no credential content; paths fixed by 1bd93c6b73b984f8b88339c4b0c3c7cdcc3640fa."
     }
   ]
 }

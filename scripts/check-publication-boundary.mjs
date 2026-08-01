@@ -83,7 +83,7 @@ const SENSITIVE_STATE_EXTENSIONS = new Set([
 const GITHUB_NOREPLY = /^(?:[0-9]+\+)?[A-Z0-9_.+\-[\]]+@users\.noreply\.github\.com$/i;
 const EMAIL_ADDRESS = /[A-Z0-9._%+\-[\]]+@[A-Z0-9.-]+\.[A-Z]{2,63}\b/gi;
 const COMMITTED_ALLOWLIST_PATH = 'release/publication-boundary-allowlist.json';
-const HISTORICAL_PATH_CODES = new Set(['ABSOLUTE_USER_PATH']);
+const HISTORICAL_PATH_CODES = new Set(['ABSOLUTE_USER_PATH', 'SCAN_TEMP_PATH']);
 const NON_CONTINUABLE_METADATA_FIELDS = new Set([
   'tree', 'parent', 'author', 'committer', 'encoding', 'object', 'type', 'tag', 'tagger'
 ]);
@@ -867,8 +867,9 @@ async function preparedHistoricalPathAllowlist(root, candidates, entries, dispos
       fail('ALLOWLIST_INVALID', 'A historical disposition cannot suppress a missing or current-tree violation.');
     }
     const fixed = await fixedPathBlob(root, disposition.fixed_at, repoPath, limits);
-    if (fixed.oid !== current.oid || pathTextViolation(fixed.bytes.toString('latin1')) === disposition.code) {
-      fail('ALLOWLIST_INVALID', 'A historical disposition does not bind the current clean blob to fixed_at.');
+    if (fixed.oid === disposition.blob_oid
+        || pathTextViolation(fixed.bytes.toString('latin1')) === disposition.code) {
+      fail('ALLOWLIST_INVALID', 'A historical disposition does not bind a clean replacement blob at fixed_at.');
     }
     allowed.set(
       `${disposition.code}:${disposition.path_id}:${disposition.blob_oid}`,

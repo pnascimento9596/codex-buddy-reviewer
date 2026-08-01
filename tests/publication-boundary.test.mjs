@@ -244,7 +244,7 @@ test('the committed allowlist binds reviewed email and historical path dispositi
 
   await writeFile(destination, `HOME=${privateLinuxPath}\n`);
   await commit(root, noreply, 'introduce a different current violation');
-  await rejectsWithCode(checkPublicationBoundary({ root }), 'ALLOWLIST_INVALID');
+  await rejectsWithCode(checkPublicationBoundary({ root }), 'ABSOLUTE_USER_PATH');
 });
 
 test('reserved invalid-domain fixtures remain safe without weakening real email checks', async () => {
