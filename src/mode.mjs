@@ -2,6 +2,7 @@ import path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import {
   drainEgressCapabilities,
+  REVIEW_SUPERVISION_TIMEOUT_MS,
   snapshotActiveEgressCapabilities
 } from './egress-capability.mjs';
 import { runProcess } from './process.mjs';
@@ -27,7 +28,9 @@ const LEGACY_MODE_POLICY_VERSIONS = new Set(['2', '3']);
 const VALID_ACTIONS = new Set(['enable', 'disable', 'toggle', 'status']);
 const VALID_PROVIDERS = new Set(supportedProviderIds());
 const MODE_LOCK_TIMEOUT_MS = 30_000;
-const MODE_DRAIN_TIMEOUT_MS = 570_000;
+// Includes the process layer's bounded stall-recovery extension plus the
+// existing 90 s settlement margin.
+const MODE_DRAIN_TIMEOUT_MS = REVIEW_SUPERVISION_TIMEOUT_MS;
 
 export function providerDefaultModel(provider) {
   if (!VALID_PROVIDERS.has(provider)) throw new Error('Invalid Buddy mode provider');
@@ -54,8 +57,12 @@ function validateReviewerDescriptor(configuration, label = 'Buddy mode') {
   return configuration;
 }
 
-export function validateReviewerConfiguration(configuration, options = {}) {
-  const maximumTimeout = options.allowLegacyTimeout ? 540_000 : 480_000;
+export function validateReviewerConfiguration(configuration) {
+  // Reasoning models (observed: Grok 4.5 high, GLM 5.2 high) regularly need
+  // more than the old 480 s ceiling. 1800 s trades slower failure detection
+  // for reviews that actually complete; the legacy 540 s allowance is
+  // subsumed by the higher cap.
+  const maximumTimeout = 1_800_000;
   validateReviewerDescriptor(configuration);
   if (!Number.isFinite(configuration.min_confidence)
       || configuration.min_confidence < 0 || configuration.min_confidence > 1) {
@@ -87,7 +94,7 @@ function defaultMode(root) {
     secondary_effort: null,
     min_confidence: 0.75,
     max_patch_bytes: 256 * 1024,
-    timeout_ms: 480_000,
+    timeout_ms: 1_800_000,
     continuous_review_enabled: false,
     continuous_review_consented_at: null,
     consented_at: null,
@@ -149,7 +156,7 @@ function validateMode(mode, root, options = {}) {
   if (!Number.isInteger(mode.config_revision) || mode.config_revision < 0) throw new Error('Invalid Buddy mode revision');
   if (mode.workspace_root !== root) throw new Error('Buddy mode state belongs to another workspace');
   if (typeof mode.enabled !== 'boolean' || mode.scope !== 'workspace') throw new Error('Invalid Buddy mode state');
-  validateReviewerConfiguration(mode, options);
+  validateReviewerConfiguration(mode);
   const normalized = normalizeAndValidateSecondaryReviewer(legacyPolicy ? {
     ...mode,
     policy_version: MODE_POLICY_VERSION,
@@ -205,10 +212,9 @@ export async function readMode({ root, dataDir }) {
   await ensureModeDirectory(root, dataDir);
   const stored = await readPrivateJson(modeFile(root, dataDir));
   const validated = validateMode(stored ?? defaultMode(root), root, {
-    allowLegacyTimeout: true,
     allowLegacyPolicy: true
   });
-  return validated.timeout_ms > 480_000 ? { ...validated, timeout_ms: 480_000 } : validated;
+  return validated;
 }
 
 export async function withModeLock({ root, dataDir }, callback) {

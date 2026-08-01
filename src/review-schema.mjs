@@ -39,7 +39,6 @@ export const REVIEW_RESULT_SCHEMA = {
     summary: { type: 'string', minLength: 1, maxLength: 1200 },
     findings: {
       type: 'array',
-      maxItems: 5,
       items: {
         type: 'object',
         additionalProperties: false,

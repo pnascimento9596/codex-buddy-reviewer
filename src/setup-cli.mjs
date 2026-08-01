@@ -22,7 +22,7 @@ Options:
   --no-continuous-review       Plan only: use final-only Stop review
   --confidence <0..1>          Plan only: publication threshold
   --max-patch-bytes <n>        Plan only: sanitized patch cap
-  --timeout-seconds <n>        Plan only: reviewer deadline, at most 480 seconds
+  --timeout-seconds <n>        Plan only: reviewer deadline, at most 1800 seconds
   --plan-ttl-seconds <n>       Plan only: lifetime, at most 86400 seconds
   --plan-id <id>               Apply/rollback: immutable plan identifier
   --plan-digest <sha256>       Apply/rollback: exact immutable plan digest
@@ -130,8 +130,8 @@ export function parseSetupArgs(argv) {
     throw new Error('--max-patch-bytes must be an integer >= 4096');
   }
   if (options.timeoutMs !== undefined
-      && (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 1_000 || options.timeoutMs > 480_000)) {
-    throw new Error('--timeout-seconds must be between 1 and 480');
+      && (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 1_000 || options.timeoutMs > 1_800_000)) {
+    throw new Error('--timeout-seconds must be between 1 and 1800');
   }
   if (options.ttlMs !== undefined
       && (!Number.isInteger(options.ttlMs) || options.ttlMs < 1_000 || options.ttlMs > 86_400_000)) {

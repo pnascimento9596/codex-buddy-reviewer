@@ -1076,7 +1076,7 @@ test('stale lock recovery preserves mutual exclusion for concurrent contenders',
   await assert.rejects(access(deadClaim));
 });
 
-test('legacy 540-second mode records are clamped and rewritten within the current limit', async () => {
+test('legacy 540-second mode records remain valid under the raised limit', async () => {
   const root = await makeRepository();
   const dataDir = await temporaryDirectory('codex-buddy-legacy-mode-');
   await changeMode({ root, action: 'enable', dataDir });
@@ -1084,9 +1084,9 @@ test('legacy 540-second mode records are clamped and rewritten within the curren
   const legacy = JSON.parse(await readFile(file, 'utf8'));
   legacy.timeout_ms = 540_000;
   await writeFile(file, `${JSON.stringify(legacy, null, 2)}\n`);
-  assert.equal((await readMode({ root, dataDir })).timeout_ms, 480_000);
+  assert.equal((await readMode({ root, dataDir })).timeout_ms, 540_000);
   const rewritten = await changeMode({ root, action: 'enable', dataDir });
-  assert.equal(rewritten.timeout_ms, 480_000);
+  assert.equal(rewritten.timeout_ms, 540_000);
 });
 
 test('continuation uses a unique closed JSON boundary and never re-embeds the worker message', () => {
@@ -1303,6 +1303,7 @@ test('continuous review launch failure leaves the normal final Stop review avail
     runtimeDataDir,
     review: async (evidence, options) => {
       reviewCalls += 1;
+      assert.equal(options.dataDir, modeDataDir);
       return {
         evidence,
         provider: options.provider,
@@ -1426,8 +1427,8 @@ test('Stop adopts an exact ready background receipt without duplicate provider e
       return built;
     },
     waitForPreReview: async (_directory, reviewKey, receipt, timeoutMs) => {
-      assert.equal(timeoutMs > mode.timeout_ms, true);
-      assert.equal(timeoutMs < 570_000, true);
+      assert.equal(timeoutMs > mode.timeout_ms + (8 * 30_000), true);
+      assert.equal(timeoutMs < 2_130_000, true);
       const terminal = successfulReceipt(mode, reviewKey, receiptContext);
       await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
       return { status: 'ready', terminal, ownerActive: false };

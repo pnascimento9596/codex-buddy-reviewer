@@ -405,6 +405,53 @@ test('OpenCode JSONL transport selects the final completed non-empty text event'
   assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, final);
 });
 
+test('OpenCode JSONL transport tolerates reasoning events from high-reasoning runs', () => {
+  const expected = reviewResult('Reviewed with reasoning enabled.');
+  const stdout = [
+    event('step_start', { part: { type: 'step-start' } }),
+    event('reasoning', { part: { type: 'reasoning', text: 'thinking through the diff', time: { start: 1, end: 2 } } }),
+    completedText(JSON.stringify(expected), 3),
+    event('reasoning', { part: { type: 'reasoning', text: 'post-answer reflection', time: { start: 4, end: 5 } } }),
+    event('step_finish', { part: { type: 'step-finish', reason: 'stop' } })
+  ].join('\n');
+  assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, expected);
+});
+
+test('OpenCode JSONL transport preserves a completed fenced-JSON review', () => {
+  const expected = reviewResult('Complete verdict wrapped in a JSON fence.');
+  const stdout = [
+    event('step_start', { part: { type: 'step-start' } }),
+    completedText(`\`\`\`json\n${JSON.stringify(expected)}\n\`\`\``),
+    event('step_finish', { part: { type: 'step-finish', reason: 'stop' } })
+  ].join('\n');
+  assert.deepEqual(parseOpenCodeTransport(stdout).reviewPayload, expected);
+});
+
+test('OpenCode completed review text is never replaced by a nested content envelope', () => {
+  const nested = reviewResult('Nested clean result must not replace the outer review.');
+  const outer = {
+    schema_version: '2',
+    status: 'findings',
+    summary: 'Outer result contains a finding.',
+    findings: [{ marker: 'outer finding must survive until schema validation' }],
+    comments: [],
+    content: JSON.stringify(nested)
+  };
+  assert.deepEqual(
+    parseOpenCodeTransport(completedText(JSON.stringify(outer))).reviewPayload,
+    outer
+  );
+});
+
+test('OpenCode reasoning events are never a source of completed review text', () => {
+  const stdout = [
+    event('step_start', { part: { type: 'step-start' } }),
+    event('reasoning', { part: { type: 'reasoning', text: '{"schema_version":"2"}', time: { start: 1, end: 2 } } }),
+    event('step_finish', { part: { type: 'step-finish', reason: 'stop' } })
+  ].join('\n');
+  assert.throws(() => parseOpenCodeTransport(stdout), /no completed text/);
+});
+
 test('OpenCode rejects tool, error, malformed, unknown, and incomplete transports', () => {
   const expected = reviewResult();
   for (const [name, stdout, pattern] of [
@@ -424,7 +471,7 @@ test('OpenCode rejects tool, error, malformed, unknown, and incomplete transport
       /error event/
     ],
     ['malformed JSONL', '{not-json}\n', /invalid JSON event/],
-    ['unknown event', event('reasoning', { part: { type: 'reasoning' } }), /unknown event/],
+    ['unknown event', event('tool_result', { part: { type: 'tool-result' } }), /unknown event/],
     [
       'incomplete text',
       event('text', { part: { type: 'text', text: JSON.stringify(expected), time: { start: 1 } } }),
@@ -432,7 +479,7 @@ test('OpenCode rejects tool, error, malformed, unknown, and incomplete transport
     ],
     ['empty output', '\n', /did not contain JSON events/],
     ['non-object result', completedText('[]'), /must be one object/],
-    ['markdown result', completedText('```json\n{}\n```'), /not valid review JSON/]
+    ['malformed fenced result', completedText('```json\n{not-json}\n```'), /not valid review JSON/]
   ]) {
     assert.throws(() => parseOpenCodeTransport(stdout), pattern, name);
   }

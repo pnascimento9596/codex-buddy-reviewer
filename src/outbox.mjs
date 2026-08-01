@@ -175,9 +175,7 @@ function publicReviewerResult(result, label) {
   }
   if (!REVIEW_STATUSES.has(result.status)) throw new Error(`${label}.status is unsupported`);
   assertSourceText(result.summary, 1200, `${label}.summary`);
-  if (!Array.isArray(result.findings) || result.findings.length > 5) {
-    throw new Error(`${label}.findings must be an array of at most 5 items`);
-  }
+  if (!Array.isArray(result.findings)) throw new Error(`${label}.findings must be an array`);
   const comments = result.comments ?? [];
   if (!Array.isArray(comments) || comments.length > 3) {
     throw new Error(`${label}.comments must be an array of at most 3 items`);

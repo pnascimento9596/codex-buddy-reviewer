@@ -47,6 +47,27 @@ test('capture budget snapshots contain only bounded numeric counters', () => {
   ].sort());
 });
 
+test('capture progress re-arm is limited to eight 30-second responsive graces', () => {
+  let monotonicNow = 0;
+  const budget = new CaptureBudget({
+    deadlineMs: 60_000,
+    startedAt: 0,
+    now: () => monotonicNow,
+    maxPaths: 20
+  });
+  budget.chargePaths(1);
+  monotonicNow = 60_001;
+  for (let rearm = 0; rearm < 8; rearm += 1) {
+    assert.doesNotThrow(() => budget.remainingMs());
+    budget.chargePaths(1);
+    monotonicNow += 30_001;
+  }
+  assert.throws(() => budget.remainingMs(), (error) => {
+    assert.equal(captureFailureCode(error), 'capture_deadline_exceeded');
+    return true;
+  });
+});
+
 test('stable turn capture charges both passes and removes newly-created private state on failure', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'buddy-budget-repo-'));
   const privateRoot = await mkdtemp(path.join(os.tmpdir(), 'buddy-budget-state-'));
@@ -89,6 +110,68 @@ test('manual stable evidence capture shares the same aggregate two-pass byte bud
       collectEvidence({ cwd: root, budgetOptions: { maxFileBytes: 25 } }),
       (error) => captureFailureCode(error) === 'capture_file_bytes_exceeded'
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('manual capture uses the shorter existing reviewer timeout as its deadline', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'buddy-budget-review-timeout-'));
+  try {
+    await runProcess('git', ['init', '-q', '-b', 'main'], { cwd: root });
+    await runProcess('git', ['config', 'user.name', 'Buddy Test'], { cwd: root });
+    await runProcess('git', ['config', 'user.email', 'buddy@example.invalid'], { cwd: root });
+    await writeFile(path.join(root, 'base.js'), 'export const base = true;\n');
+    await runProcess('git', ['add', 'base.js'], { cwd: root });
+    await runProcess('git', ['commit', '-q', '-m', 'base'], { cwd: root });
+    await assert.rejects(
+      collectEvidence({ cwd: root, timeoutMs: 5, budgetOptions: { startedAt: -100 } }),
+      (error) => captureFailureCode(error) === 'capture_deadline_exceeded'
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('large branch capture completes through bounded progress beyond its initial deadline', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'buddy-budget-large-branch-'));
+  const changedPaths = Array.from({ length: 51 }, (_, index) => `module-${String(index).padStart(2, '0')}.js`);
+  try {
+    await runProcess('git', ['init', '-q', '-b', 'main'], { cwd: root });
+    await runProcess('git', ['config', 'user.name', 'Buddy Test'], { cwd: root });
+    await runProcess('git', ['config', 'user.email', 'buddy@example.invalid'], { cwd: root });
+    await Promise.all(changedPaths.map((repoPath, index) => writeFile(
+      path.join(root, repoPath),
+      `export const value${index} = ${index};\n${'// baseline evidence line\n'.repeat(35)}`
+    )));
+    await runProcess('git', ['add', '--', ...changedPaths], { cwd: root });
+    await runProcess('git', ['commit', '-q', '-m', 'base'], { cwd: root });
+    const base = (await runProcess('git', ['rev-parse', 'HEAD'], { cwd: root })).stdout.trim();
+    await Promise.all(changedPaths.map((repoPath, index) => writeFile(
+      path.join(root, repoPath),
+      `export const value${index} = ${index + 1};\n${'// changed evidence line\n'.repeat(35)}`
+    )));
+    await runProcess('git', ['add', '--', ...changedPaths], { cwd: root });
+    await runProcess('git', ['commit', '-q', '-m', 'changed'], { cwd: root });
+
+    let monotonicNow = 0;
+    const evidence = await collectEvidence({
+      cwd: root,
+      scope: 'branch',
+      base,
+      budgetOptions: {
+        deadlineMs: 180_000,
+        startedAt: 0,
+        now: () => {
+          monotonicNow += 400;
+          return monotonicNow;
+        }
+      }
+    });
+
+    assert.equal(evidence.changed_paths.length, changedPaths.length);
+    assert.equal(evidence.incomplete_paths.length, 0);
+    assert.equal(monotonicNow > 180_000, true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

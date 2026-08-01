@@ -81,14 +81,23 @@ function parseJsonString(value) {
   }
 }
 
+export function parseReviewerText(stdout) {
+  return parseJsonString(stdout);
+}
+
 export function parseReviewerOutput(stdout) {
-  const outer = parseJsonString(stdout);
+  const outer = parseReviewerText(stdout);
+  let result = outer;
   if (outer && typeof outer === 'object') {
-    if (outer.structured_output && typeof outer.structured_output === 'object') return outer.structured_output;
-    if (typeof outer.result === 'string') return parseJsonString(outer.result);
-    if (typeof outer.content === 'string') return parseJsonString(outer.content);
+    if (outer.structured_output && typeof outer.structured_output === 'object') {
+      result = outer.structured_output;
+    } else if (typeof outer.result === 'string') {
+      result = parseJsonString(outer.result);
+    } else if (typeof outer.content === 'string') {
+      result = parseJsonString(outer.content);
+    }
   }
-  return outer;
+  return result;
 }
 
 function assertString(value, field, maxLength) {
@@ -148,7 +157,7 @@ export function validateReviewResult(raw, evidence, options = {}) {
   if (![REVIEW_SCHEMA_VERSION, '1'].includes(raw.schema_version)) throw new Error('unsupported review schema version');
   if (!VALID_STATUS.has(raw.status)) throw new Error(`invalid review status: ${raw.status}`);
   assertString(raw.summary, 'summary', 1200);
-  if (!Array.isArray(raw.findings) || raw.findings.length > 5) throw new Error('findings must be an array with at most five items');
+  if (!Array.isArray(raw.findings)) throw new Error('findings must be an array');
   if (raw.status !== 'findings' && raw.findings.length !== 0) throw new Error(`${raw.status} must not include findings`);
   if (raw.status === 'findings' && raw.findings.length === 0) throw new Error('findings status requires at least one finding');
 

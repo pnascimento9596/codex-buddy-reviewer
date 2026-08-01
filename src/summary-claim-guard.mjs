@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   drainEgressCapabilities,
+  REVIEW_SUPERVISION_TIMEOUT_MS,
   snapshotActiveEgressCapabilities
 } from './egress-capability.mjs';
 import { escapeTerminalControls, hasUnsafeTerminalControls, pathPolicy } from './policy.mjs';
@@ -73,7 +74,7 @@ const NOTE_KEYS = [
   'advice'
 ];
 const CONSENT_LOCK_TIMEOUT_MS = 30_000;
-const CONSENT_DRAIN_TIMEOUT_MS = 570_000;
+const CONSENT_DRAIN_TIMEOUT_MS = REVIEW_SUPERVISION_TIMEOUT_MS;
 
 function assertExactKeys(value, expected, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {

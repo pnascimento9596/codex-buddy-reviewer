@@ -8,6 +8,19 @@ const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 const SUPERVISOR_FILE = fileURLToPath(new URL('./process-supervisor.mjs', import.meta.url));
 const SUPERVISOR_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 const PROCESS_GROUP_CLEANUP_MS = 2_000;
+// A deadline timer that fires this much later than scheduled proves the parent
+// event loop was suspended (host memory stall or system sleep). The child was
+// frozen alongside it, so the elapsed wall clock is not child runtime.
+const DEADLINE_STALL_SLACK_MS = 2_000;
+// After a stall the re-armed budget is a short completion grace, never another
+// full deadline: a child that thawed with us finishes in seconds, while a
+// genuinely hung child must still die promptly. The limit bounds the total
+// extension at 8 × 30 s of responsive time regardless of the configured
+// deadline, so a stuck provider cannot outlive its lane by hours.
+export const DEADLINE_STALL_REARM_GRACE_MS = 30_000;
+export const DEADLINE_STALL_REARM_LIMIT = 8;
+export const DEADLINE_STALL_MAX_EXTENSION_MS =
+  DEADLINE_STALL_REARM_GRACE_MS * DEADLINE_STALL_REARM_LIMIT;
 
 function assertAbortSignal(signal) {
   if (signal === undefined) return;
@@ -148,7 +161,12 @@ function runResolvedProcess(command, args, options = {}) {
     encoding = 'utf8',
     protectFromParentDeath = process.platform !== 'win32',
     signal,
-    processGroupCleanupImpl = forceKillAndWaitForProcessGroup
+    processGroupCleanupImpl = forceKillAndWaitForProcessGroup,
+    spawnImpl = spawn,
+    terminateImpl = terminate,
+    deadlineNowImpl = Date.now,
+    deadlineSetTimeoutImpl = setTimeout,
+    deadlineClearTimeoutImpl = clearTimeout
   } = options;
 
   assertAbortSignal(signal);
@@ -174,7 +192,7 @@ function runResolvedProcess(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const supervised = protectFromParentDeath && process.platform !== 'win32';
     const supervisorToken = supervised ? randomBytes(32).toString('hex') : null;
-    const child = spawn(supervised ? process.execPath : command, supervised ? [SUPERVISOR_FILE] : args, {
+    const child = spawnImpl(supervised ? process.execPath : command, supervised ? [SUPERVISOR_FILE] : args, {
       cwd,
       env,
       detached: process.platform !== 'win32',
@@ -188,6 +206,7 @@ function runResolvedProcess(command, args, options = {}) {
     let stderrBytes = 0;
     let settled = false;
     let timedOut = false;
+    let deadlineTerminationIssued = false;
     let timeout;
     let escalationTimer;
     let escalationFired = false;
@@ -226,7 +245,11 @@ function runResolvedProcess(command, args, options = {}) {
             forceKillOnce();
             return;
           }
-          supervisorResult = { code: message.code, signal: message.signal };
+          supervisorResult = {
+            code: message.code,
+            signal: message.signal,
+            completedBeforeDeadlineTermination: !deadlineTerminationIssued
+          };
           // The authenticated provider leader has exited, but this detached
           // supervisor is still the live process-group leader. Kill the group
           // now, before waiting for inherited stdout/stderr descriptors to
@@ -244,12 +267,16 @@ function runResolvedProcess(command, args, options = {}) {
       });
     }
 
-    const stopChild = () => {
+    const stopChild = ({ deadline = false } = {}) => {
       // Once the parent has killed a supervised group, later output, signal,
       // or deadline bookkeeping must not target the same numeric group id.
       if (supervised && groupKillIssued) return;
       if (!escalationTimer) {
-        escalationTimer = terminate(child, () => {
+        // This marker owns the termination classification. Set it in the same
+        // synchronous turn, before any deadline signal can make the provider's
+        // exit race its supervisor's signal handler and authenticated result.
+        if (deadline) deadlineTerminationIssued = true;
+        escalationTimer = terminateImpl(child, () => {
           escalationFired = true;
           groupKillIssued = true;
         });
@@ -271,7 +298,7 @@ function runResolvedProcess(command, args, options = {}) {
     const finish = (error, result) => {
       if (settled) return;
       settled = true;
-      if (timeout) clearTimeout(timeout);
+      if (timeout) deadlineClearTimeoutImpl(timeout);
       if (escalationTimer && !escalationFired) {
         clearTimeout(escalationTimer);
         if (!supervised && (timedOut || forcedError)) {
@@ -325,7 +352,7 @@ function runResolvedProcess(command, args, options = {}) {
 
     child.on('error', (error) => finish(abortFailure ?? error));
     child.on('exit', () => {
-      if (!supervised || supervisorResult || forcedError || timedOut) return;
+      if (!supervised || deadlineTerminationIssued || supervisorResult || forcedError || timedOut) return;
       // `close` waits for every inherited copy of the supervisor's output
       // descriptors. If the supervisor itself dies before authenticating the
       // provider leader result, kill its group immediately so an ordinary
@@ -335,7 +362,7 @@ function runResolvedProcess(command, args, options = {}) {
     });
     child.on('close', async (supervisorCode, supervisorSignal) => {
       if (timeout) {
-        clearTimeout(timeout);
+        deadlineClearTimeoutImpl(timeout);
         timeout = null;
       }
       if (supervised && !supervisorResult && !forcedError && !timedOut) {
@@ -375,10 +402,19 @@ function runResolvedProcess(command, args, options = {}) {
       const stderrBuffer = Buffer.concat(stderr);
       const code = supervised && supervisorResult ? supervisorResult.code : supervisorCode;
       const signal = supervised && supervisorResult ? supervisorResult.signal : supervisorSignal;
+      // A result observed before a deadline-owned kill is authoritative over a
+      // stale timer. A result delivered after that marker can have been caused
+      // by the group signal itself, even when a shell reports code 0, so it must
+      // not reclassify the kill. Direct spawn has no authenticated completion
+      // message, so no post-marker exit shape can prove it won before the kill.
+      const completedBeforeDeadlineTermination = supervised
+        ? Boolean(supervisorResult?.completedBeforeDeadlineTermination)
+        : false;
+      const deadlineTimedOut = deadlineTerminationIssued && !completedBeforeDeadlineTermination;
       const result = {
         code,
         signal,
-        timedOut,
+        timedOut: deadlineTimedOut,
         stdout: encoding === null ? stdoutBuffer : stdoutBuffer.toString(encoding),
         stderr: encoding === null ? stderrBuffer : stderrBuffer.toString(encoding)
       };
@@ -386,7 +422,7 @@ function runResolvedProcess(command, args, options = {}) {
         finish(cleanupFailure);
       } else if (forcedError) {
         finish(forcedError);
-      } else if (timedOut) {
+      } else if (deadlineTimedOut) {
         finish(new Error(`${command} exceeded its ${timeoutMs} ms deadline`));
       } else if (!acceptedExitCodes.includes(code)) {
         const stderrText = Buffer.isBuffer(result.stderr) ? result.stderr.toString('utf8') : result.stderr;
@@ -398,19 +434,36 @@ function runResolvedProcess(command, args, options = {}) {
       }
     });
 
-    timeout = setTimeout(() => {
-      timedOut = true;
-      if (supervised && supervisorResult) {
-        // Group cleanup has already been issued. If a descriptor outside that
-        // group still prevents `close`, cap the drain at the command deadline
-        // without sending another signal to a potentially recycled group id.
-        child.stdout.destroy();
-        child.stderr.destroy();
-        return;
-      }
-      stopChild();
-    }, timeoutMs);
-    timeout.unref();
+    let deadlineRearms = 0;
+    const armDeadline = (delayMs) => {
+      const scheduledFor = deadlineNowImpl() + delayMs;
+      timeout = deadlineSetTimeoutImpl(() => {
+        const lateness = deadlineNowImpl() - scheduledFor;
+        if (lateness > DEADLINE_STALL_SLACK_MS
+            && !supervisorResult && !forcedError
+            && deadlineRearms < DEADLINE_STALL_REARM_LIMIT) {
+          // The timer fired far past its schedule: the parent (and the child's
+          // whole group with it) was suspended, not slow. Grant a bounded
+          // completion grace instead of killing work that never ran. Genuine
+          // hangs still die once the grace expires without another stall.
+          deadlineRearms += 1;
+          armDeadline(Math.min(timeoutMs, DEADLINE_STALL_REARM_GRACE_MS));
+          return;
+        }
+        timedOut = true;
+        if (supervised && supervisorResult) {
+          // Group cleanup has already been issued. If a descriptor outside that
+          // group still prevents `close`, cap the drain at the command deadline
+          // without sending another signal to a potentially recycled group id.
+          child.stdout.destroy();
+          child.stderr.destroy();
+          return;
+        }
+        stopChild({ deadline: true });
+      }, delayMs);
+      timeout.unref();
+    };
+    armDeadline(timeoutMs);
 
     if (input !== undefined) child.stdin.end(input);
     else child.stdin.end();

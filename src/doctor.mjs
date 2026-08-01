@@ -402,7 +402,7 @@ function validateEgressRecordReadOnly(record, expectedWorkspaceKey) {
       || !EGRESS_PROVIDERS.has(record.provider)
       || !assessProviderModelIdentifier(record.model).allowed
       || !EGRESS_EFFORTS.has(record.effort)
-      || !Number.isInteger(record.timeout_ms) || record.timeout_ms < 1_000 || record.timeout_ms > 480_000
+      || !Number.isInteger(record.timeout_ms) || record.timeout_ms < 1_000 || record.timeout_ms > 1_800_000
       || !SHA256_PATTERN.test(record.configuration_sha256)
       || !SHA256_PATTERN.test(record.approval_sha256)
       || record.content_policy_version !== '1'

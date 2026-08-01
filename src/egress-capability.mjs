@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { PROVIDER_CONTENT_POLICY_VERSION } from './approved-provider-request.mjs';
 import { inspectApprovedProviderReviewRequest } from './provider-registry.mjs';
+import { DEADLINE_STALL_MAX_EXTENSION_MS } from './process.mjs';
 import { assessProviderModelIdentifier } from './secret-scan.mjs';
 
 import {
@@ -24,8 +25,10 @@ const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const PROVIDERS = new Set(['claude', 'grok', 'ollama', 'opencode']);
 const STATES = new Set(['issued', 'consumed']);
 const REGISTRY_LOCK_TIMEOUT_MS = 30_000;
-const PROVIDER_LANE_TIMEOUT_MS = 570_000;
-const DEFAULT_DRAIN_TIMEOUT_MS = 570_000;
+const MAX_REVIEW_TIMEOUT_MS = 1_800_000;
+const REVIEW_SUPERVISION_MARGIN_MS = 90_000;
+export const REVIEW_SUPERVISION_TIMEOUT_MS =
+  MAX_REVIEW_TIMEOUT_MS + DEADLINE_STALL_MAX_EXTENSION_MS + REVIEW_SUPERVISION_MARGIN_MS;
 const CAPABILITY_SPEND_WINDOW_MS = 30_000;
 const CAPABILITY_DEADLINE_GRACE_MS = 10_000;
 const MAX_ACTIVE_CAPABILITIES = 1_024;
@@ -135,7 +138,7 @@ function validateRecord(record, expectedWorkspaceKey) {
       || !PROVIDERS.has(record.provider)
       || !assessProviderModelIdentifier(record.model).allowed
       || !EFFORTS.has(record.effort)
-      || !Number.isInteger(record.timeout_ms) || record.timeout_ms < 1_000 || record.timeout_ms > 480_000
+      || !Number.isInteger(record.timeout_ms) || record.timeout_ms < 1_000 || record.timeout_ms > 1_800_000
       || !TOKEN_HASH_PATTERN.test(record.configuration_sha256)
       || !TOKEN_HASH_PATTERN.test(record.approval_sha256)
       || record.content_policy_version !== PROVIDER_CONTENT_POLICY_VERSION
@@ -333,7 +336,7 @@ export function egressConfigurationHash(configuration) {
       || !assessProviderModelIdentifier(configuration.model).allowed
       || !EFFORTS.has(configuration.effort)
       || !Number.isSafeInteger(configuration.timeout_ms)
-      || configuration.timeout_ms < 1_000 || configuration.timeout_ms > 480_000
+      || configuration.timeout_ms < 1_000 || configuration.timeout_ms > 1_800_000
       || !Number.isFinite(configuration.min_confidence)
       || configuration.min_confidence < 0 || configuration.min_confidence > 1
       || !Number.isSafeInteger(configuration.max_patch_bytes)
@@ -350,8 +353,8 @@ export async function withProviderLane(options, callback) {
   const paths = pathsFor(root, dataDir);
   await ensurePrivateStatePath(paths.dataRoot, paths.directory);
   return withFileLock(paths.providerLane, callback, {
-    timeoutMs: PROVIDER_LANE_TIMEOUT_MS,
-    staleMs: PROVIDER_LANE_TIMEOUT_MS
+    timeoutMs: REVIEW_SUPERVISION_TIMEOUT_MS,
+    staleMs: REVIEW_SUPERVISION_TIMEOUT_MS
   });
 }
 
@@ -677,7 +680,7 @@ export async function drainEgressCapabilities(options) {
     root,
     dataDir,
     capabilityIds,
-    timeoutMs = DEFAULT_DRAIN_TIMEOUT_MS
+    timeoutMs = REVIEW_SUPERVISION_TIMEOUT_MS
   } = options;
   if (!Array.isArray(capabilityIds) || capabilityIds.some((id) => !CAPABILITY_ID_PATTERN.test(id))) {
     fail('drain requires valid capability ids');
@@ -685,8 +688,8 @@ export async function drainEgressCapabilities(options) {
   if (new Set(capabilityIds).size !== capabilityIds.length) {
     fail('drain capability ids must be unique');
   }
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > DEFAULT_DRAIN_TIMEOUT_MS) {
-    fail(`drain timeout must be an integer from 0 through ${DEFAULT_DRAIN_TIMEOUT_MS}`);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > REVIEW_SUPERVISION_TIMEOUT_MS) {
+    fail(`drain timeout must be an integer from 0 through ${REVIEW_SUPERVISION_TIMEOUT_MS}`);
   }
   if (capabilityIds.length === 0) return Object.freeze({ drained: 0 });
   const wanted = new Set(capabilityIds);

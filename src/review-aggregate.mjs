@@ -119,9 +119,7 @@ function validateResult(result, label) {
   }
   if (!STATUS.has(result.status)) throw new TypeError(`${label}.status is invalid`);
   assertText(result.summary, `${label}.summary`, 1200);
-  if (!Array.isArray(result.findings) || result.findings.length > AGGREGATE_FINDING_LIMIT) {
-    throw new TypeError(`${label}.findings must contain at most ${AGGREGATE_FINDING_LIMIT} items`);
-  }
+  if (!Array.isArray(result.findings)) throw new TypeError(`${label}.findings must be an array`);
   if (result.status === 'findings' && result.findings.length === 0) {
     throw new TypeError(`${label} with findings status requires a finding`);
   }

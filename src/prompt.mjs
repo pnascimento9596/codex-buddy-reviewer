@@ -73,10 +73,9 @@ Your job:
 - Cite line_side "old" only when the path evidence has file_state "deleted" and its hunk range has side "old". Cite line_side "new" for every surviving or newly created file.
 - A range with kind "deletion" is the nearest new-file anchor for a deletion-only hunk. A range with kind "metadata" is a synthetic line-1 anchor for a mode-only or empty-file metadata change. Cite that exact anchor even when the current file has no line 1.
 - Explain the real runtime or user impact and give an actionable recommendation.
-- Prefer a small number of high-confidence findings. A clean no_findings result is a success.
+- Return every evidence-backed finding that meets the review contract. Do not omit a finding because of count. A clean no_findings result is a success.
 - Use abstain when truncation, excluded paths, missing context, or unstable scope prevents a defensible conclusion.
 - Do not report style, naming, generic test suggestions, or speculative improvements unless they expose a concrete defect.
-- Return at most five findings.
 - You may also return at most three grounded optimization, reliability, maintainability, or testing comments. Each comment must identify a concrete changed line, explain a specific cost or engineering consequence, and recommend an actionable improvement. Omit generic advice.
 
 Output only one valid JSON object. Do not use Markdown fences and do not place literal control characters or unescaped newlines inside JSON strings.
@@ -85,7 +84,7 @@ ${outputContract}
 - schema_version: the string "2" exactly
 - status: exactly one of "findings", "no_findings", or "abstain"
 - summary: a non-empty string
-- findings: an array with at most five items
+- findings: an array containing every evidence-backed finding
 - comments: optional array with at most three items
 
 When status is "no_findings" or "abstain", findings must be an empty array. When status is "findings", every item must contain exactly these fields: severity, confidence, title, body, impact, path, line_side, line_start, line_end, evidence, and recommendation. severity is blocker, high, medium, or low. confidence is a number from 0 to 1. line_side is new or old. line_start and line_end are positive integers. Do not add any other fields.
