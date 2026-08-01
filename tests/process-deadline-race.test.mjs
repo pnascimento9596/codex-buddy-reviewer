@@ -23,11 +23,12 @@ class DeterministicSupervisor extends EventEmitter {
   }
 }
 
-function forcedDeadlineRun(command, args, outcome) {
+function forcedDeadlineRun(command, args, outcome, { protectFromParentDeath = true } = {}) {
   let deadlineCallback;
   let supervisor;
   const running = runProcess(command, args, {
     timeoutMs: 250,
+    protectFromParentDeath,
     spawnImpl: () => {
       supervisor = new DeterministicSupervisor(outcome);
       return supervisor;
@@ -41,14 +42,16 @@ function forcedDeadlineRun(command, args, outcome) {
     terminateImpl: (child) => {
       const { code, signal, stdout } = child.outcome;
       if (stdout) child.stdout.write(stdout);
-      child.emit('message', {
-        schema_version: '1',
-        type: 'result',
-        token: child.startMessage.token,
-        code,
-        signal,
-        leader_exited: true
-      });
+      if (child.startMessage) {
+        child.emit('message', {
+          schema_version: '1',
+          type: 'result',
+          token: child.startMessage.token,
+          code,
+          signal,
+          leader_exited: true
+        });
+      }
       queueMicrotask(() => {
         child.stdout.end();
         child.stderr.end();
@@ -70,9 +73,9 @@ test('deadline termination remains a timeout when a direct subprocess result rac
 }, async () => {
   await assert.rejects(
     forcedDeadlineRun(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      code: null,
-      signal: 'SIGTERM'
-    }),
+      code: 0,
+      signal: null
+    }, { protectFromParentDeath: false }),
     /exceeded its 250 ms deadline/
   );
 });

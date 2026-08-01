@@ -404,10 +404,10 @@ function runResolvedProcess(command, args, options = {}) {
       // stale timer. A result delivered after that marker can have been caused
       // by the group signal itself, even when a shell reports code 0, so it must
       // not reclassify the kill. Direct spawn has no authenticated completion
-      // message; a null signal with an accepted code proves its own exit won.
+      // message, so no post-marker exit shape can prove it won before the kill.
       const completedBeforeDeadlineTermination = supervised
         ? Boolean(supervisorResult?.completedBeforeDeadlineTermination)
-        : signal === null && acceptedExitCodes.includes(code);
+        : false;
       const deadlineTimedOut = deadlineTerminationIssued && !completedBeforeDeadlineTermination;
       const result = {
         code,

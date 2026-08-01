@@ -1357,13 +1357,12 @@ test('a genuinely hung child still dies after a stall re-arm grace', {
   assert.ok(Date.now() - started < 15_000);
 });
 
-test('an unsupervised child that exited before the deadline kill is a natural completion', {
+test('an unsupervised child cannot override an authoritative deadline kill marker', {
   skip: process.platform === 'win32'
 }, async () => {
-  // Direct-spawn parallel of the supervised photo-finish: the child completes
-  // and dies DURING the stall, the thawed timer phase runs before the buffered
-  // close is dispatched (as in a real freeze), and ESRCH on the kill proves
-  // the child was already gone — its work must not be discarded.
+  // A direct child has no authenticated completion message. Even when its
+  // buffered close later reports code 0, it cannot prove that completion won
+  // before the deadline-owned kill marker was set.
   const promise = runProcess(
     process.execPath,
     ['-e', 'setTimeout(() => { process.stdout.write("direct-done"); }, 200)'],
@@ -1375,10 +1374,7 @@ test('an unsupervised child that exited before the deadline kill is a natural co
     Atomics.wait(gate, 0, 0, 1_500);
     resolve();
   }));
-  const result = await promise;
-  assert.equal(result.code, 0);
-  assert.equal(result.stdout, 'direct-done');
-  assert.equal(result.timedOut, false);
+  await assert.rejects(promise, /exceeded its 100 ms deadline/);
 });
 
 test('subprocess timeout escalation kills signal-resistant process-group descendants', { skip: process.platform === 'win32' }, async () => {
