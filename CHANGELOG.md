@@ -2,7 +2,20 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
-## 0.5.0-rc.2 (Unreleased)
+## Unreleased
+
+### Documentation
+
+- PR #15 separated current validation claims from frozen publication evidence and reconciled the reviewed publication dispositions.
+
+### Security
+
+- PR #17 prevents repository clean filters from executing during evidence capture and uses filter-free Git objects for private turn snapshots.
+- PR #19 reviews provable staged filtered changes from the stage-0 index object while explicitly omitting unproven filtered worktree representations.
+
+## 0.5.0-rc.2 - 2026-08-01
+
+Released from source commit `6975a04a697bfe65602f34e790501058481b992a` as the annotated artifact-only tag `v0.5.0-rc.2`.
 
 ### Fixed
 
@@ -16,7 +29,7 @@ All notable changes to Codex Buddy Reviewer are documented here. Release candida
 
 ### Release status
 
-- This remains an RC. Local public-builder output contains the five public pets Byte, Mochi, Orbit, Bella, and Lupo under their checked-in Apache-2.0 provenance grants. This source entry is not evidence that an rc.2 artifact was published. Artifact-bound host evidence remains a stable `v0.5.0` gate and is not required for this RC.
+- This remains an RC. The published public artifact contains the five public pets Byte, Mochi, Orbit, Bella, and Lupo under their checked-in Apache-2.0 provenance grants. Artifact-bound host evidence remains a stable `v0.5.0` gate and was not required for this RC.
 
 ## 0.5.0-rc.1
 

@@ -37,7 +37,7 @@ Run the first-party `/pet` command once to keep the selected companion open. `/b
 
 ## Status
 
-Source candidate: `0.5.0-rc.2`. Published release: `v0.5.0-rc.1`.
+Published release: `v0.5.0-rc.2` (2026-08-01), built from source commit `6975a04a697bfe65602f34e790501058481b992a`.
 
 This is a release candidate, not a stable release. Provider egress remains experimental until the frozen tree passes the complete security, cross-platform, independent-review, packaging, and Codex host gates below. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
 
@@ -162,21 +162,21 @@ Prerequisites:
 - At least one supported reviewer CLI installed and authenticated through its own normal login flow
 - Windows v0.5 RC supports nonprovider commands and offline validation, but live reviewer contact is disabled pending current-user-only DACL implementation and real Windows evidence
 
-Install the published `v0.5.0-rc.1` release through Codex's Git marketplace support:
+Install the published `v0.5.0-rc.2` release through Codex's Git marketplace support:
 
 ```bash
-codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.1
+codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.2
 codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
 codex plugin list
 ```
 
-The `0.5.0-rc.2` source tree is an unpublished candidate. Use the published `v0.5.0-rc.1` tag for marketplace installs until an rc.2 artifact is separately verified and published.
+The published `v0.5.0-rc.2` artifact predates the clean-filter evidence fix in PR #17 and the filtered-path scope fix in PR #19. Users who need those protections should wait for the next release rather than treating the newer `main` branch as an installable release artifact.
 
 This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0-rc.2`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
 
 The public default branch remains the contributor-friendly source repository. A release version tag is intended to resolve to a separate parentless distribution commit whose tree contains only the byte-verified positive artifact, including its `release-manifest.json`. It does not point at the full development checkout or inherit its objects and history. Install a pinned release tag, never a moving source branch.
 
-The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0-rc.2` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only release candidate. The stable `v0.5.0` tag remains unavailable until the security, platform, and five-pet Codex host gates close. During private development, use the existing `personal` marketplace flow.
+The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0-rc.2` tag was created after the protected release workflow rebuilt, verified, attested, and published the artifact-only release candidate. The stable `v0.5.0` tag remains unavailable until the security, platform, and five-pet Codex host gates close. During private development, use the existing `personal` marketplace flow.
 
 ```mermaid
 flowchart TD
