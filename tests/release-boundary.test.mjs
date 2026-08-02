@@ -54,11 +54,12 @@ test('release dispatch requires the owner account before reusable validation', a
 
   const authorizeJob = workflow.slice(authorizeStart, validateStart);
   const validateJob = workflow.slice(validateStart, buildStart);
-  assert.match(authorizeJob, /^    environment: public-release$/mu);
+  assert.doesNotMatch(authorizeJob, /^    environment:/mu);
   assert.match(authorizeJob, /^      DISPATCH_ACTOR: \$\{\{ github\.actor \}\}$/mu);
   assert.match(authorizeJob, /^      EXPECTED_DISPATCH_ACTOR: pnascimento9596$/mu);
   assert.match(authorizeJob, /if \[\[ "\$DISPATCH_ACTOR" != "\$EXPECTED_DISPATCH_ACTOR" \]\]; then/u);
   assert.match(validateJob, /^    needs: authorize$/mu);
+  assert.equal((workflow.match(/^    environment: public-release$/gmu) ?? []).length, 3);
 });
 
 test.after(async () => {
