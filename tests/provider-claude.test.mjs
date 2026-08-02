@@ -140,6 +140,53 @@ test('Claude invokes the verified isolated CLI contract with schema-bound stdin'
   assert.equal(response.run.cost_usd_ticks, null);
 });
 
+test('Claude mocked reviews start fresh without session or prior-response state', async () => {
+  const prompts = ['first bounded packet', 'second bounded packet'];
+  const summaries = ['FIRST_RESPONSE_STATE', 'SECOND_RESPONSE_STATE'];
+  const calls = [];
+  const runProcessImpl = async (command, args, options) => {
+    const index = calls.length;
+    calls.push({ command, args: [...args], options: { ...options, env: { ...options.env } } });
+    return {
+      stdout: JSON.stringify(claudeEnvelope({
+        structured_output: { ...reviewResult(), summary: summaries[index] }
+      })),
+      stderr: ''
+    };
+  };
+
+  const responses = [];
+  for (const prompt of prompts) {
+    responses.push(await reviewWithClaude({
+      root: path.join(os.tmpdir(), 'codex-buddy-claude-stateless-repository'),
+      prompt,
+      model: 'claude-opus-4-8',
+      effort: 'high',
+      timeoutMs: 5_000,
+      claudeBin: '/fixture/bin/claude',
+      responseSchema: REVIEW_RESULT_SCHEMA,
+      ambientEnvironment: { PATH: '/usr/bin:/bin', HOME: path.join(os.tmpdir(), 'fixture-home') },
+      platform: 'linux',
+      runProcessImpl
+    }));
+  }
+
+  assert.deepEqual(responses.map((response) => response.reviewPayload.summary), summaries);
+  assert.equal(calls.length, 2);
+  assert.notEqual(calls[0].options.cwd, calls[1].options.cwd);
+  for (const [index, call] of calls.entries()) {
+    assert.equal(call.options.input, prompts[index]);
+    assert.equal(call.args.includes('--no-session-persistence'), true);
+    assert.equal(call.args.some((arg) => /^--(?:resume|continue|session(?:-id)?|conversation)/u.test(arg)), false);
+    assert.equal(Object.keys(call.options.env).some((key) => /session|resume|conversation/iu.test(key)), false);
+    await assert.rejects(access(call.options.cwd));
+  }
+  assert.doesNotMatch(
+    JSON.stringify({ args: calls[1].args, input: calls[1].options.input, env: calls[1].options.env }),
+    /FIRST_RESPONSE_STATE/u
+  );
+});
+
 test('Claude environment is allowlisted on Windows and does not forward unrelated credentials', () => {
   const result = buildClaudeProviderEnvironment({
     Path: 'C:\\Windows\\System32',

@@ -38,6 +38,18 @@ import {
 
 const temporaryPaths = [];
 const CONCURRENT_STATE_VISIBILITY_TIMEOUT_MS = 10_000;
+const CLEAN_FILTER_MARKER_ENV = 'CODEX_BUDDY_CLEAN_FILTER_MARKER';
+const CLEAN_FILTER_COMMAND = "node -e \"const fs=require('node:fs');fs.appendFileSync(process.env.CODEX_BUDDY_CLEAN_FILTER_MARKER,'clean\\\\n');let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>process.stdout.write(s.replaceAll('RAW_WORKTREE','FILTER_OUTPUT')))\"";
+const EXCLUSIVE_AUTHORSHIP_PATTERNS = Object.freeze([
+  /\b(?:I|we|you|Buddy|(?:the\s+)?worker(?: agent)?|(?:the\s+)?coding agent|(?:the\s+)?agent|(?:the\s+)?user|(?:the\s+)?reviewer)\s+(?:made|wrote|authored|implemented|created|added|changed|modified|updated|fixed|removed|deleted|renamed|moved|refactored|committed)\b/iu,
+  /\b(?:my|our|your|Buddy['’]s|(?:the\s+)?worker(?: agent)?['’]s|(?:the\s+)?coding agent['’]s|(?:the\s+)?agent['’]s|(?:the\s+)?user['’]s|(?:the\s+)?reviewer['’]s)\s+(?:changes?|code|implementation|work|patch|diff|commits?|files?|bytes?)\b/iu,
+  /\b(?:changes?|code|implementation|work|patch|diff|commits?|files?|bytes?)\s+(?:that\s+)?(?:I|we|you|Buddy|(?:the\s+)?worker(?: agent)?|(?:the\s+)?coding agent|(?:the\s+)?agent|(?:the\s+)?user|(?:the\s+)?reviewer)\s+(?:made|wrote|authored|implemented|created|added|changed|modified|updated|fixed|removed|deleted|renamed|moved|refactored|committed)\b/iu,
+  /\b(?:authored|written|implemented|created|changed|modified|fixed|added|removed|deleted|renamed|moved|refactored|committed)\s+(?:(?:entirely|exclusively|solely)\s+)?by\s+(?:me|us|you|Buddy|the worker(?: agent)?|the coding agent|the agent|the user|the reviewer)\b/iu
+]);
+const assertNoExclusiveAuthorship = (value) => {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  for (const pattern of EXCLUSIVE_AUTHORSHIP_PATTERNS) assert.doesNotMatch(text, pattern);
+};
 const reviewEvidence = (evidence, options = {}) => reviewEvidenceImpl(evidence, {
   platform: 'linux',
   ...options
@@ -73,6 +85,17 @@ async function waitFor(predicate, label, timeoutMs = 2_000) {
 
 async function git(root, args) {
   return runProcess('git', args, { cwd: root });
+}
+
+async function withCleanFilterMarker(marker, operation) {
+  const previous = process.env[CLEAN_FILTER_MARKER_ENV];
+  process.env[CLEAN_FILTER_MARKER_ENV] = marker;
+  try {
+    return await operation();
+  } finally {
+    if (previous === undefined) delete process.env[CLEAN_FILTER_MARKER_ENV];
+    else process.env[CLEAN_FILTER_MARKER_ENV] = previous;
+  }
 }
 
 async function filesBelow(directory) {
@@ -427,6 +450,63 @@ test('turn snapshots exclude pre-existing dirty content and review only the obse
   assert.match(evidence.patch, /-const value = 2;/);
   assert.match(evidence.patch, /\+const value = 3;/);
   assert.doesNotMatch(evidence.patch, /const value = 1/);
+});
+
+test('turn capture stores clean-filtered paths as raw worktree blobs', async () => {
+  const root = await makeRepository();
+  const markerDirectory = await temporaryDirectory('codex-buddy-turn-filter-marker-');
+  const marker = path.join(markerDirectory, 'executions.log');
+  await git(root, ['config', 'filter.buddy-capture-test.clean', CLEAN_FILTER_COMMAND]);
+  await git(root, ['config', 'filter.buddy-capture-test.required', 'true']);
+  await writeFile(path.join(root, '.gitattributes'), 'app.js filter=buddy-capture-test\n');
+  await writeFile(marker, '');
+  await withCleanFilterMarker(marker, async () => {
+    await git(root, ['add', '.gitattributes']);
+    await git(root, ['commit', '-q', '-m', 'add clean-filter fixture']);
+  });
+
+  const snapshotDir = await temporaryDirectory('codex-buddy-filter-snapshot-');
+  const baseline = await withCleanFilterMarker(marker, () => captureTurnSnapshot({
+    root,
+    workDir: snapshotDir
+  }));
+  const rawBytes = Buffer.from('const value = "RAW_WORKTREE";\n');
+  await writeFile(path.join(root, 'app.js'), rawBytes);
+  await writeFile(marker, '');
+  await withCleanFilterMarker(marker, async () => {
+    await git(root, ['status', '--porcelain=v1', '--untracked-files=all']);
+    await git(root, ['hash-object', '--no-filters', 'app.js']);
+  });
+  assert.equal(await readFile(marker, 'utf8'), '');
+
+  const final = await withCleanFilterMarker(marker, () => captureTurnSnapshot({
+    root,
+    workDir: snapshotDir,
+    privacySalt: baseline.privacy_fragment_salt
+  }));
+  const evidence = await buildTurnEvidence({
+    baseline,
+    final,
+    sessionId: 'clean-filter-session',
+    turnId: 'clean-filter-turn'
+  });
+  const objectId = final.content_hashes['app.js'].replace(/^git-object:/u, '');
+  const originalObjects = path.resolve(
+    root,
+    (await git(root, ['rev-parse', '--git-path', 'objects'])).stdout.trim()
+  );
+  const blob = await runProcess('git', ['cat-file', 'blob', objectId], {
+    cwd: root,
+    encoding: null,
+    env: {
+      ...process.env,
+      GIT_OBJECT_DIRECTORY: final.object_directory,
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: originalObjects
+    }
+  });
+  assert.deepEqual(blob.stdout, rawBytes);
+  assert.match(evidence.patch, /RAW_WORKTREE/u);
+  assert.doesNotMatch(JSON.stringify(evidence), /FILTER_OUTPUT/u);
 });
 
 test('turn snapshot capture leaves the user index, HEAD, and working status unchanged', async () => {
@@ -1389,6 +1469,13 @@ test('automatic lifecycle produces one deterministic receipt and one Stop contin
   assert.equal(duplicate.output, null);
   assert.equal(duplicate.skipped, 'duplicate');
   assert.equal(reviewCalls, 1);
+  const outbox = await readSequencedOutboxEvents({ repositoryRoot: root, runtimeDataDir });
+  assertNoExclusiveAuthorship(started.output);
+  assertNoExclusiveAuthorship(first.output);
+  assertNoExclusiveAuthorship(outbox.events.map(({ event }) => ({
+    headline: event.payload.headline,
+    detail: event.payload.detail
+  })));
   await assert.rejects(access(path.join(path.dirname(path.dirname(first.receipt)), 'nonexistent')));
 });
 
@@ -2070,11 +2157,20 @@ test('summary consent remains bound to the primary reviewer and secondary stays 
     confirmSummaryEgress: true
   });
   const packets = new Map();
+  const approvedRequests = [];
   const stopped = await reviewTurnStop(fixture.stopInput, {
     modeDataDir: fixture.modeDataDir,
     runtimeDataDir: fixture.runtimeDataDir,
     review: async (evidence, options) => {
       packets.set(options.provider, options.summaryGuardPacket);
+      const approved = inspectApprovedProviderReviewRequest(options.approvedRequest);
+      const technicalBytes = Buffer.from(canonicalJson(evidence), 'utf8');
+      approvedRequests.push({
+        provider: approved.provider,
+        channelInventory: approved.channelInventory,
+        technicalBytes,
+        technicalSha256: createHash('sha256').update(technicalBytes).digest('hex')
+      });
       return {
         evidence,
         provider: options.provider,
@@ -2092,6 +2188,27 @@ test('summary consent remains bound to the primary reviewer and secondary stays 
     }
   });
 
+  // This proves that both lane callbacks receive the same canonical evidence object bytes
+  // and that each approved request advertises the intended channel inventory. It does not
+  // prove approved-request-derived technical digest equality; that would require a runtime
+  // metadata seam, which this test-only lane intentionally does not add.
+  const approvedByProvider = new Map(
+    approvedRequests.map((request) => [request.provider, request])
+  );
+  assert.deepEqual([...approvedByProvider.keys()].sort(), ['claude', 'ollama']);
+  assert.deepEqual(
+    approvedByProvider.get('ollama').technicalBytes,
+    approvedByProvider.get('claude').technicalBytes
+  );
+  assert.equal(
+    approvedByProvider.get('ollama').technicalSha256,
+    approvedByProvider.get('claude').technicalSha256
+  );
+  assert.deepEqual(
+    approvedByProvider.get('ollama').channelInventory,
+    ['technical_evidence', 'worker_summary']
+  );
+  assert.deepEqual(approvedByProvider.get('claude').channelInventory, ['technical_evidence']);
   assert.equal(packets.get('ollama').summary, fixture.stopInput.last_assistant_message);
   assert.equal(packets.get('claude'), null);
   const receipt = JSON.parse(await readFile(stopped.receipt, 'utf8'));
