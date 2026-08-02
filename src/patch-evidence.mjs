@@ -84,7 +84,9 @@ export function applyPatchBudget(entries, maxPatchBytes) {
     const ranges = transmitted && disposition === 'complete'
       ? parseChangedLineRanges(original.patch, { fileState: original.fileState })
       : [];
-    hunkRanges[original.path] = ranges;
+    if (transmitted && disposition === 'complete' || !Object.hasOwn(hunkRanges, original.path)) {
+      hunkRanges[original.path] = ranges;
+    }
     pathEvidence.push({
       path: original.path,
       disposition,
