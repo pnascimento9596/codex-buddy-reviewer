@@ -1549,6 +1549,54 @@ test('automatic lifecycle produces one deterministic receipt and one Stop contin
   await assert.rejects(access(path.join(path.dirname(path.dirname(first.receipt)), 'nonexistent')));
 });
 
+test('automatic lifecycle reports a bounded warning when turn snapshot cleanup fails', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir });
+  const identity = {
+    session_id: 'cleanup-warning-session',
+    turn_id: 'cleanup-warning-turn',
+    cwd: root
+  };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Exercise turn cleanup reporting.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 3;\n');
+
+  const baselinePath = path.join(
+    turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id),
+    'baseline.json'
+  );
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Exercised turn cleanup reporting.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    review: async (evidence) => {
+      await rm(baselinePath, { force: true });
+      await mkdir(baselinePath);
+      await writeFile(path.join(baselinePath, 'retained-private-state'), 'retained\n');
+      return {
+        evidence,
+        provider: 'ollama',
+        model: 'glm-5.2:cloud',
+        result: noFindings('No validated defects.')
+      };
+    }
+  });
+
+  assert.equal(stopped.result.status, 'no_findings');
+  assert.match(stopped.output.reason, /cleanup of its private temporary state failed/u);
+  assert.doesNotMatch(stopped.output.reason, /baseline\.json|retained-private-state/u);
+  await access(path.join(baselinePath, 'retained-private-state'));
+});
+
 test('Stop adopts an exact ready background receipt without duplicate provider egress', async () => {
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
