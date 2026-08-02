@@ -21,8 +21,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  authorize:
+    name: Authorize owner release dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      DISPATCH_ACTOR: ${{ github.actor }}
+      EXPECTED_DISPATCH_ACTOR: pnascimento9596
+    steps:
+      - name: Reject release dispatches from any other account
+        run: |
+          set -euo pipefail
+          if [[ "$DISPATCH_ACTOR" != "$EXPECTED_DISPATCH_ACTOR" ]]; then
+            echo 'Release workflow dispatch is restricted to the repository owner account.' >&2
+            exit 1
+          fi
+
   validate:
     name: Full cross-platform validation
+    needs: authorize
     uses: ./.github/workflows/validate.yml
 
   build:
