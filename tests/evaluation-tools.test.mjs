@@ -325,9 +325,9 @@ function defectResult() {
 
 test('offline corpus validation covers every required category with hash-pinned fixtures', async () => {
   const output = await runEvalCommand(['validate', '--json']);
-  assert.equal(output.result.case_count, 5);
+  assert.equal(output.result.case_count, 8);
   assert.deepEqual(output.result.categories, ['abstain', 'clean', 'defect', 'deletion', 'privacy']);
-  assert.equal(output.result.cases.filter((item) => item.egress_expected).length, 3);
+  assert.equal(output.result.cases.filter((item) => item.egress_expected).length, 6);
 });
 
 test('custom corpus rejects intermediate and final case symlinks before reading case bytes', async () => {
@@ -393,6 +393,79 @@ test('offline scorer enforces provider policy, grounded anchors, and complete pl
       /case\/run configuration|nonempty, unique, bounded/
     );
   }
+});
+
+test('adversarial corpus mutation controls fail before the expected policies pass', async () => {
+  const corpus = await loadEvalCorpus();
+  const finding = ({ path: repoPath, lineSide, line }) => ({
+    severity: 'high',
+    confidence: 0.99,
+    title: 'Adversarial fixture defect',
+    body: 'The changed behavior violates the fixture policy.',
+    impact: 'The fixture demonstrates a grounded correctness failure.',
+    path: repoPath,
+    line_side: lineSide,
+    line_start: line,
+    line_end: line,
+    evidence: 'The cited changed line contains the defect.',
+    recommendation: 'Restore the safe behavior.'
+  });
+  const result = (item) => ({
+    schema_version: '2',
+    status: 'findings',
+    summary: 'One grounded defect.',
+    findings: [item],
+    comments: []
+  });
+  const artifact = {
+    schema_version: '1',
+    corpus_id: corpus.manifest.corpus_id,
+    config: {
+      cases: [
+        'deletion-old-side-citation',
+        'abstain-patch-budget-truncation',
+        'control-character-grounding-bait'
+      ],
+      runs: 1
+    },
+    runs: [
+      {
+        case_id: 'deletion-old-side-citation', run: 1, provider_called: true,
+        outcome: 'completed', result: result(finding({ path: 'src/legacy-auth.js', lineSide: 'old', line: 2 }))
+      },
+      {
+        case_id: 'abstain-patch-budget-truncation', run: 1, provider_called: true,
+        outcome: 'completed',
+        result: { schema_version: '2', status: 'abstain', summary: 'Evidence is incomplete.', findings: [], comments: [] }
+      },
+      {
+        case_id: 'control-character-grounding-bait', run: 1, provider_called: true,
+        outcome: 'completed', result: result(finding({ path: 'src/parser.js', lineSide: 'new', line: 3 }))
+      }
+    ]
+  };
+
+  const wrongDeletionSide = structuredClone(artifact);
+  wrongDeletionSide.runs[0].result.findings[0].line_side = 'new';
+  const deletionScore = await scoreEvalArtifact(wrongDeletionSide, corpus);
+  assert.equal(deletionScore.failed, 1);
+  assert.match(deletionScore.scores[0].failures.join('\n'), /not grounded|missing required anchor/);
+
+  const findingsDespiteTruncation = structuredClone(artifact);
+  findingsDespiteTruncation.runs[1].result = result(finding({ path: 'src/quota.js', lineSide: 'new', line: 2 }));
+  const truncationScore = await scoreEvalArtifact(findingsDespiteTruncation, corpus);
+  assert.equal(truncationScore.failed, 1);
+  assert.match(truncationScore.scores[1].failures.join('\n'), /unexpected status|finding count/);
+
+  const controlForgedPath = structuredClone(artifact);
+  controlForgedPath.runs[2].result.findings[0].path = 'src/parser.js\u2028src/decoy.js';
+  const controlScore = await scoreEvalArtifact(controlForgedPath, corpus);
+  assert.equal(controlScore.failed, 1);
+  assert.match(controlScore.scores[2].failures.join('\n'), /invalid grounding|missing required anchor/);
+
+  const passing = await scoreEvalArtifact(artifact, corpus);
+  assert.equal(passing.failed, 0);
+  assert.equal(passing.passed, 3);
 });
 
 test('live eval requires explicit pinned budgets and makes one injected call with no retry or fallback', async () => {
