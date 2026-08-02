@@ -15,9 +15,13 @@ import {
   parseGitTreeEntry,
   runGit,
   splitNull,
-  symlinkTargetIsDenied,
-  workingInventory
+  symlinkTargetIsDenied
 } from './git-privacy-kernel.mjs';
+import {
+  filterSafeInventoryBytes,
+  filterSafeWorkingInventory,
+  quoteGitAlternateObjectDirectory
+} from './filter-free-git.mjs';
 import { applyPatchBudget } from './patch-evidence.mjs';
 import {
   createPrivacyCoverage,
@@ -407,42 +411,43 @@ async function emptyTree(root) {
   return (await git(root, ['hash-object', '-t', 'tree', '--stdin'], { input: '' })).trim();
 }
 
-async function pathHasCleanFilter(root, repoPath) {
-  const output = await git(root, ['check-attr', '-z', 'filter', '--', repoPath], {
-    encoding: null,
-    maxOutputBytes: 1024 * 1024
-  });
-  const fields = output.toString('utf8').split('\0');
-  if (fields.at(-1) === '') fields.pop();
-  if (fields.length !== 3 || fields[0] !== repoPath || fields[1] !== 'filter') {
-    throw new Error('Git clean-filter attributes could not be resolved safely');
-  }
-  return !['unspecified', 'unset', 'set'].includes(fields[2]);
-}
-
 async function createFilterFreePatchContext(root, baseline) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'codex-buddy-filter-free-evidence-'));
-  const objectDirectory = path.join(directory, 'objects');
-  await mkdir(objectDirectory, { mode: 0o700 });
-  const originalObjectDirectory = path.resolve(
-    root,
-    (await git(root, ['rev-parse', '--git-path', 'objects'])).trim()
-  );
-  const env = {
-    GIT_INDEX_FILE: path.join(directory, 'index'),
-    GIT_OBJECT_DIRECTORY: objectDirectory,
-    GIT_ALTERNATE_OBJECT_DIRECTORIES: originalObjectDirectory
-  };
   try {
+    const objectDirectory = path.join(directory, 'objects');
+    await mkdir(objectDirectory, { mode: 0o700 });
+    const originalObjectDirectory = path.resolve(
+      root,
+      (await git(root, ['rev-parse', '--git-path', 'objects'])).trim()
+    );
+    const fileMode = (await git(root, ['config', '--bool', 'core.fileMode'], {
+      acceptedExitCodes: [0, 1]
+    })).trim();
+    const env = {
+      GIT_INDEX_FILE: path.join(directory, 'index'),
+      GIT_OBJECT_DIRECTORY: objectDirectory,
+      // git(1), GIT_ALTERNATE_OBJECT_DIRECTORIES: entries beginning with `"`
+      // are C-style quoted. Git quote.c emits named escapes and octal bytes.
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: quoteGitAlternateObjectDirectory(originalObjectDirectory)
+    };
     await git(root, ['read-tree', baseline], { env });
-    return { baseline, directory, env };
+    return { baseline, directory, env, coreFileMode: fileMode !== 'false' };
   } catch (error) {
     await rm(directory, { recursive: true, force: true });
     throw error;
   }
 }
 
-async function filterFreeTrackedPatch(root, repoPath, fingerprint, context) {
+async function currentIndexMode(root, repoPath) {
+  const raw = await git(root, ['ls-files', '--stage', '-z', '--', literalPathspec(repoPath)], {
+    encoding: null,
+    maxOutputBytes: 1024 * 1024
+  });
+  const entry = parseGitIndexEntries(raw).find((item) => item.path === repoPath && item.stage === '0');
+  return entry?.mode ?? null;
+}
+
+async function filterFreeTrackedPatch(root, repoPath, fingerprint, context, preferIndexMode) {
   if (fingerprint.hash === null) {
     await git(root, ['update-index', '--force-remove', '--', repoPath], { env: context.env });
   } else {
@@ -455,8 +460,9 @@ async function filterFreeTrackedPatch(root, repoPath, fingerprint, context) {
       input: fingerprint.rawContent,
       maxOutputBytes: 1024 * 1024
     })).trim();
+    const mode = preferIndexMode ? (await currentIndexMode(root, repoPath) ?? fingerprint.mode) : fingerprint.mode;
     await git(root, [
-      'update-index', '--add', '--cacheinfo', `${fingerprint.mode},${objectId},${repoPath}`
+      'update-index', '--add', '--cacheinfo', `${mode},${objectId},${repoPath}`
     ], { env: context.env });
   }
   const tree = (await git(root, ['write-tree'], { env: context.env })).trim();
@@ -472,23 +478,23 @@ function classifyPaths(allPaths, forcedExcluded = new Set()) {
 }
 
 async function workingPathInventory(root) {
-  const inventory = await workingInventory(root, { budget: activeBudget() });
+  const inventory = await filterSafeWorkingInventory(root, { budget: activeBudget() });
   activeBudget()?.chargePaths(inventory.allPaths.length);
   return {
     staged: [...inventory.staged],
     unstaged: [...inventory.unstaged],
     untracked: [...inventory.untracked],
     allPaths: inventory.allPaths,
-    excludedRenameDestinations: inventory.forcedExcluded
+    excludedRenameDestinations: inventory.forcedExcluded,
+    forcedExcluded: inventory.forcedExcluded,
+    activeCleanFilters: inventory.activeCleanFilters
   };
 }
 
 async function captureWorkingSnapshot(root, options) {
   const head = await resolveHead(root);
-  const statusBefore = await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
-    encoding: null
-  });
   const inventory = await workingPathInventory(root);
+  const inventoryBefore = filterSafeInventoryBytes(inventory);
   const classified = classifyPaths(
     inventory.allPaths,
     inventory.excludedRenameDestinations
@@ -584,13 +590,20 @@ async function captureWorkingSnapshot(root, options) {
       } else {
         const canBuildFilterFreePatch = fingerprint.hash === null
           || (Buffer.isBuffer(fingerprint.rawContent) && fingerprint.mode);
-        const cleanFilterActive = canBuildFilterFreePatch
-          && await pathHasCleanFilter(root, repoPath);
-        if (cleanFilterActive && !filterFreeContext) {
+        const cleanFilterActive = inventory.activeCleanFilters.has(repoPath);
+        if (cleanFilterActive && canBuildFilterFreePatch && !filterFreeContext) {
           filterFreeContext = await createFilterFreePatchContext(root, baseline);
         }
-        const patchText = cleanFilterActive
-          ? await filterFreeTrackedPatch(root, repoPath, fingerprint, filterFreeContext)
+        const patchText = cleanFilterActive && !canBuildFilterFreePatch
+          ? ''
+          : cleanFilterActive
+          ? await filterFreeTrackedPatch(
+              root,
+              repoPath,
+              fingerprint,
+              filterFreeContext,
+              staged.has(repoPath) || !filterFreeContext.coreFileMode
+            )
           : await git(root, [
               'diff', '--no-renames', '--no-ext-diff', '--no-textconv', '--unified=80',
               baseline, '--', literalPathspec(repoPath)
@@ -612,16 +625,16 @@ async function captureWorkingSnapshot(root, options) {
     }
   }
 
-  const status = allowedPaths.length
+  const status = inventory.activeCleanFilters.size > 0
+    ? `filter-isolated working-tree evidence: ${allowedPaths.length} path(s)`
+    : allowedPaths.length
     ? (await git(root, [
         'status', '--short', '--no-renames', '--untracked-files=all', '--', ...allowedPaths.map(literalPathspec)
       ])).trim()
     : '';
-  const statusAfter = await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
-    encoding: null
-  });
+  const inventoryAfter = filterSafeInventoryBytes(await workingPathInventory(root));
   const endingHead = await resolveHead(root);
-  if (head !== endingHead || !statusBefore.equals(statusAfter)) {
+  if (head !== endingHead || !inventoryBefore.equals(inventoryAfter)) {
     throw new Error('review scope changed during evidence capture; retry');
   }
 
