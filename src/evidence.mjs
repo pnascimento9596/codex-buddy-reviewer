@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { lstat, readFile, readlink } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readlink, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { CaptureBudget, DEFAULT_CAPTURE_DEADLINE_MS } from './capture-budget.mjs';
 import { pathPolicy, isProbablyText, SENSITIVE_IGNORED_PATHSPECS } from './policy.mjs';
@@ -62,7 +63,8 @@ async function fingerprintWorkingPath(
   repoPath,
   maxFileBytes = MAX_SINGLE_DIFF_BYTES,
   privacySalt = null,
-  privacyInventory = null
+  privacyInventory = null,
+  includeRawContent = false
 ) {
   const absolute = path.join(root, repoPath);
   try {
@@ -76,6 +78,7 @@ async function fingerprintWorkingPath(
         privacyHash: sha256(targetBytes),
         lineCount: null,
         symlinkTarget: target,
+        ...(includeRawContent ? { rawContent: targetBytes, mode: '120000' } : {}),
         privacyFragments: [],
         privacyShortFragments: [],
         privacyFragmentMatch: false,
@@ -106,6 +109,10 @@ async function fingerprintWorkingPath(
     const match = privacyDecision(content, privacySalt, privacyInventory);
     return {
       hash: sha256(content), privacyHash: sha256(content), lineCount: countTextLines(content),
+      ...(includeRawContent ? {
+        rawContent: content,
+        mode: stat.mode & 0o111 ? '100755' : '100644'
+      } : {}),
       privacyFragments: fragments.fingerprints,
       privacyShortFragments: fragments.shortFingerprints,
       privacyFragmentMatch: match.status === 'match',
@@ -400,6 +407,65 @@ async function emptyTree(root) {
   return (await git(root, ['hash-object', '-t', 'tree', '--stdin'], { input: '' })).trim();
 }
 
+async function pathHasCleanFilter(root, repoPath) {
+  const output = await git(root, ['check-attr', '-z', 'filter', '--', repoPath], {
+    encoding: null,
+    maxOutputBytes: 1024 * 1024
+  });
+  const fields = output.toString('utf8').split('\0');
+  if (fields.at(-1) === '') fields.pop();
+  if (fields.length !== 3 || fields[0] !== repoPath || fields[1] !== 'filter') {
+    throw new Error('Git clean-filter attributes could not be resolved safely');
+  }
+  return !['unspecified', 'unset', 'set'].includes(fields[2]);
+}
+
+async function createFilterFreePatchContext(root, baseline) {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'codex-buddy-filter-free-evidence-'));
+  const objectDirectory = path.join(directory, 'objects');
+  await mkdir(objectDirectory, { mode: 0o700 });
+  const originalObjectDirectory = path.resolve(
+    root,
+    (await git(root, ['rev-parse', '--git-path', 'objects'])).trim()
+  );
+  const env = {
+    GIT_INDEX_FILE: path.join(directory, 'index'),
+    GIT_OBJECT_DIRECTORY: objectDirectory,
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: originalObjectDirectory
+  };
+  try {
+    await git(root, ['read-tree', baseline], { env });
+    return { baseline, directory, env };
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function filterFreeTrackedPatch(root, repoPath, fingerprint, context) {
+  if (fingerprint.hash === null) {
+    await git(root, ['update-index', '--force-remove', '--', repoPath], { env: context.env });
+  } else {
+    if (!Buffer.isBuffer(fingerprint.rawContent) || !fingerprint.mode) {
+      throw new Error('Raw tracked content was unavailable for filter-free evidence');
+    }
+    activeBudget()?.chargeObjectBytes(fingerprint.rawContent.length);
+    const objectId = (await git(root, ['hash-object', '--no-filters', '-w', '--stdin'], {
+      env: context.env,
+      input: fingerprint.rawContent,
+      maxOutputBytes: 1024 * 1024
+    })).trim();
+    await git(root, [
+      'update-index', '--add', '--cacheinfo', `${fingerprint.mode},${objectId},${repoPath}`
+    ], { env: context.env });
+  }
+  const tree = (await git(root, ['write-tree'], { env: context.env })).trim();
+  return git(root, [
+    'diff', '--no-renames', '--no-ext-diff', '--no-textconv', '--unified=80',
+    context.baseline, tree, '--', literalPathspec(repoPath)
+  ], { env: context.env, maxOutputBytes: MAX_SINGLE_DIFF_BYTES });
+}
+
 function classifyPaths(allPaths, forcedExcluded = new Set()) {
   const result = classifyRepoPaths(allPaths, forcedExcluded);
   return { allowedPaths: result.allowed, excludedPaths: result.excluded };
@@ -441,6 +507,7 @@ async function captureWorkingSnapshot(root, options) {
   const sensitive = await sensitiveWorkingHashes(root, options.privacySalt, excludedPaths, [baseline]);
   const sensitiveHashes = sensitive.hashes;
   const excludedSet = new Set(excludedPaths.map((item) => item.path));
+  let filterFreeContext = null;
   for (const repoPath of sensitive.ignoredPaths) {
     if (!excludedSet.has(repoPath)) {
       excludedPaths.push({ path: repoPath, reason: pathPolicy(repoPath).reason });
@@ -448,84 +515,101 @@ async function captureWorkingSnapshot(root, options) {
     }
   }
 
-  for (const repoPath of classified.allowedPaths) {
-    const fingerprint = await fingerprintWorkingPath(
-      root,
-      repoPath,
-      untracked.has(repoPath) && !tracked.has(repoPath)
-        ? options.maxUntrackedFileBytes
-        : MAX_SINGLE_DIFF_BYTES,
-      options.privacySalt,
-      sensitive
-    );
-    const baselineFingerprint = await fingerprintTreePath(
-      root,
-      baseline,
-      repoPath,
-      'complete',
-      options.privacySalt,
-      sensitive
-    );
-    oldLineCounts[repoPath] = baselineFingerprint.lineCount;
-    if (fingerprint.secretDetected || baselineFingerprint.secretDetected) {
-      excludedPaths.push({ path: repoPath, reason: 'high-confidence secret material' });
-      continue;
-    }
-    if (fingerprint.secretScanComplete === false || baselineFingerprint.secretScanComplete === false) {
-      excludedPaths.push({ path: repoPath, reason: 'secret scan incomplete' });
-      continue;
-    }
-    if ((fingerprint.privacyHash && sensitiveHashes.has(fingerprint.privacyHash))
-      || (baselineFingerprint.privacyHash && sensitiveHashes.has(baselineFingerprint.privacyHash))
-      || (fingerprint.symlinkTarget !== undefined && symlinkTargetIsDenied(repoPath, fingerprint.symlinkTarget))
-      || (baselineFingerprint.symlinkTarget !== undefined
-        && symlinkTargetIsDenied(repoPath, baselineFingerprint.symlinkTarget))) {
-      excludedPaths.push({
-        path: repoPath,
-        reason: fingerprint.symlinkTarget !== undefined ? 'symlink targets denied path' : 'content matches denied path'
-      });
-      continue;
-    }
-    if (!sensitive.complete || (!fingerprint.oversized
-      && (fingerprint.privacyFragmentsComplete === false
-        || baselineFingerprint.privacyFragmentsComplete === false))) {
-      excludedPaths.push({ path: repoPath, reason: 'privacy fragment scan incomplete' });
-      continue;
-    }
-    if (fingerprint.privacyFragmentMatch || baselineFingerprint.privacyFragmentMatch) {
-      excludedPaths.push({ path: repoPath, reason: 'content fragment matches denied path' });
-      continue;
-    }
-    if (staged.has(repoPath) && (unstaged.has(repoPath) || untracked.has(repoPath))) {
+  try {
+    for (const repoPath of classified.allowedPaths) {
+      const fingerprint = await fingerprintWorkingPath(
+        root,
+        repoPath,
+        untracked.has(repoPath) && !tracked.has(repoPath)
+          ? options.maxUntrackedFileBytes
+          : MAX_SINGLE_DIFF_BYTES,
+        options.privacySalt,
+        sensitive,
+        tracked.has(repoPath)
+      );
+      const baselineFingerprint = await fingerprintTreePath(
+        root,
+        baseline,
+        repoPath,
+        'complete',
+        options.privacySalt,
+        sensitive
+      );
+      oldLineCounts[repoPath] = baselineFingerprint.lineCount;
+      if (fingerprint.secretDetected || baselineFingerprint.secretDetected) {
+        excludedPaths.push({ path: repoPath, reason: 'high-confidence secret material' });
+        continue;
+      }
+      if (fingerprint.secretScanComplete === false || baselineFingerprint.secretScanComplete === false) {
+        excludedPaths.push({ path: repoPath, reason: 'secret scan incomplete' });
+        continue;
+      }
+      if ((fingerprint.privacyHash && sensitiveHashes.has(fingerprint.privacyHash))
+        || (baselineFingerprint.privacyHash && sensitiveHashes.has(baselineFingerprint.privacyHash))
+        || (fingerprint.symlinkTarget !== undefined && symlinkTargetIsDenied(repoPath, fingerprint.symlinkTarget))
+        || (baselineFingerprint.symlinkTarget !== undefined
+          && symlinkTargetIsDenied(repoPath, baselineFingerprint.symlinkTarget))) {
+        excludedPaths.push({
+          path: repoPath,
+          reason: fingerprint.symlinkTarget !== undefined ? 'symlink targets denied path' : 'content matches denied path'
+        });
+        continue;
+      }
+      if (!sensitive.complete || (!fingerprint.oversized
+        && (fingerprint.privacyFragmentsComplete === false
+          || baselineFingerprint.privacyFragmentsComplete === false))) {
+        excludedPaths.push({ path: repoPath, reason: 'privacy fragment scan incomplete' });
+        continue;
+      }
+      if (fingerprint.privacyFragmentMatch || baselineFingerprint.privacyFragmentMatch) {
+        excludedPaths.push({ path: repoPath, reason: 'content fragment matches denied path' });
+        continue;
+      }
+      if (staged.has(repoPath) && (unstaged.has(repoPath) || untracked.has(repoPath))) {
+        allowedPaths.push(repoPath);
+        entries.push({
+          path: repoPath,
+          disposition: 'index_worktree_diverged',
+          patch: `diff --git a/${repoPath} b/${repoPath}\n[INDEX AND WORKTREE REPRESENTATIONS DIVERGE]\n`
+        });
+        contentHashes[repoPath] = fingerprint.hash;
+        lineCounts[repoPath] = fingerprint.lineCount;
+        continue;
+      }
+      let entry;
+      if (untracked.has(repoPath) && !tracked.has(repoPath)) {
+        entry = await untrackedPatch(root, repoPath, options.maxUntrackedFileBytes);
+        contentHashes[repoPath] = fingerprint.hash;
+        lineCounts[repoPath] = fingerprint.lineCount;
+      } else {
+        const canBuildFilterFreePatch = fingerprint.hash === null
+          || (Buffer.isBuffer(fingerprint.rawContent) && fingerprint.mode);
+        const cleanFilterActive = canBuildFilterFreePatch
+          && await pathHasCleanFilter(root, repoPath);
+        if (cleanFilterActive && !filterFreeContext) {
+          filterFreeContext = await createFilterFreePatchContext(root, baseline);
+        }
+        const patchText = cleanFilterActive
+          ? await filterFreeTrackedPatch(root, repoPath, fingerprint, filterFreeContext)
+          : await git(root, [
+              'diff', '--no-renames', '--no-ext-diff', '--no-textconv', '--unified=80',
+              baseline, '--', literalPathspec(repoPath)
+            ], { maxOutputBytes: MAX_SINGLE_DIFF_BYTES });
+        entry = { disposition: dispositionForTrackedPatch(patchText, fingerprint), patch: patchText };
+        contentHashes[repoPath] = fingerprint.hash;
+        lineCounts[repoPath] = fingerprint.lineCount;
+      }
       allowedPaths.push(repoPath);
       entries.push({
         path: repoPath,
-        disposition: 'index_worktree_diverged',
-        patch: `diff --git a/${repoPath} b/${repoPath}\n[INDEX AND WORKTREE REPRESENTATIONS DIVERGE]\n`
+        ...entry,
+        ...(fingerprint.hash === null ? { fileState: 'deleted', oldLineCount: baselineFingerprint.lineCount } : {})
       });
-      contentHashes[repoPath] = fingerprint.hash;
-      lineCounts[repoPath] = fingerprint.lineCount;
-      continue;
     }
-    let entry;
-    if (untracked.has(repoPath) && !tracked.has(repoPath)) {
-      entry = await untrackedPatch(root, repoPath, options.maxUntrackedFileBytes);
-      contentHashes[repoPath] = fingerprint.hash;
-      lineCounts[repoPath] = fingerprint.lineCount;
-    } else {
-      const patchText = await git(root, [
-        'diff', '--no-renames', '--no-ext-diff', '--no-textconv', '--unified=80', baseline, '--', literalPathspec(repoPath)
-      ], { maxOutputBytes: MAX_SINGLE_DIFF_BYTES });
-      entry = { disposition: dispositionForTrackedPatch(patchText, fingerprint), patch: patchText };
-      contentHashes[repoPath] = fingerprint.hash;
-      lineCounts[repoPath] = fingerprint.lineCount;
+  } finally {
+    if (filterFreeContext) {
+      await rm(filterFreeContext.directory, { recursive: true, force: true });
     }
-    allowedPaths.push(repoPath);
-    entries.push({
-      path: repoPath,
-      ...entry,
-      ...(fingerprint.hash === null ? { fileState: 'deleted', oldLineCount: baselineFingerprint.lineCount } : {})
-    });
   }
 
   const status = allowedPaths.length
