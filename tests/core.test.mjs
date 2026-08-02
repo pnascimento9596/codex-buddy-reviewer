@@ -951,6 +951,44 @@ test('manual capture reviews staged clean-filtered index bytes and omits an unpr
   assert.equal(validated.status, 'findings');
 });
 
+test('staged clean-filtered incomplete paths stay unique after patch truncation', async () => {
+  const root = await makeRepository();
+  const markerDirectory = await temporaryDirectory('codex-buddy-truncated-filter-marker-');
+  const marker = path.join(markerDirectory, 'executions.log');
+  const trackedPath = 'truncated filtered file.js';
+  await git(root, ['config', 'filter.buddy-capture-test.clean', CLEAN_FILTER_COMMAND]);
+  await git(root, ['config', 'filter.buddy-capture-test.required', 'true']);
+  await writeFile(path.join(root, trackedPath), 'BASE_CONTENT\n');
+  await writeFile(path.join(root, '.gitattributes'), '"truncated filtered file.js" filter=buddy-capture-test\n');
+  await writeFile(marker, '');
+  await withCleanFilterMarker(marker, async () => {
+    await git(root, ['add', '.gitattributes', trackedPath]);
+    await git(root, ['commit', '-q', '-m', 'add truncated clean-filter fixture']);
+  });
+
+  await writeFile(path.join(root, trackedPath), `const value = '${'x'.repeat(512)}';\n`);
+  await withCleanFilterMarker(marker, () => git(root, ['add', trackedPath]));
+  await writeFile(path.join(root, trackedPath), 'export const value = "UNSTAGED_PRIVATE";\n');
+  await writeFile(marker, '');
+
+  const evidence = await withCleanFilterMarker(marker, () => collectEvidence({
+    cwd: root,
+    maxPatchBytes: 64
+  }));
+  assert.equal(await readFile(marker, 'utf8'), '');
+  assert.deepEqual(evidence.changed_paths, [trackedPath]);
+  assert.deepEqual(evidence.incomplete_paths, [trackedPath]);
+  assert.deepEqual(
+    evidence.path_evidence.map(({ disposition, transmitted }) => ({ disposition, transmitted })),
+    [
+      { disposition: 'patch_truncated', transmitted: false },
+      { disposition: 'filter_change_unproven', transmitted: false }
+    ]
+  );
+  assert.equal(evidence.patch, '');
+  assert.doesNotMatch(JSON.stringify(evidence), /UNSTAGED_PRIVATE|FILTER_OUTPUT/u);
+});
+
 test('manual capture fails closed for conflicted clean-filtered index stages', async () => {
   const root = await makeRepository();
   const markerDirectory = await temporaryDirectory('codex-buddy-conflicted-filter-marker-');
