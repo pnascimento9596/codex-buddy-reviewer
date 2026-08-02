@@ -42,6 +42,25 @@ test('release publication accepts only a proven missing remote tag as absence', 
   assert.doesNotMatch(workflow, /\.object\.sha(?: \/\/ empty)?' 2>\/dev\/null \|\| true/);
 });
 
+test('release dispatch requires the owner account before reusable validation', async () => {
+  const workflow = await readFile(path.join(projectRoot, '.github', 'workflows', 'release.yml'), 'utf8');
+  const authorizeStart = workflow.indexOf('  authorize:\n');
+  const validateStart = workflow.indexOf('  validate:\n');
+  const buildStart = workflow.indexOf('  build:\n');
+
+  assert.ok(authorizeStart > -1);
+  assert.ok(validateStart > authorizeStart);
+  assert.ok(buildStart > validateStart);
+
+  const authorizeJob = workflow.slice(authorizeStart, validateStart);
+  const validateJob = workflow.slice(validateStart, buildStart);
+  assert.match(authorizeJob, /^    environment: public-release$/mu);
+  assert.match(authorizeJob, /^      DISPATCH_ACTOR: \$\{\{ github\.actor \}\}$/mu);
+  assert.match(authorizeJob, /^      EXPECTED_DISPATCH_ACTOR: pnascimento9596$/mu);
+  assert.match(authorizeJob, /if \[\[ "\$DISPATCH_ACTOR" != "\$EXPECTED_DISPATCH_ACTOR" \]\]; then/u);
+  assert.match(validateJob, /^    needs: authorize$/mu);
+});
+
 test.after(async () => {
   await Promise.all(temporaryPaths.map((item) => rm(item, { recursive: true, force: true })));
 });
