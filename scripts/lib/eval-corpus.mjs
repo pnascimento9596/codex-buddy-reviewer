@@ -112,13 +112,24 @@ function validateEvidence(evidence, category) {
   }
   const seenEvidence = new Set();
   for (const [index, item] of evidence.path_evidence.entries()) {
-    exactKeys(item, ['path', 'disposition', 'patch_bytes', 'transmitted', 'hunk_ranges'], `path_evidence[${index}]`);
+    const pathEvidenceKeys = ['path', 'disposition', 'patch_bytes', 'transmitted', 'hunk_ranges'];
+    if (Object.hasOwn(item, 'file_state') || Object.hasOwn(item, 'old_line_count')) {
+      pathEvidenceKeys.push('file_state', 'old_line_count');
+    }
+    exactKeys(item, pathEvidenceKeys, `path_evidence[${index}]`);
     if (!safeRepoPath(item.path) || !changed.has(item.path) || seenEvidence.has(item.path)) {
       fail(`path_evidence[${index}] has an invalid or duplicate path`);
     }
     seenEvidence.add(item.path);
     if (typeof item.disposition !== 'string' || !Number.isInteger(item.patch_bytes) || item.patch_bytes < 0
         || typeof item.transmitted !== 'boolean') fail(`path_evidence[${index}] has invalid disposition metadata`);
+    if (Object.hasOwn(item, 'file_state')
+        && (item.file_state !== 'deleted' || !Number.isInteger(item.old_line_count) || item.old_line_count < 0)) {
+      fail(`path_evidence[${index}] has invalid deleted-file metadata`);
+    }
+    if (item.file_state === 'deleted' && evidence.old_line_counts[item.path] !== item.old_line_count) {
+      fail(`path_evidence[${index}] deleted-file line count disagrees with case evidence`);
+    }
     validateRanges(item.hunk_ranges, `path_evidence[${index}].hunk_ranges`);
     validateRanges(evidence.hunk_ranges[item.path], `hunk_ranges.${item.path}`);
     if (JSON.stringify(item.hunk_ranges) !== JSON.stringify(evidence.hunk_ranges[item.path])) {

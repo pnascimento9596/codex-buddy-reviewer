@@ -24,14 +24,16 @@
         "patch_bytes": 262,
         "transmitted": true,
         "hunk_ranges": [
-          { "start": 1, "end": 4, "side": "old", "kind": "deletion" }
-        ]
+          { "start": 1, "end": 4, "side": "old" }
+        ],
+        "file_state": "deleted",
+        "old_line_count": 4
       }
     ],
     "incomplete_paths": [],
     "hunk_ranges": {
       "src/legacy-auth.js": [
-        { "start": 1, "end": 4, "side": "old", "kind": "deletion" }
+        { "start": 1, "end": 4, "side": "old" }
       ]
     },
     "status": "changed",

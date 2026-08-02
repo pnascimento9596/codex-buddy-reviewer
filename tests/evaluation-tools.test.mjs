@@ -452,7 +452,9 @@ test('adversarial corpus mutation controls fail before the expected policies pas
   assert.match(deletionScore.scores[0].failures.join('\n'), /not grounded|missing required anchor/);
 
   const findingsDespiteTruncation = structuredClone(artifact);
-  findingsDespiteTruncation.runs[1].result = result(finding({ path: 'src/quota.js', lineSide: 'new', line: 2 }));
+  findingsDespiteTruncation.runs[1].result = result(finding({
+    path: 'src/omitted-policy.js', lineSide: 'new', line: 1
+  }));
   const truncationScore = await scoreEvalArtifact(findingsDespiteTruncation, corpus);
   assert.equal(truncationScore.failed, 1);
   assert.match(truncationScore.scores[1].failures.join('\n'), /unexpected status|finding count/);
