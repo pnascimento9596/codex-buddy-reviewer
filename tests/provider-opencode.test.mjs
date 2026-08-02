@@ -159,6 +159,62 @@ test('OpenCode uses an empty private cwd, isolated config, denied tools, and std
   await assert.rejects(access(options.env.OPENCODE_CONFIG_DIR));
 });
 
+test('OpenCode mocked reviews start fresh without session or prior-response state', async () => {
+  const prompts = ['first bounded packet', 'second bounded packet'];
+  const summaries = ['FIRST_RESPONSE_STATE', 'SECOND_RESPONSE_STATE'];
+  const calls = [];
+  const run = async (command, args, options) => {
+    const index = calls.length;
+    calls.push({ command, args: [...args], options: { ...options, env: { ...options.env } } });
+    return {
+      stdout: [
+        event('step_start', { sessionID: `response-session-${index}`, part: { type: 'step-start' } }),
+        completedText(JSON.stringify(reviewResult(summaries[index]))),
+        event('step_finish', {
+          sessionID: `response-session-${index}`,
+          part: { type: 'step-finish', reason: 'stop' }
+        })
+      ].join('\n'),
+      stderr: ''
+    };
+  };
+
+  const responses = [];
+  for (const prompt of prompts) {
+    responses.push(await reviewWithOpenCode({
+      root: path.join(os.tmpdir(), 'codex-buddy-opencode-stateless-repository'),
+      prompt,
+      model: 'anthropic/claude-opus-4-6',
+      effort: 'high',
+      timeoutMs: 5_000,
+      opencodeBin: '/fixture/bin/opencode',
+      responseSchema: REVIEW_RESULT_SCHEMA,
+      ambient: {
+        PATH: '/fixture/bin',
+        HOME: path.join(os.tmpdir(), 'fixture-home'),
+        OPENCODE_AUTH_CONTENT: '{"anthropic":{"type":"oauth","refresh":"fixture"}}'
+      },
+      run
+    }));
+  }
+
+  assert.deepEqual(responses.map((response) => response.reviewPayload.summary), summaries);
+  assert.equal(calls.length, 2);
+  assert.notEqual(calls[0].options.cwd, calls[1].options.cwd);
+  const agentNames = calls.map((call) => call.args[call.args.indexOf('--agent') + 1]);
+  assert.notEqual(agentNames[0], agentNames[1]);
+  for (const [index, call] of calls.entries()) {
+    assert.equal(call.options.input, prompts[index]);
+    assert.equal(call.args.some((arg) => /^--(?:resume|continue|session(?:-id)?|conversation)/u.test(arg)), false);
+    assert.equal(Object.keys(call.options.env).some((key) => /session|resume|conversation/iu.test(key)), false);
+    await assert.rejects(access(call.options.cwd));
+  }
+  assert.doesNotMatch(
+    JSON.stringify({ args: calls[1].args, input: calls[1].options.input, env: calls[1].options.env }),
+    /FIRST_RESPONSE_STATE|response-session-0/u
+  );
+});
+
 test('OpenCode spends one aggregate timeout across preflight and inference', async () => {
   let now = -100;
   let calls = 0;

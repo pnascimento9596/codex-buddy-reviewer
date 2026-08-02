@@ -16,9 +16,32 @@ import {
   readPresentationProfile
 } from '../src/presentation-state.mjs';
 import { workspaceKey } from '../src/state.mjs';
+import {
+  assertNoExclusiveAuthorship,
+  EXCLUSIVE_AUTHORSHIP_PATTERNS
+} from './helpers/exclusive-authorship.mjs';
 
 const reviewA = 'a'.repeat(64);
 const reviewB = 'b'.repeat(64);
+
+test('exclusive-authorship guard rejects active, possessive, and passive single-actor claims', () => {
+  const forbiddenExamples = [
+    'Buddy authored these bytes.',
+    "Buddy's changes are ready.",
+    "The worker agent's patch is ready.",
+    'The reviewer modified the files.',
+    'The code that you wrote is ready.',
+    'This was authored solely by Buddy.',
+    'The bytes were written exclusively by the coding agent.'
+  ];
+  for (const example of forbiddenExamples) {
+    assert.equal(
+      EXCLUSIVE_AUTHORSHIP_PATTERNS.some((pattern) => pattern.test(example)),
+      true,
+      example
+    );
+  }
+});
 
 test('presentation CLI rejects mutation options for read-only status', () => {
   assert.equal(parsePresentationArgs(['status', '--json']).action, 'status');
@@ -81,9 +104,16 @@ test('all pet utterances are bounded single-line terminal-safe text', () => {
   const states = ['idle', 'working', 'reviewing', 'success', 'findings', 'abstain', 'error'];
   for (const personality of personalities) {
     for (const presentationState of states) {
-      const utterance = selectPetUtterance({ personality, presentationState, reviewKey: reviewA });
-      assert.equal(utterance.length > 0 && utterance.length <= 180, true);
-      assert.doesNotMatch(utterance, /[\r\n\t\u001b\u202e]/u);
+      for (let key = 0; key < 32; key += 1) {
+        const utterance = selectPetUtterance({
+          personality,
+          presentationState,
+          reviewKey: key.toString(16).padStart(64, '0')
+        });
+        assert.equal(utterance.length > 0 && utterance.length <= 180, true);
+        assert.doesNotMatch(utterance, /[\r\n\t\u001b\u202e]/u);
+        assertNoExclusiveAuthorship(utterance);
+      }
     }
   }
 });

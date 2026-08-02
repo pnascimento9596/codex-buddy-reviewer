@@ -15,9 +15,13 @@ import {
   parseGitTreeEntry,
   runGit,
   splitNull,
-  symlinkTargetIsDenied,
-  workingInventory
+  symlinkTargetIsDenied
 } from './git-privacy-kernel.mjs';
+import {
+  filterSafeInventoryBytes,
+  filterSafeWorkingInventory,
+  quoteGitAlternateObjectDirectory
+} from './filter-free-git.mjs';
 import {
   createPrivacyCoverage,
   createPrivacyCoverageIndex,
@@ -92,7 +96,7 @@ function classifyPaths(inventory) {
   return classifyRepoPaths(inventory.allPaths, inventory.forcedExcluded);
 }
 
-async function stageWorkingPath(root, repoPath, env, maxFileBytes) {
+async function stageWorkingPath(root, repoPath, env, maxFileBytes, modeOverride = null) {
   const absolute = path.join(root, repoPath);
   let stat;
   try {
@@ -115,7 +119,7 @@ async function stageWorkingPath(root, repoPath, env, maxFileBytes) {
     }
     content = await readFile(absolute);
     activeBudget()?.chargeFileBytes(content.length);
-    mode = stat.mode & 0o111 ? '100755' : '100644';
+    mode = modeOverride ?? (stat.mode & 0o111 ? '100755' : '100644');
   } else {
     return { disposition: 'non_file_omitted', contentHash: null, lineCount: null };
   }
@@ -396,13 +400,11 @@ async function captureOnce({ root, objectDir, workDir, maxFileBytes, privacySalt
     ...process.env,
     GIT_INDEX_FILE: indexFile,
     GIT_OBJECT_DIRECTORY: objectDir,
-    GIT_ALTERNATE_OBJECT_DIRECTORIES: originalObjects
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: quoteGitAlternateObjectDirectory(originalObjects)
   };
-  const statusBefore = await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
-    encoding: null
-  });
   const head = await resolveHead(root);
-  const inventory = await workingInventory(root, { budget: activeBudget() });
+  const inventory = await filterSafeWorkingInventory(root, { budget: activeBudget() });
+  const inventoryBefore = filterSafeInventoryBytes(inventory);
   activeBudget()?.chargePaths(inventory.allPaths.length);
   const { allowed, excluded } = classifyPaths(inventory);
   const incomplete = {};
@@ -420,7 +422,16 @@ async function captureOnce({ root, objectDir, workDir, maxFileBytes, privacySalt
     if (head === 'UNBORN') await git(root, ['read-tree', '--empty'], { env });
     else await git(root, ['read-tree', head], { env });
     for (const repoPath of allowed) {
-      const staged = await stageWorkingPath(root, repoPath, env, maxFileBytes);
+      const preserveIndexMode = inventory.indexModes.has(repoPath)
+        && (!inventory.coreFileMode
+          || (inventory.activeCleanFilters.has(repoPath) && inventory.staged.has(repoPath)));
+      const staged = await stageWorkingPath(
+        root,
+        repoPath,
+        env,
+        maxFileBytes,
+        preserveIndexMode ? inventory.indexModes.get(repoPath) : null
+      );
       contentHashes[repoPath] = staged.contentHash;
       lineCounts[repoPath] = staged.lineCount;
       if (inventory.staged.has(repoPath)
@@ -430,11 +441,11 @@ async function captureOnce({ root, objectDir, workDir, maxFileBytes, privacySalt
     }
     for (const item of excluded) excludedFingerprints[item.path] = await fingerprintExcludedPath(root, item.path);
     const tree = (await git(root, ['write-tree'], { env })).stdout.trim();
-    const statusAfter = await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
-      encoding: null
-    });
+    const inventoryAfter = filterSafeInventoryBytes(
+      await filterSafeWorkingInventory(root, { budget: activeBudget() })
+    );
     const endingHead = await resolveHead(root);
-    if (head !== endingHead || !statusBefore.stdout.equals(statusAfter.stdout)) {
+    if (head !== endingHead || !inventoryBefore.equals(inventoryAfter)) {
       throw new Error('turn snapshot changed during capture; retry');
     }
     return {
@@ -459,7 +470,7 @@ async function captureOnce({ root, objectDir, workDir, maxFileBytes, privacySalt
       ignored_reviewable_complete: ignoredReviewable.complete,
       ignored_reviewable_fingerprint: ignoredReviewable.fingerprint,
       line_counts: lineCounts,
-      status_hash: sha256(statusAfter.stdout)
+      status_hash: sha256(inventoryAfter)
     };
   } finally {
     await rm(indexFile, { force: true });
@@ -646,7 +657,7 @@ async function buildTurnEvidenceWithinBudget({ baseline, final, sessionId, turnI
   const env = {
     ...process.env,
     GIT_OBJECT_DIRECTORY: final.object_directory,
-    GIT_ALTERNATE_OBJECT_DIRECTORIES: originalObjects
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: quoteGitAlternateObjectDirectory(originalObjects)
   };
   const names = await git(root, [
     'diff', '--name-only', '--no-renames', '-z', baseline.tree, final.tree
