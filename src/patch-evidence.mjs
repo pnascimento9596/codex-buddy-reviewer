@@ -84,7 +84,9 @@ export function applyPatchBudget(entries, maxPatchBytes) {
     const ranges = transmitted && disposition === 'complete'
       ? parseChangedLineRanges(original.patch, { fileState: original.fileState })
       : [];
-    hunkRanges[original.path] = ranges;
+    if (transmitted && disposition === 'complete' || !Object.hasOwn(hunkRanges, original.path)) {
+      hunkRanges[original.path] = ranges;
+    }
     pathEvidence.push({
       path: original.path,
       disposition,
@@ -105,7 +107,11 @@ export function applyPatchBudget(entries, maxPatchBytes) {
     patchBytes: Buffer.byteLength(patch, 'utf8'),
     pathEvidence,
     hunkRanges,
-    incompletePaths: pathEvidence.filter((item) => item.disposition !== 'complete').map((item) => item.path),
+    // A staged filtered path can emit both a complete-or-truncated index
+    // representation and an unproven worktree omission for the same path.
+    incompletePaths: [...new Set(
+      pathEvidence.filter((item) => item.disposition !== 'complete').map((item) => item.path)
+    )],
     truncated: pathEvidence.some((item) => item.disposition === 'patch_truncated')
   };
 }

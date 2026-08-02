@@ -133,9 +133,18 @@ export async function filterSafeWorkingInventory(root, options = {}) {
   ]);
   const stagedPaths = splitNull(staged.stdout);
   const indexEntries = parseGitIndexEntries(tracked.stdout);
+  const conflictedPaths = new Set(
+    indexEntries.filter((entry) => entry.stage !== '0').map((entry) => entry.path)
+  );
+  const stagedPathSet = new Set([...stagedPaths, ...conflictedPaths]);
   const trackedPaths = [...new Set(indexEntries.map((entry) => entry.path))].sort();
   const indexModes = new Map(
     indexEntries.filter((entry) => entry.stage === '0').map((entry) => [entry.path, entry.mode])
+  );
+  const indexObjects = new Map(
+    indexEntries
+      .filter((entry) => entry.stage === '0')
+      .map((entry) => [entry.path, { mode: entry.mode, objectId: entry.objectId }])
   );
   const attributeCandidatePaths = [...new Set([...trackedPaths, ...stagedPaths])].sort();
   const filteredPaths = await cleanFilterPaths(root, attributeCandidatePaths, options);
@@ -155,8 +164,15 @@ export async function filterSafeWorkingInventory(root, options = {}) {
       options
     )
   ]);
-  const unstagedPaths = [...new Set([...splitNull(unstaged.stdout), ...filteredPaths])].sort();
+  const unstagedPaths = [...new Set([...splitNull(unstaged.stdout), ...conflictedPaths])].sort();
   const untrackedPaths = splitNull(untracked.stdout);
+  // The staged representation is provably changed through index/tree
+  // metadata. The filtered worktree representation remains unproven because
+  // classifying it would execute the clean filter.
+  const stagedCleanFilterChanges = new Set(
+    [...filteredPaths].filter((repoPath) => stagedPathSet.has(repoPath))
+  );
+  const unprovenCleanFilterChanges = new Set(filteredPaths);
   const forcedExcluded = new Set([
     ...excludedRenameDestinations(stagedRenames.stdout),
     ...excludedRenameDestinations(unstagedRenames.stdout)
@@ -172,13 +188,21 @@ export async function filterSafeWorkingInventory(root, options = {}) {
     }
   }
   return {
-    allPaths: [...new Set([...stagedPaths, ...unstagedPaths, ...untrackedPaths])].sort(),
-    staged: new Set(stagedPaths),
+    allPaths: [...new Set([
+      ...stagedPaths,
+      ...unstagedPaths,
+      ...untrackedPaths,
+      ...unprovenCleanFilterChanges
+    ])].sort(),
+    staged: stagedPathSet,
     unstaged: new Set(unstagedPaths),
     untracked: new Set(untrackedPaths),
     activeCleanFilters: filteredPaths,
+    stagedCleanFilterChanges,
+    unprovenCleanFilterChanges,
     coreFileMode: fileMode.stdout.trim() !== 'false',
     indexModes,
+    indexObjects,
     forcedExcluded
   };
 }
@@ -190,8 +214,11 @@ export function filterSafeInventoryBytes(inventory) {
     unstaged: [...inventory.unstaged].sort(),
     untracked: [...inventory.untracked].sort(),
     activeCleanFilters: [...inventory.activeCleanFilters].sort(),
+    stagedCleanFilterChanges: [...inventory.stagedCleanFilterChanges].sort(),
+    unprovenCleanFilterChanges: [...inventory.unprovenCleanFilterChanges].sort(),
     coreFileMode: inventory.coreFileMode,
     indexModes: [...inventory.indexModes].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
+    indexObjects: [...inventory.indexObjects].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
     forcedExcluded: [...inventory.forcedExcluded].sort()
   }));
 }

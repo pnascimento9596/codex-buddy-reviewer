@@ -509,6 +509,51 @@ test('turn capture stores clean-filtered paths as raw worktree blobs', async () 
   assert.doesNotMatch(JSON.stringify(evidence), /FILTER_OUTPUT/u);
 });
 
+test('turn capture supports a POSIX repository path containing a colon', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const parent = await temporaryDirectory('codex-buddy-auto-colon-parent-');
+  const root = path.join(parent, 'colon:repo');
+  const markerDirectory = await temporaryDirectory('codex-buddy-auto-colon-filter-marker-');
+  const marker = path.join(markerDirectory, 'executions.log');
+  await mkdir(root);
+  await git(root, ['init', '-q', '-b', 'main']);
+  await git(root, ['config', 'user.name', 'Buddy Test']);
+  await git(root, ['config', 'user.email', 'buddy@example.invalid']);
+  await git(root, ['config', 'filter.buddy-capture-test.clean', CLEAN_FILTER_COMMAND]);
+  await git(root, ['config', 'filter.buddy-capture-test.required', 'true']);
+  await writeFile(path.join(root, 'app.js'), 'BASE_CONTENT\n');
+  await writeFile(path.join(root, '.gitattributes'), 'app.js filter=buddy-capture-test\n');
+  await writeFile(marker, '');
+  await withCleanFilterMarker(marker, async () => {
+    await git(root, ['add', '.gitattributes', 'app.js']);
+    await git(root, ['commit', '-q', '-m', 'add colon-path clean-filter fixture']);
+  });
+
+  const snapshotDir = await temporaryDirectory('codex-buddy-auto-colon-snapshot-');
+  await writeFile(marker, '');
+  const baseline = await withCleanFilterMarker(marker, () => captureTurnSnapshot({ root, workDir: snapshotDir }));
+  assert.equal(await readFile(marker, 'utf8'), '');
+  await writeFile(path.join(root, 'app.js'), 'export const value = "RAW_WORKTREE";\n');
+  await writeFile(marker, '');
+  const final = await withCleanFilterMarker(marker, () => captureTurnSnapshot({
+    root,
+    workDir: snapshotDir,
+    privacySalt: baseline.privacy_fragment_salt
+  }));
+  assert.equal(await readFile(marker, 'utf8'), '');
+
+  const evidence = await buildTurnEvidence({
+    baseline,
+    final,
+    sessionId: 'colon-session',
+    turnId: 'colon-turn'
+  });
+  assert.deepEqual(evidence.changed_paths, ['app.js']);
+  assert.match(evidence.patch, /RAW_WORKTREE/u);
+  assert.doesNotMatch(JSON.stringify(evidence), /FILTER_OUTPUT/u);
+});
+
 test('turn capture honors core.fileMode=false for tracked destinations', {
   skip: process.platform === 'win32'
 }, async () => {

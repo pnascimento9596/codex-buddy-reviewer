@@ -184,6 +184,52 @@ async function fingerprintTreePath(
   };
 }
 
+async function fingerprintIndexPath(root, entry, privacySalt = null, privacyInventory = null) {
+  if (!entry) return { hash: null, privacyHash: null, lineCount: null };
+  const { mode, objectId } = entry;
+  if (!['100644', '100755', '120000'].includes(mode)) {
+    return { hash: `git-object:${objectId}`, privacyHash: null, lineCount: null };
+  }
+  const size = Number((await git(root, ['cat-file', '-s', objectId])).trim());
+  if (!Number.isSafeInteger(size) || size < 0) throw new Error('Invalid staged blob size');
+  if (size > MAX_SINGLE_DIFF_BYTES) {
+    return {
+      hash: `git-object:${objectId}`,
+      privacyHash: null,
+      lineCount: null,
+      oversized: true,
+      privacyFragments: [],
+      privacyShortFragments: [],
+      privacyFragmentMatch: false,
+      privacyFragmentsComplete: false,
+      secretScanComplete: true
+    };
+  }
+  const content = await git(root, ['cat-file', 'blob', objectId], {
+    maxOutputBytes: MAX_SINGLE_DIFF_BYTES,
+    encoding: null
+  });
+  const secretScan = scanSecretMaterial(content);
+  const fragments = privacySalt
+    ? privacyFragmentFingerprints(content, privacySalt)
+    : { complete: true, fingerprints: [], shortFingerprints: [] };
+  const matchResult = privacyDecision(content, privacySalt, privacyInventory);
+  return {
+    hash: `git-object:${objectId}`,
+    privacyHash: sha256(content),
+    lineCount: mode === '120000' ? null : countTextLines(content),
+    ...(mode === '120000' ? { symlinkTarget: decodeSymlinkTarget(content) } : {}),
+    privacyFragments: mode === '120000' ? [] : fragments.fingerprints,
+    privacyShortFragments: mode === '120000' ? [] : fragments.shortFingerprints,
+    privacyFragmentMatch: mode === '120000' ? false : matchResult.status === 'match',
+    privacyFragmentsComplete: mode === '120000'
+      ? true
+      : fragments.complete && matchResult.status !== 'incomplete',
+    secretDetected: secretScan.detected,
+    secretScanComplete: secretScan.complete
+  };
+}
+
 async function sensitiveIndexHashes(root, privacySalt) {
   const raw = await git(root, ['ls-files', '--stage', '-z'], {
     maxOutputBytes: MAX_SINGLE_DIFF_BYTES,
@@ -412,7 +458,8 @@ async function emptyTree(root) {
 }
 
 async function createFilterFreePatchContext(root, baseline) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'codex-buddy-filter-free-evidence-'));
+  const rootKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  const directory = await mkdtemp(path.join(os.tmpdir(), `codex-buddy-filter-free-evidence-${rootKey}-`));
   try {
     const objectDirectory = path.join(directory, 'objects');
     await mkdir(objectDirectory, { mode: 0o700 });
@@ -460,6 +507,13 @@ async function filterFreeTrackedPatch(root, repoPath, fingerprint, context, mode
   ], { env: context.env, maxOutputBytes: MAX_SINGLE_DIFF_BYTES });
 }
 
+async function stagedTrackedPatch(root, baseline, repoPath) {
+  return git(root, [
+    'diff', '--cached', '--no-renames', '--no-ext-diff', '--no-textconv', '--unified=80',
+    baseline, '--', literalPathspec(repoPath)
+  ], { maxOutputBytes: MAX_SINGLE_DIFF_BYTES });
+}
+
 function classifyPaths(allPaths, forcedExcluded = new Set()) {
   const result = classifyRepoPaths(allPaths, forcedExcluded);
   return { allowedPaths: result.allowed, excludedPaths: result.excluded };
@@ -476,8 +530,11 @@ async function workingPathInventory(root) {
     excludedRenameDestinations: inventory.forcedExcluded,
     forcedExcluded: inventory.forcedExcluded,
     activeCleanFilters: inventory.activeCleanFilters,
+    stagedCleanFilterChanges: inventory.stagedCleanFilterChanges,
+    unprovenCleanFilterChanges: inventory.unprovenCleanFilterChanges,
     coreFileMode: inventory.coreFileMode,
-    indexModes: inventory.indexModes
+    indexModes: inventory.indexModes,
+    indexObjects: inventory.indexObjects
   };
 }
 
@@ -494,6 +551,8 @@ async function captureWorkingSnapshot(root, options) {
   const untracked = new Set(inventory.untracked);
   const staged = new Set(inventory.staged);
   const unstaged = new Set(inventory.unstaged);
+  const stagedCleanFilterChanges = new Set(inventory.stagedCleanFilterChanges);
+  const unprovenCleanFilterChanges = new Set(inventory.unprovenCleanFilterChanges);
   const tracked = new Set([...inventory.staged, ...inventory.unstaged]);
   const baseline = head === 'UNBORN' ? await emptyTree(root) : head;
   const entries = [];
@@ -513,16 +572,28 @@ async function captureWorkingSnapshot(root, options) {
 
   try {
     for (const repoPath of classified.allowedPaths) {
-      const fingerprint = await fingerprintWorkingPath(
-        root,
-        repoPath,
-        untracked.has(repoPath) && !tracked.has(repoPath)
-          ? options.maxUntrackedFileBytes
-          : MAX_SINGLE_DIFF_BYTES,
-        options.privacySalt,
-        sensitive,
-        tracked.has(repoPath)
-      );
+      const stagedCleanFilter = stagedCleanFilterChanges.has(repoPath);
+      if (unprovenCleanFilterChanges.has(repoPath) && !stagedCleanFilter) {
+        allowedPaths.push(repoPath);
+        entries.push({ path: repoPath, disposition: 'filter_change_unproven', patch: '' });
+        contentHashes[repoPath] = null;
+        lineCounts[repoPath] = null;
+        oldLineCounts[repoPath] = null;
+        continue;
+      }
+      const indexEntry = stagedCleanFilter ? inventory.indexObjects.get(repoPath) : null;
+      const fingerprint = stagedCleanFilter
+        ? await fingerprintIndexPath(root, indexEntry, options.privacySalt, sensitive)
+        : await fingerprintWorkingPath(
+            root,
+            repoPath,
+            untracked.has(repoPath) && !tracked.has(repoPath)
+              ? options.maxUntrackedFileBytes
+              : MAX_SINGLE_DIFF_BYTES,
+            options.privacySalt,
+            sensitive,
+            tracked.has(repoPath)
+          );
       const baselineFingerprint = await fingerprintTreePath(
         root,
         baseline,
@@ -581,10 +652,14 @@ async function captureWorkingSnapshot(root, options) {
         const canBuildFilterFreePatch = fingerprint.hash === null
           || (Buffer.isBuffer(fingerprint.rawContent) && fingerprint.mode);
         const cleanFilterActive = inventory.activeCleanFilters.has(repoPath);
-        if (cleanFilterActive && canBuildFilterFreePatch && !filterFreeContext) {
+        if (cleanFilterActive && !stagedCleanFilter && canBuildFilterFreePatch && !filterFreeContext) {
           filterFreeContext = await createFilterFreePatchContext(root, baseline);
         }
-        const patchText = cleanFilterActive && !canBuildFilterFreePatch
+        const patchText = stagedCleanFilter && fingerprint.oversized
+          ? ''
+          : stagedCleanFilter
+          ? await stagedTrackedPatch(root, baseline, repoPath)
+          : cleanFilterActive && !canBuildFilterFreePatch
           ? ''
           : cleanFilterActive
           ? await filterFreeTrackedPatch(
@@ -610,6 +685,9 @@ async function captureWorkingSnapshot(root, options) {
         ...entry,
         ...(fingerprint.hash === null ? { fileState: 'deleted', oldLineCount: baselineFingerprint.lineCount } : {})
       });
+      if (stagedCleanFilter && indexEntry && entry.disposition === 'complete') {
+        entries.push({ path: repoPath, disposition: 'filter_change_unproven', patch: '' });
+      }
     }
   } finally {
     if (filterFreeContext) {
