@@ -16,19 +16,13 @@ import {
   readPresentationProfile
 } from '../src/presentation-state.mjs';
 import { workspaceKey } from '../src/state.mjs';
+import {
+  assertNoExclusiveAuthorship,
+  EXCLUSIVE_AUTHORSHIP_PATTERNS
+} from './helpers/exclusive-authorship.mjs';
 
 const reviewA = 'a'.repeat(64);
 const reviewB = 'b'.repeat(64);
-const EXCLUSIVE_AUTHORSHIP_PATTERNS = Object.freeze([
-  /\b(?:I|we|you|Buddy|(?:the\s+)?worker(?: agent)?|(?:the\s+)?coding agent|(?:the\s+)?agent|(?:the\s+)?user|(?:the\s+)?reviewer)\s+(?:made|wrote|authored|implemented|created|added|changed|modified|updated|fixed|removed|deleted|renamed|moved|refactored|committed)\b/iu,
-  /\b(?:my|our|your|Buddy['’]s|(?:the\s+)?worker(?: agent)?['’]s|(?:the\s+)?coding agent['’]s|(?:the\s+)?agent['’]s|(?:the\s+)?user['’]s|(?:the\s+)?reviewer['’]s)\s+(?:changes?|code|implementation|work|patch|diff|commits?|files?|bytes?)\b/iu,
-  /\b(?:changes?|code|implementation|work|patch|diff|commits?|files?|bytes?)\s+(?:that\s+)?(?:I|we|you|Buddy|(?:the\s+)?worker(?: agent)?|(?:the\s+)?coding agent|(?:the\s+)?agent|(?:the\s+)?user|(?:the\s+)?reviewer)\s+(?:made|wrote|authored|implemented|created|added|changed|modified|updated|fixed|removed|deleted|renamed|moved|refactored|committed)\b/iu,
-  /\b(?:authored|written|implemented|created|changed|modified|fixed|added|removed|deleted|renamed|moved|refactored|committed)\s+(?:(?:entirely|exclusively|solely)\s+)?by\s+(?:me|us|you|Buddy|the worker(?: agent)?|the coding agent|the agent|the user|the reviewer)\b/iu
-]);
-
-function assertNoExclusiveAuthorship(value) {
-  for (const pattern of EXCLUSIVE_AUTHORSHIP_PATTERNS) assert.doesNotMatch(value, pattern);
-}
 
 test('exclusive-authorship guard rejects active, possessive, and passive single-actor claims', () => {
   const forbiddenExamples = [

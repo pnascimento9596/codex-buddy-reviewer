@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { access, chmod, copyFile, readFile, stat, mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { access, chmod, copyFile, readFile, readdir, stat, mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
@@ -833,6 +833,10 @@ test('manual capture fingerprints clean-filtered tracked paths from raw worktree
   });
 
   const rawBytes = Buffer.from('export const value = "RAW_WORKTREE";\n');
+  if (process.platform !== 'win32') {
+    await git(root, ['config', 'core.fileMode', 'false']);
+    await chmod(path.join(root, trackedPath), 0o755);
+  }
   await writeFile(path.join(root, trackedPath), rawBytes);
   await writeFile(marker, '');
   await withCleanFilterMarker(marker, async () => {
@@ -841,11 +845,84 @@ test('manual capture fingerprints clean-filtered tracked paths from raw worktree
   });
   assert.equal(await readFile(marker, 'utf8'), '');
 
+  await writeFile(marker, '');
   const evidence = await withCleanFilterMarker(marker, () => collectEvidence({ cwd: root }));
+  assert.equal(await readFile(marker, 'utf8'), '');
   assert.equal(
     evidence.content_hashes[trackedPath],
     createHash('sha256').update(rawBytes).digest('hex')
   );
+  assert.match(evidence.patch, /RAW_WORKTREE/u);
+  assert.doesNotMatch(evidence.patch, /(?:old|new) mode/u);
+  assert.doesNotMatch(JSON.stringify(evidence), /FILTER_OUTPUT/u);
+});
+
+test('manual capture safely omits oversized filtered paths without executing the filter', async () => {
+  const root = await makeRepository();
+  const markerDirectory = await temporaryDirectory('codex-buddy-oversized-filter-marker-');
+  const marker = path.join(markerDirectory, 'executions.log');
+  const trackedPath = 'oversized filtered file.js';
+  await git(root, ['config', 'filter.buddy-capture-test.clean', CLEAN_FILTER_COMMAND]);
+  await git(root, ['config', 'filter.buddy-capture-test.required', 'true']);
+  await writeFile(path.join(root, trackedPath), 'BASE_CONTENT\n');
+  await writeFile(path.join(root, '.gitattributes'), '"oversized filtered file.js" filter=buddy-capture-test\n');
+  await writeFile(marker, '');
+  await withCleanFilterMarker(marker, async () => {
+    await git(root, ['add', '.gitattributes', trackedPath]);
+    await git(root, ['commit', '-q', '-m', 'add oversized clean-filter fixture']);
+  });
+
+  await writeFile(path.join(root, trackedPath), 'RAW_WORKTREE\n');
+  await truncate(path.join(root, trackedPath), (64 * 1024 * 1024) + 1);
+  await git(root, ['status', '--porcelain=v1', '--untracked-files=all']);
+  await writeFile(marker, '');
+
+  const evidence = await withCleanFilterMarker(marker, () => collectEvidence({ cwd: root }));
+  assert.equal(await readFile(marker, 'utf8'), '');
+  assert.deepEqual(evidence.incomplete_paths, [trackedPath]);
+  assert.deepEqual(evidence.path_evidence, [{
+    path: trackedPath,
+    disposition: 'size_omitted',
+    patch_bytes: 0,
+    transmitted: false,
+    hunk_ranges: []
+  }]);
+  assert.equal(evidence.patch, '');
+  assert.doesNotMatch(JSON.stringify(evidence), /RAW_WORKTREE|FILTER_OUTPUT/u);
+});
+
+test('filter-free evidence supports POSIX repository paths containing a colon', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const parent = await temporaryDirectory('codex-buddy-colon-parent-');
+  const root = path.join(parent, 'colon:repo');
+  const markerDirectory = await temporaryDirectory('codex-buddy-colon-filter-marker-');
+  const marker = path.join(markerDirectory, 'executions.log');
+  const temporaryPrefix = 'codex-buddy-filter-free-evidence-';
+  await mkdir(root);
+  await git(root, ['init', '-q', '-b', 'main']);
+  await git(root, ['config', 'user.name', 'Buddy Test']);
+  await git(root, ['config', 'user.email', 'buddy@example.invalid']);
+  await git(root, ['config', 'filter.buddy-capture-test.clean', CLEAN_FILTER_COMMAND]);
+  await git(root, ['config', 'filter.buddy-capture-test.required', 'true']);
+  await writeFile(path.join(root, 'app.js'), 'BASE_CONTENT\n');
+  await writeFile(path.join(root, '.gitattributes'), 'app.js filter=buddy-capture-test\n');
+  await writeFile(marker, '');
+  await withCleanFilterMarker(marker, async () => {
+    await git(root, ['add', '.gitattributes', 'app.js']);
+    await git(root, ['commit', '-q', '-m', 'add colon-path clean-filter fixture']);
+  });
+
+  const rawBytes = Buffer.from('export const value = "RAW_WORKTREE";\n');
+  await writeFile(path.join(root, 'app.js'), rawBytes);
+  await git(root, ['status', '--porcelain=v1', '--untracked-files=all']);
+  await writeFile(marker, '');
+  const before = (await readdir(os.tmpdir())).filter((name) => name.startsWith(temporaryPrefix)).sort();
+
+  const evidence = await withCleanFilterMarker(marker, () => collectEvidence({ cwd: root }));
+  const after = (await readdir(os.tmpdir())).filter((name) => name.startsWith(temporaryPrefix)).sort();
+  assert.equal(await readFile(marker, 'utf8'), '');
+  assert.deepEqual(after, before);
   assert.match(evidence.patch, /RAW_WORKTREE/u);
   assert.doesNotMatch(JSON.stringify(evidence), /FILTER_OUTPUT/u);
 });
