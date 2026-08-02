@@ -96,7 +96,7 @@ function classifyPaths(inventory) {
   return classifyRepoPaths(inventory.allPaths, inventory.forcedExcluded);
 }
 
-async function stageWorkingPath(root, repoPath, env, maxFileBytes) {
+async function stageWorkingPath(root, repoPath, env, maxFileBytes, modeOverride = null) {
   const absolute = path.join(root, repoPath);
   let stat;
   try {
@@ -119,7 +119,7 @@ async function stageWorkingPath(root, repoPath, env, maxFileBytes) {
     }
     content = await readFile(absolute);
     activeBudget()?.chargeFileBytes(content.length);
-    mode = stat.mode & 0o111 ? '100755' : '100644';
+    mode = modeOverride ?? (stat.mode & 0o111 ? '100755' : '100644');
   } else {
     return { disposition: 'non_file_omitted', contentHash: null, lineCount: null };
   }
@@ -422,7 +422,16 @@ async function captureOnce({ root, objectDir, workDir, maxFileBytes, privacySalt
     if (head === 'UNBORN') await git(root, ['read-tree', '--empty'], { env });
     else await git(root, ['read-tree', head], { env });
     for (const repoPath of allowed) {
-      const staged = await stageWorkingPath(root, repoPath, env, maxFileBytes);
+      const preserveIndexMode = inventory.indexModes.has(repoPath)
+        && (!inventory.coreFileMode
+          || (inventory.activeCleanFilters.has(repoPath) && inventory.staged.has(repoPath)));
+      const staged = await stageWorkingPath(
+        root,
+        repoPath,
+        env,
+        maxFileBytes,
+        preserveIndexMode ? inventory.indexModes.get(repoPath) : null
+      );
       contentHashes[repoPath] = staged.contentHash;
       lineCounts[repoPath] = staged.lineCount;
       if (inventory.staged.has(repoPath)

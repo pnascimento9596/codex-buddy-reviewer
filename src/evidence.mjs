@@ -420,9 +420,6 @@ async function createFilterFreePatchContext(root, baseline) {
       root,
       (await git(root, ['rev-parse', '--git-path', 'objects'])).trim()
     );
-    const fileMode = (await git(root, ['config', '--bool', 'core.fileMode'], {
-      acceptedExitCodes: [0, 1]
-    })).trim();
     const env = {
       GIT_INDEX_FILE: path.join(directory, 'index'),
       GIT_OBJECT_DIRECTORY: objectDirectory,
@@ -431,23 +428,14 @@ async function createFilterFreePatchContext(root, baseline) {
       GIT_ALTERNATE_OBJECT_DIRECTORIES: quoteGitAlternateObjectDirectory(originalObjectDirectory)
     };
     await git(root, ['read-tree', baseline], { env });
-    return { baseline, directory, env, coreFileMode: fileMode !== 'false' };
+    return { baseline, directory, env };
   } catch (error) {
     await rm(directory, { recursive: true, force: true });
     throw error;
   }
 }
 
-async function currentIndexMode(root, repoPath) {
-  const raw = await git(root, ['ls-files', '--stage', '-z', '--', literalPathspec(repoPath)], {
-    encoding: null,
-    maxOutputBytes: 1024 * 1024
-  });
-  const entry = parseGitIndexEntries(raw).find((item) => item.path === repoPath && item.stage === '0');
-  return entry?.mode ?? null;
-}
-
-async function filterFreeTrackedPatch(root, repoPath, fingerprint, context, preferIndexMode) {
+async function filterFreeTrackedPatch(root, repoPath, fingerprint, context, modeOverride) {
   if (fingerprint.hash === null) {
     await git(root, ['update-index', '--force-remove', '--', repoPath], { env: context.env });
   } else {
@@ -460,7 +448,7 @@ async function filterFreeTrackedPatch(root, repoPath, fingerprint, context, pref
       input: fingerprint.rawContent,
       maxOutputBytes: 1024 * 1024
     })).trim();
-    const mode = preferIndexMode ? (await currentIndexMode(root, repoPath) ?? fingerprint.mode) : fingerprint.mode;
+    const mode = modeOverride ?? fingerprint.mode;
     await git(root, [
       'update-index', '--add', '--cacheinfo', `${mode},${objectId},${repoPath}`
     ], { env: context.env });
@@ -487,7 +475,9 @@ async function workingPathInventory(root) {
     allPaths: inventory.allPaths,
     excludedRenameDestinations: inventory.forcedExcluded,
     forcedExcluded: inventory.forcedExcluded,
-    activeCleanFilters: inventory.activeCleanFilters
+    activeCleanFilters: inventory.activeCleanFilters,
+    coreFileMode: inventory.coreFileMode,
+    indexModes: inventory.indexModes
   };
 }
 
@@ -602,7 +592,9 @@ async function captureWorkingSnapshot(root, options) {
               repoPath,
               fingerprint,
               filterFreeContext,
-              staged.has(repoPath) || !filterFreeContext.coreFileMode
+              staged.has(repoPath) || !inventory.coreFileMode
+                ? inventory.indexModes.get(repoPath)
+                : null
             )
           : await git(root, [
               'diff', '--no-renames', '--no-ext-diff', '--no-textconv', '--unified=80',

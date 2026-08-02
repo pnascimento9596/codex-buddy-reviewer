@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { access, chmod, copyFile, readFile, readdir, stat, mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { access, chmod, copyFile, readFile, readdir, rename, stat, mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
@@ -625,6 +625,32 @@ test('sanitized status cannot reveal an excluded rename source', async () => {
   assert.equal(evidence.excluded_paths.some((item) => item.path === 'src/config.js'), true);
   assert.doesNotMatch(evidence.status, /\.env|->/);
   assert.doesNotMatch(buildReviewPrompt(evidence), /\.env|never-name-this/);
+});
+
+test('attribute removal cannot launder denied filtered sources into tracked destinations', async () => {
+  const root = await makeRepository();
+  const markerDirectory = await temporaryDirectory('codex-buddy-denied-filter-marker-');
+  const marker = path.join(markerDirectory, 'executions.log');
+  await git(root, ['config', 'filter.buddy-capture-test.clean', CLEAN_FILTER_COMMAND]);
+  await git(root, ['config', 'filter.buddy-capture-test.required', 'true']);
+  await writeFile(path.join(root, '.gitattributes'), '.env filter=buddy-capture-test\n');
+  await writeFile(path.join(root, '.env'), 'TOKEN=RAW_WORKTREE\n');
+  await writeFile(marker, '');
+  await withCleanFilterMarker(marker, async () => {
+    await git(root, ['add', '.gitattributes', '.env']);
+    await git(root, ['commit', '-q', '-m', 'add filtered private config']);
+  });
+  await writeFile(path.join(root, '.gitattributes'), '');
+  await git(root, ['add', '.gitattributes']);
+  await rename(path.join(root, '.env'), path.join(root, 'app.js'));
+  await writeFile(marker, '');
+
+  const evidence = await withCleanFilterMarker(marker, () => collectEvidence({ cwd: root }));
+  assert.equal(await readFile(marker, 'utf8'), '');
+  assert.deepEqual(evidence.changed_paths, []);
+  assert.equal(evidence.excluded_paths.some((item) => item.path === '.env'), true);
+  assert.equal(evidence.excluded_paths.some((item) => item.path === 'app.js'), true);
+  assert.doesNotMatch(buildReviewPrompt(evidence), /\.env|RAW_WORKTREE|FILTER_OUTPUT/u);
 });
 
 test('default receipt stores hashes and metadata but omits patch and stderr text', async () => {

@@ -1,9 +1,11 @@
 import {
   excludedRenameDestinations,
   literalPathspec,
+  parseGitIndexEntries,
   runGit,
   splitNull
 } from './git-privacy-kernel.mjs';
+import { pathPolicy } from './policy.mjs';
 
 const MAX_PATHSPEC_ARGUMENT_BYTES = 16 * 1024;
 const MAX_PATHSPEC_BATCH_PATHS = 128;
@@ -35,9 +37,8 @@ function attributeInput(paths) {
   return Buffer.from(`${paths.join('\0')}\0`);
 }
 
-async function cleanFilterPaths(root, trackedPaths, options) {
-  if (trackedPaths.length === 0) return new Set();
-  const result = await runGit(root, ['check-attr', '-z', '--stdin', 'filter'], {
+async function cleanFilterPathsFrom(root, trackedPaths, sourceArgs, options) {
+  const result = await runGit(root, ['check-attr', '-z', ...sourceArgs, '--stdin', 'filter'], {
     ...options,
     encoding: null,
     input: attributeInput(trackedPaths),
@@ -58,6 +59,20 @@ async function cleanFilterPaths(root, trackedPaths, options) {
     if (!['unspecified', 'unset', 'set'].includes(value)) active.add(pathField);
   }
   return active;
+}
+
+async function cleanFilterPaths(root, candidatePaths, options) {
+  if (candidatePaths.length === 0) return new Set();
+  const head = await runGit(root, ['rev-parse', '--verify', 'HEAD'], {
+    ...options,
+    acceptedExitCodes: [0, 128]
+  });
+  const sources = [[], ['--cached']];
+  if (head.stdout.trim()) sources.push([`--source=${head.stdout.trim()}`]);
+  const resolved = await Promise.all(
+    sources.map((sourceArgs) => cleanFilterPathsFrom(root, candidatePaths, sourceArgs, options))
+  );
+  return new Set(resolved.flatMap((paths) => [...paths]));
 }
 
 function pathspecBytes(paths) {
@@ -103,17 +118,27 @@ async function worktreeDiffWithoutFilters(root, args, trackedPaths, filteredPath
 }
 
 export async function filterSafeWorkingInventory(root, options = {}) {
-  const [staged, untracked, stagedRenames, tracked] = await Promise.all([
+  const [staged, untracked, stagedRenames, tracked, fileMode] = await Promise.all([
     runGit(root, ['diff', '--name-only', '--no-renames', '-z', '--cached'], { ...options, encoding: null }),
     runGit(root, ['ls-files', '--others', '--exclude-standard', '-z'], { ...options, encoding: null }),
     runGit(root, ['diff', '--name-status', '--find-renames', '--find-copies-harder', '-z', '--cached'], {
       ...options,
       encoding: null
     }),
-    runGit(root, ['ls-files', '-z'], { ...options, encoding: null })
+    runGit(root, ['ls-files', '--stage', '-z'], { ...options, encoding: null }),
+    runGit(root, ['config', '--bool', 'core.fileMode'], {
+      ...options,
+      acceptedExitCodes: [0, 1]
+    })
   ]);
-  const trackedPaths = splitNull(tracked.stdout);
-  const filteredPaths = await cleanFilterPaths(root, trackedPaths, options);
+  const stagedPaths = splitNull(staged.stdout);
+  const indexEntries = parseGitIndexEntries(tracked.stdout);
+  const trackedPaths = [...new Set(indexEntries.map((entry) => entry.path))].sort();
+  const indexModes = new Map(
+    indexEntries.filter((entry) => entry.stage === '0').map((entry) => [entry.path, entry.mode])
+  );
+  const attributeCandidatePaths = [...new Set([...trackedPaths, ...stagedPaths])].sort();
+  const filteredPaths = await cleanFilterPaths(root, attributeCandidatePaths, options);
   const [unstaged, unstagedRenames] = await Promise.all([
     worktreeDiffWithoutFilters(
       root,
@@ -130,19 +155,31 @@ export async function filterSafeWorkingInventory(root, options = {}) {
       options
     )
   ]);
-  const stagedPaths = splitNull(staged.stdout);
   const unstagedPaths = [...new Set([...splitNull(unstaged.stdout), ...filteredPaths])].sort();
   const untrackedPaths = splitNull(untracked.stdout);
+  const forcedExcluded = new Set([
+    ...excludedRenameDestinations(stagedRenames.stdout),
+    ...excludedRenameDestinations(unstagedRenames.stdout)
+  ]);
+  const hasDeniedFilteredSource = [...filteredPaths].some((repoPath) => !pathPolicy(repoPath).allowed);
+  // A clean filter is intentionally never run to reconstruct a denied source's
+  // raw historical bytes. Conservatively exclude every changed destination
+  // while one exists rather than permitting filter-based copy laundering into
+  // either an untracked path or an already-tracked path.
+  if (hasDeniedFilteredSource) {
+    for (const repoPath of [...stagedPaths, ...unstagedPaths, ...untrackedPaths]) {
+      forcedExcluded.add(repoPath);
+    }
+  }
   return {
     allPaths: [...new Set([...stagedPaths, ...unstagedPaths, ...untrackedPaths])].sort(),
     staged: new Set(stagedPaths),
     unstaged: new Set(unstagedPaths),
     untracked: new Set(untrackedPaths),
     activeCleanFilters: filteredPaths,
-    forcedExcluded: new Set([
-      ...excludedRenameDestinations(stagedRenames.stdout),
-      ...excludedRenameDestinations(unstagedRenames.stdout)
-    ])
+    coreFileMode: fileMode.stdout.trim() !== 'false',
+    indexModes,
+    forcedExcluded
   };
 }
 
@@ -153,6 +190,8 @@ export function filterSafeInventoryBytes(inventory) {
     unstaged: [...inventory.unstaged].sort(),
     untracked: [...inventory.untracked].sort(),
     activeCleanFilters: [...inventory.activeCleanFilters].sort(),
+    coreFileMode: inventory.coreFileMode,
+    indexModes: [...inventory.indexModes].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
     forcedExcluded: [...inventory.forcedExcluded].sort()
   }));
 }

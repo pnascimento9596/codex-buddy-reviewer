@@ -455,12 +455,18 @@ test('turn capture stores clean-filtered paths as raw worktree blobs', async () 
     await git(root, ['add', '.gitattributes']);
     await git(root, ['commit', '-q', '-m', 'add clean-filter fixture']);
   });
+  if (process.platform !== 'win32') {
+    await git(root, ['config', 'core.fileMode', 'false']);
+    await chmod(path.join(root, 'app.js'), 0o755);
+  }
 
   const snapshotDir = await temporaryDirectory('codex-buddy-filter-snapshot-');
+  await writeFile(marker, '');
   const baseline = await withCleanFilterMarker(marker, () => captureTurnSnapshot({
     root,
     workDir: snapshotDir
   }));
+  assert.equal(await readFile(marker, 'utf8'), '');
   const rawBytes = Buffer.from('const value = "RAW_WORKTREE";\n');
   await writeFile(path.join(root, 'app.js'), rawBytes);
   await writeFile(marker, '');
@@ -499,7 +505,33 @@ test('turn capture stores clean-filtered paths as raw worktree blobs', async () 
   });
   assert.deepEqual(blob.stdout, rawBytes);
   assert.match(evidence.patch, /RAW_WORKTREE/u);
+  assert.doesNotMatch(evidence.patch, /(?:old|new) mode/u);
   assert.doesNotMatch(JSON.stringify(evidence), /FILTER_OUTPUT/u);
+});
+
+test('turn capture honors core.fileMode=false for tracked destinations', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const root = await makeRepository();
+  await git(root, ['config', 'core.fileMode', 'false']);
+  const snapshotDir = await temporaryDirectory('codex-buddy-filemode-snapshot-');
+  const baseline = await captureTurnSnapshot({ root, workDir: snapshotDir });
+  await chmod(path.join(root, 'app.js'), 0o755);
+  await writeFile(path.join(root, 'app.js'), 'const value = 2;\n');
+  const final = await captureTurnSnapshot({
+    root,
+    workDir: snapshotDir,
+    privacySalt: baseline.privacy_fragment_salt
+  });
+
+  const evidence = await buildTurnEvidence({
+    baseline,
+    final,
+    sessionId: 'filemode-session',
+    turnId: 'filemode-turn'
+  });
+  assert.match(evidence.patch, /\+const value = 2;/u);
+  assert.doesNotMatch(evidence.patch, /(?:old|new) mode/u);
 });
 
 test('turn snapshot capture leaves the user index, HEAD, and working status unchanged', async () => {
