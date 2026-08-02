@@ -480,6 +480,26 @@ test('runtime receipt shapes are rejected outside whole-object JSON', async () =
   }
 });
 
+test('encoded and value-adjacent runtime receipt content is rejected', async () => {
+  const reviewKey = 'b'.repeat(64);
+  const receipt = {
+    review_key: reviewKey,
+    terminal_status: 'findings',
+    reviewer_runs: []
+  };
+  const variants = {
+    'serialized.json': `${JSON.stringify({ diagnostic: JSON.stringify(receipt) })}\n`,
+    'double-escaped.json': `${JSON.stringify({ diagnostic: JSON.stringify(JSON.stringify(receipt)) })}\n`,
+    'array.json': `${JSON.stringify([{ kind: 'diagnostic' }, receipt])}\n`,
+    'runtime.log': `review_key ${reviewKey} terminal_status findings reviewer_runs empty\n`
+  };
+
+  for (const [name, content] of Object.entries(variants)) {
+    const root = await fixture({ [name]: content });
+    await rejectsWithCode(checkPublicationBoundary({ root }), 'RUNTIME_RECEIPT_CONTENT');
+  }
+});
+
 test('ordinary documentation and test source may discuss receipt field names', async () => {
   const root = await fixture({
     'docs/receipt-format.md': [
@@ -489,6 +509,11 @@ test('ordinary documentation and test source may discuss receipt field names', a
     'tests/receipt-format.test.mjs': [
       "const fixture = { review_key: 'a'.repeat(64), terminal_status: 'findings', reviewer_runs: [] };",
       'void fixture;'
+    ].join('\n'),
+    'tests/synthetic-receipt.txt': [
+      'review_key=short-synthetic-key',
+      'terminal_status=findings',
+      'reviewer_runs=[]'
     ].join('\n')
   });
   const result = await checkPublicationBoundary({ root });

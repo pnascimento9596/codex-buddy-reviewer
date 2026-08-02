@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 
+/**
+ * Accidental-inclusion guard for plain, JSON, singly encoded JSON-string, and
+ * value-adjacent runtime receipt content. Deliberate multi-layer encoding,
+ * compression, base64, or field splitting is outside this scanner's scope.
+ * See docs/SECURITY.md, "Repository credential hygiene" and "Known
+ * limitations"; Buddy's product boundary is that receipts are written only
+ * to private state, not that this publication guard detects malicious same-user
+ * obfuscation.
+ */
+
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
@@ -89,6 +99,10 @@ const NON_CONTINUABLE_METADATA_FIELDS = new Set([
 ]);
 const COMMIT_STRUCTURAL_FIELDS = new Set(['tree', 'parent', 'author', 'committer', 'encoding']);
 const TAG_STRUCTURAL_FIELDS = new Set(['object', 'type', 'tag', 'tagger', 'encoding']);
+const RECEIPT_VALUE_VOCABULARY = /\b(?:review_key|terminal_status|reviewer_runs|evidence_digest)\b/i;
+const RECEIPT_VALUE_WINDOW = 192;
+const RECEIPT_JSON_MAX_DEPTH = 4;
+const RECEIPT_JSON_MAX_NODES = 512;
 
 export class PublicationBoundaryError extends Error {
   constructor(code, message) {
@@ -416,6 +430,54 @@ function isRuntimeReceiptJson(text) {
   }
 }
 
+function hasDecodedJsonRuntimeReceipt(text) {
+  let root;
+  try {
+    root = JSON.parse(text);
+  } catch {
+    return false;
+  }
+
+  const pending = [{ value: root, depth: 0 }];
+  let visited = 0;
+  while (pending.length > 0 && visited < RECEIPT_JSON_MAX_NODES) {
+    const { value, depth } = pending.pop();
+    visited += 1;
+    if (value === null || typeof value === 'boolean' || typeof value === 'number') continue;
+    if (typeof value === 'string') {
+      if (depth >= RECEIPT_JSON_MAX_DEPTH) continue;
+      let decoded;
+      try {
+        decoded = JSON.parse(value);
+      } catch {
+        continue;
+      }
+      if (decoded !== null && typeof decoded === 'object'
+          && hasRuntimeReceiptShape(JSON.stringify(decoded))) return true;
+      pending.push({ value: decoded, depth: depth + 1 });
+      continue;
+    }
+    if (depth >= RECEIPT_JSON_MAX_DEPTH) continue;
+    const children = Array.isArray(value) ? value : Object.values(value);
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      if (pending.length + visited >= RECEIPT_JSON_MAX_NODES) break;
+      pending.push({ value: children[index], depth: depth + 1 });
+    }
+  }
+  return false;
+}
+
+function hasReceiptVocabularyNearHex(text) {
+  const tokenPattern = /(?:^|[^a-f0-9])([a-f0-9]{64})(?![a-f0-9])/gi;
+  for (const match of text.matchAll(tokenPattern)) {
+    const tokenOffset = match.index + match[0].length - match[1].length;
+    const start = Math.max(0, tokenOffset - RECEIPT_VALUE_WINDOW);
+    const end = Math.min(text.length, tokenOffset + match[1].length + RECEIPT_VALUE_WINDOW);
+    if (RECEIPT_VALUE_VOCABULARY.test(text.slice(start, end))) return true;
+  }
+  return false;
+}
+
 function hasConcreteRuntimeIdentity(text) {
   const fieldWithValue = (field, value) => {
     const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -430,6 +492,7 @@ function hasConcreteRuntimeIdentity(text) {
 }
 
 function hasRuntimeReceiptBlobShape(text) {
+  if (hasReceiptVocabularyNearHex(text) || hasDecodedJsonRuntimeReceipt(text)) return true;
   if (!hasRuntimeReceiptShape(text)) return false;
   return isRuntimeReceiptJson(text) || hasConcreteRuntimeIdentity(text);
 }

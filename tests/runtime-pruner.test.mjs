@@ -448,6 +448,7 @@ test('orphaned automatic receipts from an interrupted publication still reach th
 
 test('an unreadable turn session preserves claimed receipts as ambiguous', {
   skip: process.platform === 'win32'
+    || (typeof process.getuid === 'function' && process.getuid() === 0)
 }, async () => {
   const { runtimeDataDir, root, turnDir } = await fixture();
   const reviewKey = 'f'.repeat(64);
