@@ -220,15 +220,15 @@ async function cleanTurnDirectory(directory) {
       return false;
     }
     if (preReviewIsActive(state)) return false;
-    await Promise.all([
-      rm(path.join(directory, 'baseline.json'), { force: true }).catch(() => {}),
-      rm(path.join(directory, 'snapshot'), { recursive: true, force: true }).catch(() => {}),
-      rm(path.join(directory, 'pre-review-snapshot'), { recursive: true, force: true }).catch(() => {}),
-      rm(path.join(directory, 'attempt.json'), { force: true }).catch(() => {}),
-      rm(path.join(directory, 'pre-review.json'), { force: true }).catch(() => {}),
-      rm(path.join(directory, 'pre-review-attempts'), { recursive: true, force: true }).catch(() => {})
+    const removals = await Promise.allSettled([
+      rm(path.join(directory, 'baseline.json'), { force: true }),
+      rm(path.join(directory, 'snapshot'), { recursive: true, force: true }),
+      rm(path.join(directory, 'pre-review-snapshot'), { recursive: true, force: true }),
+      rm(path.join(directory, 'attempt.json'), { force: true }),
+      rm(path.join(directory, 'pre-review.json'), { force: true }),
+      rm(path.join(directory, 'pre-review-attempts'), { recursive: true, force: true })
     ]);
-    return true;
+    return removals.every((removal) => removal.status === 'fulfilled');
   }, { timeoutMs: STOP_LEASE_TIMEOUT_MS, staleMs: STOP_LEASE_TIMEOUT_MS }).catch(() => false);
 }
 
@@ -277,9 +277,12 @@ function receiptModelIdentifiersAreSafe(terminal) {
 }
 
 async function continuationFromReceipt(terminal, options) {
-  const output = outputFromReceipt(terminal);
+  let output = outputFromReceipt(terminal);
   if (!output) return null;
   if (!receiptModelIdentifiersAreSafe(terminal)) return null;
+  if (options.turnCleanupStatus === 'failed') {
+    output = { ...output, turn_cleanup_status: 'failed' };
+  }
   const companion = await presentationForCompletedReview({
     root: options.root,
     dataDir: options.dataDir,
@@ -297,6 +300,7 @@ async function adoptPreReviewReceipt({
   terminal,
   receipt,
   completedFile,
+  directory,
   root,
   input,
   runtimeDataDir,
@@ -305,7 +309,7 @@ async function adoptPreReviewReceipt({
   skipped = 'pre_review_adopted'
 }) {
   const reviewKey = terminal.review_key;
-  const output = outputFromReceipt(terminal);
+  let output = outputFromReceipt(terminal);
   if (!output) {
     await writePrivateJsonAtomic(completedFile, {
       schema_version: '1',
@@ -366,7 +370,6 @@ async function adoptPreReviewReceipt({
       receipt
     };
   }
-  const continuation = renderContinuation({ output, reviewKey });
   const companion = await presentationForCompletedReview({
     root,
     dataDir: modeDataDir,
@@ -381,6 +384,16 @@ async function adoptPreReviewReceipt({
     presentation_status: 'prepared',
     completed_at: new Date().toISOString()
   });
+  const turnCleanupComplete = await cleanTurnDirectory(directory);
+  if (!turnCleanupComplete) {
+    output = { ...output, turn_cleanup_status: 'failed' };
+    const preparedCompletion = await readPrivateJson(completedFile);
+    await writePrivateJsonAtomic(completedFile, {
+      ...preparedCompletion,
+      turn_cleanup_status: 'failed'
+    });
+  }
+  const continuation = renderContinuation({ output, reviewKey });
   const reviewerRuns = Array.isArray(terminal.reviewer_runs) ? terminal.reviewer_runs : [];
   await safeEmit({
     runtimeDataDir,
@@ -696,8 +709,18 @@ export async function reviewTurnStop(input, options = {}) {
       const receiptDigestMatches = REVIEW_KEY_PATTERN.test(completed.receipt_sha256 ?? '')
         && terminal
         && automaticReceiptDigest(terminal) === completed.receipt_sha256;
+      const turnCleanupComplete = await cleanTurnDirectory(directory);
+      let replayCompletion = completed;
+      if (!turnCleanupComplete && completed.turn_cleanup_status !== 'failed') {
+        replayCompletion = { ...completed, turn_cleanup_status: 'failed' };
+        await writePrivateJsonAtomic(completedFile, replayCompletion);
+      }
       const reason = receiptDigestMatches
-        ? await continuationFromReceipt(terminal, { root, dataDir: options.modeDataDir })
+        ? await continuationFromReceipt(terminal, {
+          root,
+          dataDir: options.modeDataDir,
+          turnCleanupStatus: replayCompletion.turn_cleanup_status
+        })
         : null;
       if (!receiptDigestMatches) {
         await writePrivateJsonAtomic(completedFile, {
@@ -710,11 +733,10 @@ export async function reviewTurnStop(input, options = {}) {
       }
       const delivery = await claimContinuationDelivery(
         completedFile,
-        completed,
+        replayCompletion,
         reason,
         options.deliveryRetryMs ?? DELIVERY_RETRY_MS
       );
-      await cleanTurnDirectory(directory);
       if (delivery) {
         return {
           output: delivery.output,
@@ -892,6 +914,7 @@ export async function reviewTurnStop(input, options = {}) {
         terminal: exactTerminal,
         receipt,
         completedFile,
+        directory,
         root,
         input,
         runtimeDataDir: options.runtimeDataDir,
@@ -1393,6 +1416,15 @@ export async function reviewTurnStop(input, options = {}) {
       receipt_sha256: automaticReceiptDigest(terminal),
       presentation_status: 'prepared', completed_at: new Date().toISOString()
     });
+    const turnCleanupComplete = await cleanTurnDirectory(directory);
+    if (!turnCleanupComplete) {
+      output = { ...output, turn_cleanup_status: 'failed' };
+      const preparedCompletion = await readPrivateJson(completedFile);
+      await writePrivateJsonAtomic(completedFile, {
+        ...preparedCompletion,
+        turn_cleanup_status: 'failed'
+      });
+    }
     await safeEmit({
       runtimeDataDir: options.runtimeDataDir, repositoryRoot: root, sessionId: input.session_id,
       turnId: input.turn_id, reviewKey, type: 'review_completed', state: presentationState(output.result),

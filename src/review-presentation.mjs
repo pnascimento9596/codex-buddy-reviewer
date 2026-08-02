@@ -35,7 +35,7 @@ function supportedByBoth(output, kind, index) {
   return Array.isArray(source?.review_indices) && source.review_indices.length > 1;
 }
 
-function operationalWarning(output) {
+function providerCleanupWarning(output) {
   return (output?.reviews ?? []).some((review) => review?.run?.cleanup_status === 'failed');
 }
 
@@ -49,7 +49,10 @@ function summaryQualifier(output) {
 }
 
 function finalQualifier(output, result, primaryKind = null, primaryIndex = null) {
-  if (operationalWarning(output)) {
+  if (output?.turn_cleanup_status === 'failed') {
+    return sentence('Buddy completed, but cleanup of its private temporary state failed; inspect local temporary storage');
+  }
+  if (providerCleanupWarning(output)) {
     return sentence('A reviewer completed, but cleanup of its private temporary state failed; inspect the private receipt');
   }
   const failures = Array.isArray(output?.failures) ? output.failures.length : 0;

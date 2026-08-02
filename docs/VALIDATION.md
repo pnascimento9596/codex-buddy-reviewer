@@ -4,11 +4,11 @@ This document separates validation evidence into four explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` is `bedb4565a369aa3878c8afbde28216b2aed4e47e`. The first-parent range after the released rc.2 source contains PR #15 (`3281a44bfb72b9ac76e6e1bee3f59f04a897bcb2`), PR #17 (`c51e6fb12fae1b5c2fb8a82cf5daa0ff20b2bfeb`), and PR #19 (`bedb4565a369aa3878c8afbde28216b2aed4e47e`). PR #17 prevents clean-filter execution during capture; PR #19 omits unproven filtered worktree representations while preserving reviewable stage-0 index evidence.
+Current protected `main` is `32f1121c0c916e7820d66095d2f1956793604e40`. The first-parent range after the released rc.2 source contains PR #15 (`3281a44bfb72b9ac76e6e1bee3f59f04a897bcb2`), PR #17 (`c51e6fb12fae1b5c2fb8a82cf5daa0ff20b2bfeb`), PR #19 (`bedb4565a369aa3878c8afbde28216b2aed4e47e`), PR #20 (`0219d7aa4b136e034876becb9a7dbeabf2422aa6`), and PR #21 (`32f1121c0c916e7820d66095d2f1956793604e40`). PR #17 prevents clean-filter execution during capture; PR #19 omits unproven filtered worktree representations while preserving reviewable stage-0 index evidence; PR #21 rejects non-owner release dispatches before environment approval or release-workflow concurrency can be occupied.
 
-### Local exact-HEAD validation on `bedb4565a369aa3878c8afbde28216b2aed4e47e`
+### Local exact-HEAD validation on `32f1121c0c916e7820d66095d2f1956793604e40`
 
-The final local verification of this protected head recorded `769` tests, `751` passes, `18` intentional skips, and `0` failures. `npm run check:syntax` checked `85` modules; bare `npm run security:publication` passed after scanning `746` history text blobs; `npm run release:boundary` verified `127` public files; and `git diff --check` was clean. The focused filtered-path regression selection passed `7/7` tests. Provider tests were mocked and no live provider was contacted.
+The final local verification of this protected head recorded `770` tests, `752` passes, `18` intentional skips, and `0` failures. `npm run check:syntax` checked `85` modules; bare `npm run security:publication` passed; `npm run release:boundary` verified `127` public files; and `git diff --check` was clean. Provider tests were mocked and no live provider was contacted during that local gate.
 
 ### Protected-main GitHub validation evidence
 
@@ -18,6 +18,27 @@ The final local verification of this protected head recorded `769` tests, `751` 
 | PR #15, validation-layer reconciliation | `30707435091` | `3281a44bfb72b9ac76e6e1bee3f59f04a897bcb2` | success |
 | PR #17, filter-free capture hardening | `30728024227` | `c51e6fb12fae1b5c2fb8a82cf5daa0ff20b2bfeb` | success |
 | PR #19, filtered worktree scope hardening | `30732240371` | `bedb4565a369aa3878c8afbde28216b2aed4e47e` | success |
+| PR #20, rc.2 publication reconciliation | `30752311643` | `0219d7aa4b136e034876becb9a7dbeabf2422aa6` | success |
+| PR #21, release-governance hardening | `30755603147` | `32f1121c0c916e7820d66095d2f1956793604e40` | success |
+
+### Phase 2 independent exact-head adversarial review
+
+The initial packet pinned protected source commit `32f1121c0c916e7820d66095d2f1956793604e40`, tree `8ca8806e891714e2d71d00a3b18d15e99755a54f`, and packet SHA-256 `9a790aadbc28b8ea1eee335a4bd1fe712894f6a4a05f934b1c1acd33a2bc72de`. After reproducing and locally fixing the first cleanup finding, the re-review packet pinned commit `6ef982b94fd4faf60b6922c059ed5445a6d75b9a`, tree `652f7522531e0f8086f4731295c68e4b10674860`, and packet SHA-256 `3013b068a72d5f3c736d3de31c877c589ed6e6b81f382d9aed30da6c75efee5d`. Each packet contained the complete named source scope, eleven complete directly relevant tests, complete PR #12/#13/#17/#19 squash diffs, and, for re-review, the complete cleanup-fix diff.
+
+| UTC window | Provider / invocation model | Effort | Purpose | Verdict |
+|---|---|---|---|---|
+| `2026-08-02T16:18:12Z`–`16:18:53Z` | OpenAI Codex / `gpt-5.6-sol` | requested high; trace reported `reasoning effort: none` | initial exact-head review | one medium finding: silent turn-snapshot cleanup failure |
+| `2026-08-02T16:18:12Z`–`16:20:50Z` | Ollama Cloud / `glm-5.2:cloud` | not explicitly set | initial exact-head review | `no_findings`, with `findings: []` |
+| `2026-08-02T16:32:24Z`–`16:35:12Z` | Ollama Cloud / `glm-5.2:cloud` | explicit high | fixed-head re-review | `no_findings`, with `findings: []` |
+| `2026-08-02T16:32:24Z`–`16:36:13Z` | OpenAI Codex / `gpt-5.6-sol` | trace-confirmed high | fixed-head authoritative re-review | four findings: publication receipt-shape bypass, unreadable-session receipt deletion, silent adopted cleanup failure, and cleanup-warning loss on replay |
+
+The Codex effort discrepancy is retained rather than normalized: the initial call requested high effort, but its own trace showed `reasoning effort: none`; the trace-confirmed high-effort re-review is the authoritative Codex pass. The GLM attribution anomaly is also retained verbatim: `glm-5.2:cloud` twice self-reported a Claude model identity—first `claude-opus-4-20250514`, then `claude-opus-4-8`. That is an attribution defect in the Ollama Cloud reviewer route, so both GLM `no_findings` verdicts are weighted accordingly rather than treated as independent proof of model identity.
+
+The initial cleanup claim and all four high-effort Codex re-review claims were reproduced locally with failing tests before implementation. The fixes make per-artifact cleanup failures observable, preserve one bounded cleanup-status bit through adopted and replayed continuations, treat unreadable session inventories as ambiguous before orphan-receipt pruning, and apply the broad receipt-shape detector to text blobs rather than requiring a whole-file JSON receipt. Scanner regressions reject key-value, YAML, JSONL, wrapped JSON, and single-object JSON receipts while an inert documentation/test-source control passes. The first strengthened detector found one candidate-history collision, `evals/corpus/cases/abstain-binary-omitted.json`; inspection established detector overreach because it is deliberately synthetic nested evidence (`review_id: eval-…`, `repository_root: eval-fixture`), not runtime state. Requiring a concrete runtime review key, workspace key, or UUID review ID for non-object serialized shapes removed that false positive without weakening the reproduced cases. An isolated clean candidate scan then passed over `761` reachable-history text blobs (`93` commits, `18` refs, `2` annotated tags) and `210` current-tree text files; both scanner processes exited `0`.
+
+PR #22 then stopped before merge when its authorized bot review alleged a receipt serialized inside a JSON string. The local seed `/tmp/repro-serialized-receipt.mjs` committed one outer diagnostic object containing the full receipt as a string; the scanner incorrectly returned `ok: true` after scanning one 162-byte text blob. A RED regression preserved that exact shape. The bounded final fix walks valid JSON through at most four levels and 512 values, decodes string values that themselves contain JSON objects, and rejects any literal 64-hex token within 192 characters of `review_key`, `terminal_status`, `reviewer_runs`, or `evidence_digest`. Added controls cover the stopped-session seed, a double-escaped variant, a receipt in a JSON array, a plain log line, ordinary documentation without a hex value, and clearly synthetic short keys. The final candidate scan initially rediscovered the same synthetic eval case because the walker inspected ordinary nested objects; that was detector overreach, not runtime state, and the walker was narrowed to the specified string-decoding rung. The resulting isolated candidate passed `766` reachable-history text files (`94` commits, `18` refs, `2` annotated tags) and `210` current-tree text files with both scanner subprocesses at exit `0`. The explicit shipped limit is deliberate: the guardrail targets accidental plain, JSON, singly encoded string, and value-adjacent receipt inclusion; malicious multi-layer encoding, compression, base64, or splitting is outside scanner scope. The product boundary remains that Buddy writes receipts only under private state.
+
+The Phase 2 call ceiling was exhausted by the two initial calls and one re-review per reviewer. The publication scanner fix and the three follow-on lifecycle/pruner fixes therefore shipped **without provider re-review**; they carry reproduced failing tests converted to focused passing regressions. rc.3 proceeds on that basis by owner authority. No provider fallback or additional Phase 2 call occurred. The preserved private review outputs were bound before cleanup by these SHA-256 values: initial Codex stdout `b8f5ca1c36d9d5eb89239c6ca27759155d0fd8219c1099419ec4ed3b9fad57d6`, initial GLM stdout `e6025a8919060e5cb196922b1ac3f18ac464545a021276a7efc560609c1e43a8`, high-effort Codex stdout `81ad511349733b3973f297b73234e942fdb8e03b0b9bdd9a388ba3b2f479b60d`, and high-effort GLM stdout `c14c5e6316d7c8b825f41723dbeea04efa62a9e2c3e33f3518c5c90747f3692a`. The final pre-commit local chain recorded `777` tests, `759` passes, `18` intentional skips, and `0` failures; `85` syntax-checked modules; `127` public files; clean skill/plugin validators; and no Gitleaks findings across `96` commits or the working directory. After the packet identities, verdicts, timestamps, anomalies, hashes, reproduction seeds, and resulting regressions were preserved here and in tests, `/tmp/codex-buddy-phase2-review/`, both receipt repro scripts, the packet assembler, and all isolated scanner candidates were removed; an independent existence check confirmed every target and candidate glob absent.
 
 ### rc.2 merge, dispatch, and approval attribution
 
@@ -31,9 +52,9 @@ The merge, dispatch, three approvals, and publication form one 20-minute account
 
 ### Current limitations in this layer
 
-The published rc.2 source did not receive the fresh independent exact-head review prescribed by the roadmap gates before publication. The post-publication byte, tag, hash, and attestation checks in Layer C do not replace that review. Fresh independent review of current protected `main` is now the rc.3/stable pre-release gate and requires explicit owner consent before any provider contact.
+The published rc.2 source did not receive the fresh independent exact-head review prescribed by the roadmap gates before publication. Phase 2 supplied that review against post-rc.2 protected main and one exact cleanup-fix head; later reproduced fixes were not provider-re-reviewed because the authorized call ceiling was exhausted.
 
-The strict `findings`-required rejection path remains unverified against live OpenCode and Ollama Cloud responses. The published rc.2 artifact also predates the clean-filter evidence and filtered-path scope corrections in PRs #17 and #19.
+Both Phase 2 GLM responses included `findings: []` explicitly, so the strict findings-array requirement held on that route despite the model-attribution anomaly. Published-artifact end-to-end confirmation for the configured reviewer pair remains a Phase 6 gate. The published rc.2 artifact also predates the clean-filter, filtered-path, governance, and Phase 2 corrections.
 
 ## Layer B - frozen `v0.5.0-rc.1` publication evidence, historical
 
@@ -142,7 +163,7 @@ The external scratch clone, downloaded assets, and generated attestation JSON we
 
 The following gates remain unresolved for rc.3/stable promotion or for stronger current-head assurance:
 
-- Fresh independent exact-head review of current protected `main`, requiring explicit owner consent before provider contact.
+- Protected-merge and protected-main CI evidence for the Phase 2 fixes.
 - Fresh exact-head whole-repository Codex Deep Security Scan.
 - Five-pet artifact-bound host observations for Byte, Mochi, Orbit, Bella, and Lupo.
 - Windows current-user-only DACL creation and verification for durable Buddy state and provider temporary roots.

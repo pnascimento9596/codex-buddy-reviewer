@@ -12,6 +12,8 @@ All notable changes to Codex Buddy Reviewer are documented here. Release candida
 
 - PR #17 prevents repository clean filters from executing during evidence capture and uses filter-free Git objects for private turn snapshots.
 - PR #19 reviews provable staged filtered changes from the stage-0 index object while explicitly omitting unproven filtered worktree representations.
+- The rc.3 Phase 2 independent review reproduced a private turn-snapshot cleanup defect; cleanup failures are now surfaced for foreground, adopted, and replayed continuations, and unreadable session inventories preserve claimed receipts as ambiguous rather than pruning them as orphans.
+- The same review reproduced a publication-boundary bypass for receipt-shaped non-JSON text; key-value, YAML, JSONL, wrapped JSON, and single-object JSON runtime receipts are now rejected while synthetic documentation and evaluator fixtures remain publishable.
 
 ## 0.5.0-rc.2 - 2026-08-01
 
