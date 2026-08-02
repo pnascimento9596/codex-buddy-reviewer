@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -444,6 +444,45 @@ test('orphaned automatic receipts from an interrupted publication still reach th
   });
   assert.equal(result.receiptPruned, 1);
   await assert.rejects(lstat(receipt));
+});
+
+test('an unreadable turn session preserves claimed receipts as ambiguous', {
+  skip: process.platform === 'win32'
+}, async () => {
+  const { runtimeDataDir, root, turnDir } = await fixture();
+  const reviewKey = 'f'.repeat(64);
+  await rm(path.join(turnDir, 'snapshot'), { recursive: true });
+  await writeJson(path.join(turnDir, 'completed.json'), {
+    schema_version: '1',
+    review_key: reviewKey,
+    terminal_status: 'findings',
+    presentation_status: 'observed',
+    completed_at: '2020-01-02T00:00:00.000Z',
+    presentation_observed_at: '2020-01-02T00:00:00.000Z'
+  });
+  const receiptDir = path.join(runtimeDataDir, 'automatic-reviews', workspaceKey(root));
+  await mkdir(receiptDir, { recursive: true });
+  const receipt = path.join(receiptDir, `${reviewKey}.json`);
+  await writeFile(receipt, '{"private_review_content":"claimed"}\n');
+  await utimes(receipt, new Date('2020-01-01T00:00:00.000Z'), new Date('2020-01-01T00:00:00.000Z'));
+
+  const sessionDir = path.dirname(turnDir);
+  await chmod(sessionDir, 0o000);
+  let result;
+  try {
+    result = await pruneWorkspaceTurns({
+      runtimeDataDir,
+      root,
+      now: Date.parse('2020-01-03T00:00:00.000Z')
+    });
+  } finally {
+    await chmod(sessionDir, 0o700);
+  }
+
+  assert.equal(result.ambiguous, 1);
+  assert.equal(result.receiptPruned, 0);
+  await lstat(receipt);
+  assert.equal(JSON.parse(await readFile(path.join(turnDir, 'completed.json'), 'utf8')).review_key, reviewKey);
 });
 
 test('rejected responses share the 24-hour content ceiling without disturbing other state', async () => {

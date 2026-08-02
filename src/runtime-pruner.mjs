@@ -476,7 +476,13 @@ export async function pruneWorkspaceTurns(options) {
     outer: for (const session of sessions) {
       if (!session.isDirectory() || session.isSymbolicLink() || session.name.endsWith('.lock')) continue;
       const sessionDir = path.join(workspaceDir, session.name);
-      const turns = await readdir(sessionDir, { withFileTypes: true }).catch(() => []);
+      let turns;
+      try {
+        turns = await readdir(sessionDir, { withFileTypes: true });
+      } catch {
+        ambiguous += 1;
+        continue;
+      }
       for (const turn of turns) {
         if (!turn.isDirectory() || turn.isSymbolicLink()) continue;
         if (session.name === skipSession && turn.name === skipTurn) continue;

@@ -1657,6 +1657,113 @@ test('Stop adopts an exact ready background receipt without duplicate provider e
   await assert.rejects(access(path.join(directory, 'baseline.json')));
 });
 
+test('Stop reports cleanup failure when adopting an exact background receipt', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const mode = await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
+  const identity = { session_id: 'adopt-cleanup-session', turn_id: 'adopt-cleanup-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Adopt the exact background receipt and report cleanup.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 18;\n');
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Implemented and validated the cleanup path.'
+  };
+  let receiptContext = null;
+  const stopped = await reviewTurnStop(stopInput, {
+    modeDataDir,
+    runtimeDataDir,
+    buildEvidence: async (options) => {
+      const built = await buildTurnEvidence(options);
+      receiptContext = {
+        root,
+        input: stopInput,
+        baseline: options.baseline,
+        final: options.final,
+        evidence: built
+      };
+      return built;
+    },
+    waitForPreReview: async (directory, reviewKey, receipt) => {
+      const terminal = successfulReceipt(mode, reviewKey, receiptContext);
+      await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
+      const baselinePath = path.join(directory, 'baseline.json');
+      await rm(baselinePath, { force: true });
+      await mkdir(baselinePath);
+      await writeFile(path.join(baselinePath, 'retained-private-state'), 'retained\n');
+      return { status: 'ready', terminal, ownerActive: false };
+    },
+    review: async () => {
+      throw new Error('exact background receipt must prevent duplicate provider egress');
+    }
+  });
+
+  assert.equal(stopped.skipped, 'pre_review_adopted');
+  assert.match(stopped.output.reason, /cleanup of its private temporary state failed/u);
+  const baselinePath = path.join(
+    turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id),
+    'baseline.json'
+  );
+  await access(path.join(baselinePath, 'retained-private-state'));
+});
+
+test('cleanup warning remains visible when a continuation is replayed', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir });
+  const identity = { session_id: 'cleanup-replay-session', turn_id: 'cleanup-replay-turn', cwd: root };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Preserve cleanup warning across replay.'
+  }, { modeDataDir, runtimeDataDir });
+  await writeFile(path.join(root, 'app.js'), 'const value = 19;\n');
+  const baselinePath = path.join(
+    turnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id),
+    'baseline.json'
+  );
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Preserved cleanup warning replay.'
+  };
+  const stopped = await reviewTurnStop(stopInput, {
+    modeDataDir,
+    runtimeDataDir,
+    review: async (evidence) => {
+      await rm(baselinePath, { force: true });
+      await mkdir(baselinePath);
+      await writeFile(path.join(baselinePath, 'retained-private-state'), 'retained\n');
+      return {
+        evidence,
+        provider: 'ollama',
+        model: 'glm-5.2:cloud',
+        result: noFindings('No validated defects.')
+      };
+    }
+  });
+  assert.match(stopped.output.reason, /cleanup of its private temporary state failed/u);
+
+  const replay = await reviewTurnStop(stopInput, {
+    modeDataDir,
+    runtimeDataDir,
+    deliveryRetryMs: 0,
+    captureSnapshot: async () => { throw new Error('replay must not recapture'); },
+    review: async () => { throw new Error('replay must not call a provider'); }
+  });
+  assert.equal(replay.skipped, 'replayed');
+  assert.match(replay.output.reason, /cleanup of its private temporary state failed/u);
+  await access(path.join(baselinePath, 'retained-private-state'));
+});
+
 test('Stop recovers an exact local receipt left before completed publication', async () => {
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');

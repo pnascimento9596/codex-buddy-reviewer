@@ -397,6 +397,43 @@ function hasRuntimeReceiptShape(text) {
     || (has('workspace_key') && has('event_id') && has('event_type'));
 }
 
+function runtimeReceiptObjectShape(value) {
+  if (value === null || Array.isArray(value) || typeof value !== 'object') return false;
+  const has = (name) => Object.hasOwn(value, name);
+  return (has('review_key') && has('terminal_status')
+      && (has('reviewer_runs') || has('content_expired_at') || has('delivery_state')))
+    || (has('review_id') && has('repository_root')
+      && (has('snapshot_sha256') || has('patch_hash') || has('captured_at')))
+    || (has('review_id') && has('provider') && has('model') && has('prompt_version'))
+    || (has('workspace_key') && has('event_id') && has('event_type'));
+}
+
+function isRuntimeReceiptJson(text) {
+  try {
+    return runtimeReceiptObjectShape(JSON.parse(text));
+  } catch {
+    return false;
+  }
+}
+
+function hasConcreteRuntimeIdentity(text) {
+  const fieldWithValue = (field, value) => {
+    const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(
+      `(?:^|[^A-Za-z0-9_])['"]?${escaped}['"]?\\s*[:=]\\s*['"]?(?:${value})['"]?(?=\\s*(?:[,}]|$))`,
+      'im'
+    ).test(text);
+  };
+  return fieldWithValue('review_key', '[a-f0-9]{64}')
+    || fieldWithValue('workspace_key', '[a-f0-9]{16,64}')
+    || fieldWithValue('review_id', '[a-f0-9]{8}-[a-f0-9-]{27,40}');
+}
+
+function hasRuntimeReceiptBlobShape(text) {
+  if (!hasRuntimeReceiptShape(text)) return false;
+  return isRuntimeReceiptJson(text) || hasConcreteRuntimeIdentity(text);
+}
+
 function metadataViolation(text, safeEmails) {
   for (const variant of decodedMetadataVariants(text)) {
     const pathViolation = pathTextViolation(variant);
@@ -406,23 +443,6 @@ function metadataViolation(text, safeEmails) {
     if (hasRuntimeReceiptShape(variant)) return 'RUNTIME_RECEIPT_CONTENT';
   }
   return null;
-}
-
-function isRuntimeReceiptJson(text) {
-  let value;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    return false;
-  }
-  if (value === null || Array.isArray(value) || typeof value !== 'object') return false;
-  const has = (name) => Object.hasOwn(value, name);
-  return (has('review_key') && has('terminal_status')
-      && (has('reviewer_runs') || has('content_expired_at') || has('delivery_state')))
-    || (has('review_id') && has('repository_root')
-      && (has('snapshot_sha256') || has('patch_hash') || has('captured_at')))
-    || (has('review_id') && has('provider') && has('model') && has('prompt_version'))
-    || (has('workspace_key') && has('event_id') && has('event_type'));
 }
 
 function validateSafeEmails(emails) {
@@ -954,7 +974,7 @@ async function scanBlobCandidates(root, candidates, safeEmails, historicalPathAl
         const id = items[index].path === null ? 'unattributed' : safePathId(items[index].path);
         fail(decodedViolation, `A tracked blob contains non-public data (path-id ${id}).`);
       }
-      if (isRuntimeReceiptJson(text)) {
+      if (hasRuntimeReceiptBlobShape(text)) {
         const id = items[index].path === null ? 'unattributed' : safePathId(items[index].path);
         fail('RUNTIME_RECEIPT_CONTENT', `A tracked blob contains runtime receipt data (path-id ${id}).`);
       }
