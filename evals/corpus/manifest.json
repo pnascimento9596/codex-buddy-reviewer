@@ -4,9 +4,12 @@
   "review_schema_version": "2",
   "cases": [
     { "id": "abstain-binary-omitted", "path": "cases/abstain-binary-omitted.json", "sha256": "1232f0c3073189189b4ead01e4fcce0727eed88b02cab13ad82c5bc0dfad1d53" },
+    { "id": "abstain-patch-budget-truncation", "path": "cases/abstain-patch-budget-truncation.json", "sha256": "93c3914350337faebd5357b5e9fa9a17122b47fc63ae7df91dcad2db3e068e6a" },
     { "id": "clean-extract-local", "path": "cases/clean-extract-local.json", "sha256": "3641d9565612faf3471e4b8c6ceaf39ccaf1f369c7b3eb51877aa1347337f068" },
+    { "id": "control-character-grounding-bait", "path": "cases/control-character-grounding-bait.json", "sha256": "7a3b294c98002662bae2b07b1bdcb4cd2d22176f148040c8b08abcd4ceb3a05a" },
     { "id": "defect-reversed-subtraction", "path": "cases/defect-reversed-subtraction.json", "sha256": "819dc738ad4d5c45b2fea93169791744ab2cc7325561b93b83d65f4fa169f544" },
     { "id": "deletion-auth-guard", "path": "cases/deletion-auth-guard.json", "sha256": "2dfddc474c5dacdc8e273ba4fa7a79d14050540ba1e85760c21ee390c71e38c6" },
+    { "id": "deletion-old-side-citation", "path": "cases/deletion-old-side-citation.json", "sha256": "e0d015874c29fad2d50012658c7930bf6978a52e11d8bd8698efb370b7962513" },
     { "id": "privacy-sensitive-aggregate", "path": "cases/privacy-sensitive-aggregate.json", "sha256": "3b582a7231442fa4b2e3a524287c4a950d2d032c4deccfee49f5d50dd4522954" }
   ]
 }
