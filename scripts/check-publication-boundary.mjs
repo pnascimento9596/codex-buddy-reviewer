@@ -35,6 +35,11 @@ export const PUBLICATION_LIMITS = Object.freeze({
   maxGitOutputBytes: 32 * 1024 * 1024
 });
 
+export const PUBLICATION_BATCH_CHECK_ARGS = Object.freeze([
+  'cat-file',
+  '--batch-check=%(objectname) %(objecttype) %(objectsize)'
+]);
+
 const BINARY_EXTENSIONS = new Set([
   '.7z', '.a', '.avi', '.bin', '.bmp', '.bz2', '.class', '.db', '.dll', '.dylib',
   '.eot', '.exe', '.flac', '.gif', '.gz', '.ico', '.jar', '.jpeg', '.jpg', '.lib',
@@ -719,7 +724,7 @@ async function validateCompleteHistory(root, limits) {
 async function batchMetadata(root, objects, limits) {
   if (objects.length === 0) return [];
   const input = Buffer.from(`${objects.map((item) => item.oid).join('\n')}\n`, 'ascii');
-  const { stdout } = await runGit(root, ['cat-file', '--batch-check'], {
+  const { stdout } = await runGit(root, PUBLICATION_BATCH_CHECK_ARGS, {
     input,
     maxBuffer: limits.maxGitOutputBytes
   });
