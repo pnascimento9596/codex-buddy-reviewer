@@ -1551,6 +1551,14 @@ setInterval(() => {}, 1000);
       throw new Error('PRIVATE_DEADLINE_CLEANUP_FAILURE');
     }
   });
+  const observed = running.then(
+    (value) => ({ status: 'fulfilled', value }),
+    (error) => ({ status: 'rejected', error })
+  );
+  // Force the process promise to reject before this test begins observing it.
+  // The synchronously attached settlement observer must prevent the macOS CI
+  // unhandled-rejection race even when assertions run much later.
+  await new Promise((resolve) => setTimeout(resolve, 2_500));
   let providerPid;
   try {
     const deadline = Date.now() + 3_000;
@@ -1559,17 +1567,17 @@ setInterval(() => {}, 1000);
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     providerPid = Number(await readFile(providerPidFile, 'utf8'));
-    await assert.rejects(running, (error) => {
-      // Contract: non-cancel cleanup failures do not get the cancel-path retry.
-      // Containment still outranks the raw deadline message when cleanup fails.
-      assert.equal(error.name, 'ProcessContainmentError');
-      assert.equal(error.kind, 'containment_failure');
-      assert.equal(error.code, 'PROCESS_CONTAINMENT_FAILED');
-      assert.doesNotMatch(JSON.stringify(error), /PRIVATE_DEADLINE_CLEANUP_FAILURE/);
-      return true;
-    });
+    const settlement = await observed;
+    assert.equal(settlement.status, 'rejected');
+    const { error } = settlement;
+    // Contract: non-cancel cleanup failures do not get the cancel-path retry.
+    // Containment still outranks the raw deadline message when cleanup fails.
+    assert.equal(error.name, 'ProcessContainmentError');
+    assert.equal(error.kind, 'containment_failure');
+    assert.equal(error.code, 'PROCESS_CONTAINMENT_FAILED');
+    assert.doesNotMatch(JSON.stringify(error), /PRIVATE_DEADLINE_CLEANUP_FAILURE/);
   } finally {
-    await running.catch(() => {});
+    await observed;
   }
   assert.equal(cleanupCalls.length, 1);
   await assertProcessTerminated(
