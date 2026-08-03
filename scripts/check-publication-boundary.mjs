@@ -38,7 +38,8 @@ export const PUBLICATION_LIMITS = Object.freeze({
 export const PUBLICATION_GIT_CONFIG_ARGS = Object.freeze([
   '-c', 'color.ui=false',
   '-c', 'core.fsmonitor=false',
-  '-c', 'core.untrackedCache=false'
+  '-c', 'core.untrackedCache=false',
+  '-c', 'core.quotePath=true'
 ]);
 
 export const PUBLICATION_REACHABLE_OBJECT_ARGS = Object.freeze([
@@ -301,7 +302,72 @@ function parseHistoryChanges(bytes, limits) {
   return paths.length;
 }
 
+function decodeLegacyGitPath(value) {
+  if (!value.startsWith('"')) {
+    if (value.includes('"') || value.includes('\\') || /[\u0000-\u001f\u007f]/u.test(value)) {
+      fail('GIT_OUTPUT_MALFORMED', 'Git returned a malformed reachable object path.');
+    }
+    return value;
+  }
+  if (value.length < 2 || !value.endsWith('"')) {
+    fail('GIT_OUTPUT_MALFORMED', 'Git returned a malformed reachable object path.');
+  }
+  const bytes = [];
+  const namedEscapes = new Map([
+    ['a', 7], ['b', 8], ['t', 9], ['n', 10], ['v', 11], ['f', 12], ['r', 13]
+  ]);
+  for (let index = 1; index < value.length - 1; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code !== 0x5c) {
+      if (code < 0x20 || code > 0x7e || code === 0x22) {
+        fail('GIT_OUTPUT_MALFORMED', 'Git returned a malformed reachable object path.');
+      }
+      bytes.push(code);
+      continue;
+    }
+    index += 1;
+    if (index >= value.length - 1) {
+      fail('GIT_OUTPUT_MALFORMED', 'Git returned a malformed reachable object path.');
+    }
+    const escaped = value[index];
+    if (escaped === '\\' || escaped === '"') {
+      bytes.push(escaped.charCodeAt(0));
+      continue;
+    }
+    if (namedEscapes.has(escaped)) {
+      bytes.push(namedEscapes.get(escaped));
+      continue;
+    }
+    const octal = value.slice(index, index + 3);
+    if (!/^[0-7]{3}$/u.test(octal)) {
+      fail('GIT_OUTPUT_MALFORMED', 'Git returned a malformed reachable object path.');
+    }
+    const byte = Number.parseInt(octal, 8);
+    if (byte > 0xff) fail('GIT_OUTPUT_MALFORMED', 'Git returned a malformed reachable object path.');
+    bytes.push(byte);
+    index += 2;
+  }
+  return strictUtf8(Buffer.from(bytes), 'GIT_OUTPUT_MALFORMED');
+}
+
+function parseLegacyReachableObjects(bytes) {
+  if (bytes.length === 0) return [];
+  const text = strictUtf8(bytes, 'GIT_OUTPUT_MALFORMED');
+  if (!text.endsWith('\n')) fail('GIT_OUTPUT_MALFORMED', 'Git returned malformed line-delimited output.');
+  return text.slice(0, -1).split('\n').map((line) => {
+    const match = line.match(/^([0-9a-f]{40}|[0-9a-f]{64})(?: (.*))?$/u);
+    if (!match) fail('GIT_OUTPUT_MALFORMED', 'Git returned a malformed reachable object record.');
+    let repoPath = null;
+    if (match[2]) {
+      repoPath = decodeLegacyGitPath(match[2]);
+      validateRepoPath(repoPath);
+    }
+    return Object.freeze({ oid: match[1], path: repoPath });
+  });
+}
+
 export function parsePublicationReachableObjects(bytes) {
+  if (!bytes.includes(0)) return parseLegacyReachableObjects(bytes);
   const objects = [];
   for (const record of nullRecords(bytes)) {
     if (record.length >= 5 && record.subarray(0, 5).equals(Buffer.from('path=', 'ascii'))) {

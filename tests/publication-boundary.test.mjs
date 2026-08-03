@@ -35,7 +35,8 @@ test('publication scanner pins no-echo Git metadata invocations', () => {
   assert.deepEqual(PUBLICATION_GIT_CONFIG_ARGS, [
     '-c', 'color.ui=false',
     '-c', 'core.fsmonitor=false',
-    '-c', 'core.untrackedCache=false'
+    '-c', 'core.untrackedCache=false',
+    '-c', 'core.quotePath=true'
   ]);
   assert.deepEqual(PUBLICATION_REACHABLE_OBJECT_ARGS, ['rev-list', '--objects', '-z', '--all']);
   assert.deepEqual(PUBLICATION_BATCH_CHECK_ARGS, [
@@ -68,6 +69,35 @@ test('reachable-object parser accepts OID-plus-path rev-list records', () => {
       { oid: first, path: 'src/index.mjs' },
       { oid: second, path: 'docs/release notes.md' }
     ]
+  );
+});
+
+test('reachable-object parser accepts strict Git 2.43 LF records with C-quoted paths', () => {
+  const commitOid = 'a'.repeat(40);
+  const treeOid = 'b'.repeat(40);
+  const blobOid = 'c'.repeat(40);
+  assert.deepEqual(
+    parsePublicationReachableObjects(Buffer.from(
+      `${commitOid}\n${treeOid} \n${blobOid} "docs/caf\\303\\251 file.md"\n`,
+      'ascii'
+    )),
+    [
+      { oid: commitOid, path: null },
+      { oid: treeOid, path: null },
+      { oid: blobOid, path: 'docs/café file.md' }
+    ]
+  );
+});
+
+test('reachable-object parser rejects malformed legacy quoting', () => {
+  const oid = 'a'.repeat(40);
+  assert.throws(
+    () => parsePublicationReachableObjects(Buffer.from(`${oid} "unterminated\n`, 'ascii')),
+    (error) => error instanceof PublicationBoundaryError && error.code === 'GIT_OUTPUT_MALFORMED'
+  );
+  assert.throws(
+    () => parsePublicationReachableObjects(Buffer.from(`${oid} "oversized\\777"\n`, 'ascii')),
+    (error) => error instanceof PublicationBoundaryError && error.code === 'GIT_OUTPUT_MALFORMED'
   );
 });
 
