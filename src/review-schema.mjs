@@ -125,6 +125,10 @@ export const REVIEW_WITH_SUMMARY_ADVISORY_SCHEMA = {
   }
 };
 
+/**
+ * @param {unknown} raw
+ * @returns {object}
+ */
 export function validateReviewWithSummaryAdvisoryEnvelope(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('review-with-summary response must be an object');
