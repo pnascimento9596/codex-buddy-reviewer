@@ -38,6 +38,10 @@ release dispatch to be executed by delegated agent session under owner instructi
 
 The dispatch is authorized only after this candidate merges through normal protection and its exact protected-main source SHA passes protected CI. The delegated session authenticates to GitHub as owner account `pnascimento9596` (account ID `198005926`) and will invoke `.github/workflows/release.yml` from unchanged protected `main` with `version: 0.5.0-rc.3` and `publish: true`. GitHub can establish account, workflow, source, and approval attribution; it cannot establish which person or delegated local session operated an authorized account token.
 
+### Phase 7 pre-stable engineering work item
+
+- [ ] Deterministic-timing hardening pass over process-supervision tests (#14, #25, and #29).
+
 ### Phase 2 independent exact-head adversarial review
 
 The initial packet pinned protected source commit `32f1121c0c916e7820d66095d2f1956793604e40`, tree `8ca8806e891714e2d71d00a3b18d15e99755a54f`, and packet SHA-256 `9a790aadbc28b8ea1eee335a4bd1fe712894f6a4a05f934b1c1acd33a2bc72de`. After reproducing and locally fixing the first cleanup finding, the re-review packet pinned commit `6ef982b94fd4faf60b6922c059ed5445a6d75b9a`, tree `652f7522531e0f8086f4731295c68e4b10674860`, and packet SHA-256 `3013b068a72d5f3c736d3de31c877c589ed6e6b81f382d9aed30da6c75efee5d`. Each packet contained the complete named source scope, eleven complete directly relevant tests, complete PR #12/#13/#17/#19 squash diffs, and, for re-review, the complete cleanup-fix diff.

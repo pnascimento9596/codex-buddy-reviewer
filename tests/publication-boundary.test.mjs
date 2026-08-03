@@ -8,6 +8,7 @@ import test from 'node:test';
 import { promisify } from 'node:util';
 
 import {
+  PUBLICATION_BATCH_CHECK_ARGS,
   PublicationBoundaryError,
   checkPublicationBoundary
 } from '../scripts/check-publication-boundary.mjs';
@@ -25,6 +26,14 @@ const privateMacPath = ['', 'Users', 'alice', 'private-project'].join('/');
 const privateLinuxPath = ['', 'home', 'alice', 'private-project'].join('/');
 const privateWindowsPath = ['C:', 'Users', 'Alice', 'private-project'].join('\\');
 const scanTemporaryPath = ['', 'tmp', 'codex-security-scans-fixture', 'artifact'].join('/');
+
+test('publication scanner pins the complete cat-file batch metadata format', () => {
+  assert.deepEqual(PUBLICATION_BATCH_CHECK_ARGS, [
+    'cat-file',
+    '--batch-check=%(objectname) %(objecttype) %(objectsize)'
+  ]);
+  assert.equal(Object.isFrozen(PUBLICATION_BATCH_CHECK_ARGS), true);
+});
 
 test.after(async () => {
   await Promise.all(temporaryPaths.map((item) => rm(item, { recursive: true, force: true })));
