@@ -2,18 +2,31 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
-## Unreleased
+## 0.5.0-rc.3 - 2026-08-03
 
-### Documentation
+### Reviewed
 
-- PR #15 separated current validation claims from frozen publication evidence and reconciled the reviewed publication dispositions.
+- The bounded Phase 2 independent review pinned exact source/tree identities and used OpenAI Codex `gpt-5.6-sol` plus Ollama Cloud `glm-5.2:cloud`; every accepted claim was reproduced locally before implementation. Invocation evidence, not the GLM route's incorrect Claude self-identification, remains authoritative.
+- PR #15 separated current validation claims from frozen publication evidence. PRs #23 and #24 then added mutation-controlled adversarial corpus coverage and a strict checked-JavaScript gate for the five authorized review-boundary modules.
 
-### Security
+### Defects found
 
-- PR #17 prevents repository clean filters from executing during evidence capture and uses filter-free Git objects for private turn snapshots.
-- PR #19 reviews provable staged filtered changes from the stage-0 index object while explicitly omitting unproven filtered worktree representations.
-- The rc.3 Phase 2 independent review reproduced a private turn-snapshot cleanup defect; cleanup failures are now surfaced for foreground, adopted, and replayed continuations, and unreadable session inventories preserve claimed receipts as ambiguous rather than pruning them as orphans.
-- The same review reproduced a publication-boundary bypass for receipt-shaped non-JSON text; key-value, YAML, JSONL, wrapped JSON, and single-object JSON runtime receipts are now rejected while synthetic documentation and evaluator fixtures remain publishable.
+- The Phase 2 review found silent private turn-snapshot cleanup failures, loss of cleanup warnings when adopting or replaying continuations, and unsafe orphan pruning when a turn-session inventory is unreadable.
+- It also found that the publication guardrail could miss receipt-shaped runtime state serialized as non-JSON text or inside a singly encoded JSON string.
+- Earlier privacy review found that repository clean filters could execute during evidence capture and that filtered working-tree bytes could not be treated as equivalent to provable stage-0 index content.
+
+### Defects fixed
+
+- Cleanup failures are surfaced for foreground, adopted, and replayed continuations; unreadable session inventories preserve claimed receipts as ambiguous rather than pruning them as orphans.
+- The publication scanner rejects accidental key-value, YAML, JSONL, wrapped JSON, single-object JSON, and singly encoded string receipt shapes while preserving deliberately synthetic documentation and evaluator fixtures. Multi-layer encoding, compression, base64, and splitting remain documented non-goals; the product boundary remains private-state-only receipt persistence.
+- PR #17 prevents repository clean filters from executing during capture and uses filter-free Git objects for private turn snapshots. PR #19 reviews only provable staged filtered bytes and explicitly omits unproven filtered working-tree representations.
+- PR #21 rejects non-owner release dispatches before reusable validation, protected-environment approval, or release concurrency can be occupied.
+
+### Shipped in this candidate
+
+- PR #22 shipped the reproduced Phase 2 cleanup, pruning, and publication-boundary fixes through protected CI. PR #23 shipped deleted-file old-side citation, patch-budget truncation/abstention, and control-character grounding-bait cases with mutation controls that fail on policy violations.
+- PR #24 shipped exact-version development tooling and strict checked JavaScript for `review-schema`, `result`, approved provider requests, reviewer identity, and aggregation. Emitted runtime JavaScript remained byte-identical after comments were removed, and the focused behavioral suite remained 112/112.
+- This candidate carries Byte, Mochi, Orbit, Bella, and Lupo under their checked-in Apache-2.0 provenance grants. It becomes a published prerelease only if the exact protected `main` head passes `.github/workflows/release.yml` with `version: 0.5.0-rc.3` and `publish: true`; stable host acceptance is not claimed.
 
 ## 0.5.0-rc.2 - 2026-08-01
 

@@ -322,7 +322,7 @@ test('public release materializes committed blobs instead of clean-filtered work
 test('final public versions require a packaged verified win32-x64 helper', async () => {
   const { output } = await buildFixture();
   assert.deepEqual(
-    await verifyFinalWindowsHelper(output, '0.5.0-rc.2'),
+    await verifyFinalWindowsHelper(output, '0.5.0-rc.3'),
     { required: false, verified: false }
   );
   await assert.rejects(
