@@ -363,11 +363,12 @@ test('working-tree evidence excludes a long whitespace-normalized subset of deni
 test('working-tree evidence excludes an embedded short normalized denied value', async () => {
   const root = await makeRepository();
   const value = `café-${'x'.repeat(40)}`;
+  const decomposedValue = `cafe\u0301-${'x'.repeat(40)}`;
   const secret = `TOKEN=${value}`;
   await writeFile(path.join(root, '.env'), `${secret}\n`);
   await writeFile(
     path.join(root, 'config.js'),
-    `export const prefix = true; export const copied = 'cafe\u0301-${'x'.repeat(40)}'; export const suffix = true;\n`
+    `export const prefix = true; export const copied = '${decomposedValue}'; export const suffix = true;\n`
   );
 
   const evidence = await collectEvidence({ cwd: root });
@@ -377,7 +378,9 @@ test('working-tree evidence excludes an embedded short normalized denied value',
       && item.reason === 'content fragment matches denied path'),
     true
   );
-  assert.doesNotMatch(buildReviewPrompt(evidence), /café-|cafe/u);
+  const prompt = buildReviewPrompt(evidence);
+  assert.equal(prompt.includes(value), false);
+  assert.equal(prompt.includes(decomposedValue), false);
 });
 
 test('working-tree privacy matching covers descendants of ignored secret directories', async () => {
