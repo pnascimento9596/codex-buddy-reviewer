@@ -35,9 +35,19 @@ export const PUBLICATION_LIMITS = Object.freeze({
   maxGitOutputBytes: 32 * 1024 * 1024
 });
 
+export const PUBLICATION_GIT_CONFIG_ARGS = Object.freeze([
+  '-c', 'color.ui=false',
+  '-c', 'core.fsmonitor=false',
+  '-c', 'core.untrackedCache=false'
+]);
+
+export const PUBLICATION_REACHABLE_OBJECT_ARGS = Object.freeze([
+  'rev-list', '--objects', '-z', '--all'
+]);
+
 export const PUBLICATION_BATCH_CHECK_ARGS = Object.freeze([
   'cat-file',
-  '--batch-check=%(objectname) %(objecttype) %(objectsize)'
+  '--batch-check=%(objecttype) %(objectsize)'
 ]);
 
 const BINARY_EXTENSIONS = new Set([
@@ -184,12 +194,7 @@ async function runGit(root, args, options = {}) {
     const env = gitEnvironment();
     const executable = await resolveExternalExecutable('git', { cwd: root, env });
     return await new Promise((resolve, reject) => {
-      const child = execFile(executable, [
-        '-c', 'color.ui=false',
-        '-c', 'core.fsmonitor=false',
-        '-c', 'core.untrackedCache=false',
-        ...args
-      ], {
+      const child = execFile(executable, [...PUBLICATION_GIT_CONFIG_ARGS, ...args], {
         cwd: root,
         encoding: null,
         env,
@@ -296,7 +301,7 @@ function parseHistoryChanges(bytes, limits) {
   return paths.length;
 }
 
-function parseReachableObjects(bytes) {
+export function parsePublicationReachableObjects(bytes) {
   const objects = [];
   for (const record of nullRecords(bytes)) {
     if (record.length >= 5 && record.subarray(0, 5).equals(Buffer.from('path=', 'ascii'))) {
@@ -326,17 +331,21 @@ function parseReachableObjects(bytes) {
   return objects.map((item) => Object.freeze(item));
 }
 
-function parseBatchCheck(bytes, expectedOids) {
+export function parsePublicationBatchCheck(bytes, expectedOids) {
   const text = strictUtf8(bytes, 'GIT_OUTPUT_MALFORMED');
   const lines = text.endsWith('\n') ? text.slice(0, -1).split('\n') : text.split('\n');
   if (expectedOids.length === 0 && text.length === 0) return [];
   if (lines.length !== expectedOids.length) fail('GIT_OUTPUT_MALFORMED', 'Git returned incomplete object metadata.');
   return lines.map((line, index) => {
-    const match = line.match(/^([0-9a-f]{40}|[0-9a-f]{64}) (blob|commit|tag|tree) (\d+)$/);
-    if (!match || match[1] !== expectedOids[index]) fail('GIT_OUTPUT_MALFORMED', 'Git returned malformed object metadata.');
-    const size = Number(match[3]);
+    const oid = expectedOids[index];
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(oid)) {
+      fail('GIT_OUTPUT_MALFORMED', 'Git metadata was requested for a malformed object ID.');
+    }
+    const match = line.match(/^(blob|commit|tag|tree) (\d+)$/);
+    if (!match) fail('GIT_OUTPUT_MALFORMED', 'Git returned malformed object metadata.');
+    const size = Number(match[2]);
     if (!Number.isSafeInteger(size)) fail('WORK_LIMIT_EXCEEDED', 'A Git object is too large to scan safely.');
-    return Object.freeze({ oid: match[1], type: match[2], size });
+    return Object.freeze({ oid, type: match[1], size });
   });
 }
 
@@ -728,7 +737,7 @@ async function batchMetadata(root, objects, limits) {
     input,
     maxBuffer: limits.maxGitOutputBytes
   });
-  return parseBatchCheck(stdout, objects.map((item) => item.oid));
+  return parsePublicationBatchCheck(stdout, objects.map((item) => item.oid));
 }
 
 function validateMetadataText(text, safeEmails, label) {
@@ -1099,10 +1108,10 @@ async function treeCandidates(root, entries, limits) {
 }
 
 async function historyCandidates(root, limits) {
-  const { stdout } = await runGit(root, ['rev-list', '--objects', '-z', '--all'], {
+  const { stdout } = await runGit(root, PUBLICATION_REACHABLE_OBJECT_ARGS, {
     maxBuffer: limits.maxGitOutputBytes
   });
-  const listed = parseReachableObjects(stdout);
+  const listed = parsePublicationReachableObjects(stdout);
   if (listed.length > limits.maxObjects) fail('WORK_LIMIT_EXCEEDED', 'Reachable object count exceeded the publication scan work limit.');
   const unique = [];
   const indexByOid = new Map();
