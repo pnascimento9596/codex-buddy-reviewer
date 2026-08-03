@@ -11,7 +11,7 @@
     "review": "node scripts/buddy-review.mjs review",
     "test": "node --test --test-timeout=900000",
     "check:syntax": "node scripts/check-syntax.mjs",
-    "check:types": "tsc -p tsconfig.json",
+    "check:types": "npm ci --ignore-scripts --no-audit --no-fund && tsc -p tsconfig.json",
     "check:assets": "node scripts/buddy-review.mjs pet list --json",
     "check:atlas-structure": "node scripts/validate-pet-atlases.mjs --json",
     "eval:validate": "node scripts/buddy-eval.mjs validate --json",
