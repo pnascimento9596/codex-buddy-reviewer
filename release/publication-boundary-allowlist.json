@@ -4,6 +4,10 @@
     {
       "email": "pnascimento9596@gmail.com",
       "disposition": "Reviewed public contributor address; not a credential."
+    },
+    {
+      "email": "support@github.com",
+      "disposition": "Reviewed public GitHub support address in Dependabot commit metadata; not a credential."
     }
   ],
   "historical_path_violations": []
