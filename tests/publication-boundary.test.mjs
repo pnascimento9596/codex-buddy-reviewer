@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -317,6 +317,33 @@ test('the explicit safe-email allowlist covers reviewed contributor metadata and
   const result = await checkPublicationBoundary({ root, safeEmails: [contributorEmail] });
   assert.equal(result.annotated_tags_scanned, 1);
   assert.equal(result.reachable_refs, 2);
+});
+
+test('the committed main allowlist only dispositions objects reachable from HEAD', async () => {
+  const sourceRoot = process.cwd();
+  const committed = JSON.parse(await readFile(
+    path.join(sourceRoot, 'release', 'publication-boundary-allowlist.json'),
+    'utf8'
+  ));
+  const { stdout } = await execFileAsync('git', ['rev-list', '--objects', 'HEAD'], {
+    cwd: sourceRoot,
+    windowsHide: true
+  });
+  const reachable = new Set(
+    stdout.trim().split('\n').filter(Boolean).map((line) => line.split(' ', 1)[0])
+  );
+  for (const [index, disposition] of committed.historical_path_violations.entries()) {
+    assert.equal(
+      reachable.has(disposition.blob_oid),
+      true,
+      `historical disposition ${index} binds a blob absent from public main history`
+    );
+    assert.equal(
+      reachable.has(disposition.fixed_at),
+      true,
+      `historical disposition ${index} binds a fixing commit absent from public main history`
+    );
+  }
 });
 
 test('the committed allowlist binds reviewed email and historical path dispositions exactly', async () => {
