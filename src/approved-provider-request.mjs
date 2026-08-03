@@ -1,9 +1,30 @@
+// @ts-ignore -- noResolve keeps checked-JS confined to the authorized slice.
 import { createHash } from 'node:crypto';
+// @ts-ignore -- noResolve keeps checked-JS confined to the authorized slice.
 import path from 'node:path';
 
+// @ts-ignore -- external runtime boundary; validated by its owning module.
 import { assessProviderModelIdentifier, scanSecretMaterial } from './secret-scan.mjs';
+// @ts-ignore -- external runtime boundary; validated by its owning module.
 import { hasUnsafeTerminalControls } from './policy.mjs';
+// @ts-ignore -- external runtime boundary; validated by its owning module.
 import { canonicalJson } from './state.mjs';
+
+/** @typedef {Record<string, any>} DynamicObject */
+/**
+ * @typedef {{
+ *   purpose: string,
+ *   root: string,
+ *   provider: string,
+ *   prompt: string,
+ *   model: string,
+ *   effort: string,
+ *   timeoutMs: number,
+ *   responseSchema?: DynamicObject,
+ *   summaryGuardPacket: DynamicObject | null
+ * }} ProviderRequestCandidate
+ */
+/** @typedef {{request: ProviderRequestCandidate, metadata: DynamicObject}} ApprovedState */
 
 export const PROVIDER_CONTENT_POLICY_VERSION = '1';
 
@@ -27,24 +48,30 @@ const SUMMARY_PACKET_KEYS = Object.freeze([
   'summary_truncated'
 ]);
 
+/** @param {string} message @returns {never} */
 function fail(message) {
   throw new Error(`Buddy provider request approval: ${message}`);
 }
 
+/** @param {string} value @returns {string} */
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
+/** @param {DynamicObject} value @param {readonly string[]} expected @param {string} label */
 function exactKeys(value, expected, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`${label} must be an object`);
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) fail(`${label} must be a plain data object`);
+  /** @type {DynamicObject} */
   const descriptors = Object.getOwnPropertyDescriptors(value);
   const keys = Reflect.ownKeys(value);
   if (keys.some((key) => typeof key !== 'string')) fail(`${label} contains symbol fields`);
+  // @ts-ignore -- symbol keys were rejected immediately above.
   if (keys.some((key) => !descriptors[key]?.enumerable || !Object.hasOwn(descriptors[key], 'value'))) {
     fail(`${label} contains accessors or hidden fields`);
   }
+  // @ts-ignore -- symbol keys were rejected immediately above.
   const actual = [...keys].sort();
   const wanted = [...expected].sort();
   if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
@@ -52,6 +79,7 @@ function exactKeys(value, expected, label) {
   }
 }
 
+/** @param {any} value @param {string} label @param {number} [depth] @returns {any} */
 function cloneJson(value, label, depth = 0) {
   if (depth > MAX_JSON_DEPTH) fail(`${label} exceeds the maximum JSON depth`);
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
@@ -79,11 +107,13 @@ function cloneJson(value, label, depth = 0) {
   if (!value || typeof value !== 'object') fail(`${label} contains non-JSON data`);
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) fail(`${label} contains a non-plain object`);
+  /** @type {DynamicObject} */
   const descriptors = Object.getOwnPropertyDescriptors(value);
   const keys = Reflect.ownKeys(value);
   if (keys.some((key) => typeof key !== 'string')) fail(`${label} contains symbol fields`);
   const clone = {};
   for (const key of keys) {
+    // @ts-ignore -- symbol keys were rejected before this loop.
     const descriptor = descriptors[key];
     if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
       fail(`${label} contains accessors or hidden fields`);
@@ -98,15 +128,19 @@ function cloneJson(value, label, depth = 0) {
   return Object.freeze(clone);
 }
 
+/** @param {any} value @param {string} label @param {number} maximumBytes */
 function immutableJson(value, label, maximumBytes) {
   const clone = cloneJson(value, label);
   const serialized = canonicalJson(clone);
+  // @ts-ignore -- Node global exists at runtime; noResolve intentionally fences dependencies.
   if (Buffer.byteLength(serialized, 'utf8') > maximumBytes) fail(`${label} exceeds its byte limit`);
   return Object.freeze({ clone, serialized, sha256: sha256(serialized) });
 }
 
+/** @param {string} text @param {string} label */
 function scanProviderBoundText(text, label) {
   if (hasUnsafeTerminalControls(text)) fail(`${label} contains unsafe control characters`);
+  // @ts-ignore -- Node global exists at runtime; noResolve intentionally fences dependencies.
   const bytes = Buffer.from(text, 'utf8');
   if (bytes.toString('utf8') !== text) fail(`${label} is not lossless UTF-8 text`);
   const scan = scanSecretMaterial(bytes);
@@ -114,6 +148,7 @@ function scanProviderBoundText(text, label) {
   if (scan.detected) fail(`${label} contains credential material`);
 }
 
+/** @param {string} purpose @param {DynamicObject | null} summaryGuardPacket */
 function channelInventory(purpose, summaryGuardPacket) {
   if (purpose === 'health_check') return Object.freeze(['static_health_prompt']);
   return summaryGuardPacket === null
@@ -121,6 +156,11 @@ function channelInventory(purpose, summaryGuardPacket) {
     : Object.freeze(['technical_evidence', 'worker_summary']);
 }
 
+/**
+ * @param {ProviderRequestCandidate} candidate
+ * @param {{scan?: boolean}} [options]
+ * @returns {ApprovedState}
+ */
 function buildState(candidate, options = {}) {
   exactKeys(candidate, [
     'purpose',
@@ -139,6 +179,7 @@ function buildState(candidate, options = {}) {
   }
   if (!PROVIDERS.has(candidate.provider)) fail('provider is unsupported');
   if (typeof candidate.prompt !== 'string' || !candidate.prompt) fail('prompt must be non-empty text');
+  // @ts-ignore -- Node global exists at runtime; noResolve intentionally fences dependencies.
   const promptBytes = Buffer.byteLength(candidate.prompt, 'utf8');
   if (promptBytes > MAX_PROMPT_BYTES) fail('prompt exceeds its byte limit');
   const modelAssessment = assessProviderModelIdentifier(candidate.model);
@@ -250,14 +291,24 @@ function buildState(candidate, options = {}) {
   return Object.freeze({ request, metadata });
 }
 
+/** @param {ApprovedState} state @returns {boolean} */
 function stateMatchesMetadata(state) {
   const rebuilt = buildState(state.request, { scan: false });
   return canonicalJson(rebuilt.metadata) === canonicalJson(state.metadata);
 }
 
+/**
+ * @returns {Readonly<{
+ *   approve(candidate: ProviderRequestCandidate): object,
+ *   inspect(handle: object): DynamicObject,
+ *   unwrap(handle: object): ProviderRequestCandidate
+ * }>}
+ */
 export function createApprovedProviderRequestAuthority() {
+  /** @type {WeakMap<object, ApprovedState>} */
   const privateRequests = new WeakMap();
 
+  /** @param {object} handle @returns {ApprovedState} */
   function stateFor(handle) {
     const state = privateRequests.get(handle);
     if (!state) fail('request is not an approved local handle');
@@ -268,15 +319,18 @@ export function createApprovedProviderRequestAuthority() {
   }
 
   return Object.freeze({
+    /** @param {ProviderRequestCandidate} candidate */
     approve(candidate) {
       const state = buildState(candidate);
       const handle = Object.freeze(Object.create(null));
       privateRequests.set(handle, state);
       return handle;
     },
+    /** @param {object} handle */
     inspect(handle) {
       return stateFor(handle).metadata;
     },
+    /** @param {object} handle */
     unwrap(handle) {
       return stateFor(handle).request;
     }

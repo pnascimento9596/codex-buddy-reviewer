@@ -1,12 +1,18 @@
+// @ts-ignore -- noResolve keeps checked-JS confined to the authorized slice.
 import { createHash } from 'node:crypto';
+// @ts-ignore -- external runtime boundary; validated by its owning module.
 import { hasUnsafeTerminalControls } from './policy.mjs';
 import { REVIEW_SCHEMA_VERSION } from './review-schema.mjs';
 
+/** @typedef {Record<string, any>} DynamicObject */
+
 const AGGREGATE_FINDING_LIMIT = 5;
 const AGGREGATE_COMMENT_LIMIT = 3;
+/** @type {Readonly<Record<string, number>>} */
 const SEVERITY_RANK = Object.freeze({ blocker: 0, high: 1, medium: 2, low: 3 });
 // Engineering comments have no severity field, so their fixed risk-oriented
 // order is reliability, testing, maintainability, then optimization.
+/** @type {Readonly<Record<string, number>>} */
 const COMMENT_CATEGORY_RANK = Object.freeze({ reliability: 0, testing: 1, maintainability: 2, optimization: 3 });
 const RESULT_KEYS = new Set(['schema_version', 'status', 'summary', 'findings', 'comments']);
 const FINDING_KEYS = new Set([
@@ -40,22 +46,31 @@ const SUMMARY_CATEGORY = new Set([
 const STATUS = new Set(['findings', 'no_findings', 'abstain']);
 const LINE_SIDE = new Set(['new', 'old']);
 
+/** @param {unknown} value @returns {value is DynamicObject} */
 function plainObject(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
+/** @param {DynamicObject} value @param {Set<string>} allowed @param {string} label */
 function assertExactKeys(value, allowed, label) {
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   if (unknown.length) throw new TypeError(`${label} contains unknown properties: ${unknown.join(', ')}`);
 }
 
+/** @param {DynamicObject} value @param {string[]} required @param {string} label */
 function assertRequiredKeys(value, required, label) {
   const missing = required.filter((key) => !Object.hasOwn(value, key));
   if (missing.length) throw new TypeError(`${label} is missing required properties: ${missing.join(', ')}`);
 }
 
+/**
+ * @param {any} value
+ * @param {string} label
+ * @param {any} maximum
+ * @param {{singleLine?: boolean, visibleAscii?: boolean, printableAscii?: boolean}} [options]
+ */
 function assertText(value, label, maximum, {
   singleLine = false,
   visibleAscii = false,
@@ -69,12 +84,14 @@ function assertText(value, label, maximum, {
   if (printableAscii && !/^[\x20-\x7e]+$/u.test(value)) throw new TypeError(`${label} must contain printable ASCII only`);
 }
 
+/** @param {any} value @param {string} label */
 function assertConfidence(value, label) {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
     throw new TypeError(`${label} must be a finite number from 0 to 1`);
   }
 }
 
+/** @param {DynamicObject} item @param {string} label */
 function assertLineRange(item, label) {
   if (!LINE_SIDE.has(item.line_side)) throw new TypeError(`${label}.line_side must be new or old`);
   if (!Number.isInteger(item.line_start) || item.line_start < 1) {
@@ -85,6 +102,7 @@ function assertLineRange(item, label) {
   }
 }
 
+/** @param {any} item @param {string} label */
 function validateFinding(item, label) {
   if (!plainObject(item)) throw new TypeError(`${label} must be an object`);
   assertExactKeys(item, FINDING_KEYS, label);
@@ -98,6 +116,7 @@ function validateFinding(item, label) {
   assertLineRange(item, label);
 }
 
+/** @param {any} item @param {string} label */
 function validateComment(item, label) {
   if (!plainObject(item)) throw new TypeError(`${label} must be an object`);
   assertExactKeys(item, COMMENT_KEYS, label);
@@ -110,6 +129,7 @@ function validateComment(item, label) {
   assertLineRange(item, label);
 }
 
+/** @param {any} result @param {string} label */
 function validateResult(result, label) {
   if (!plainObject(result)) throw new TypeError(`${label} must be an object`);
   assertExactKeys(result, RESULT_KEYS, label);
@@ -138,6 +158,7 @@ function validateResult(result, label) {
   comments.forEach((item, index) => validateComment(item, `${label}.comments[${index}]`));
 }
 
+/** @param {any} failure @param {string} label */
 function validateFailure(failure, label) {
   if (!plainObject(failure)) throw new TypeError(`${label} must be an object`);
   assertExactKeys(failure, FAILURE_METADATA_KEYS, label);
@@ -151,12 +172,14 @@ function validateFailure(failure, label) {
   assertText(failure.message, `${label}.message`, 240, { singleLine: true, printableAscii: true });
 }
 
+/** @param {any} value @param {string} label */
 function assertNullableNonnegativeInteger(value, label) {
   if (value !== null && (!Number.isSafeInteger(value) || value < 0)) {
     throw new TypeError(`${label} must be null or a nonnegative safe integer`);
   }
 }
 
+/** @param {any} run @param {DynamicObject} outcome @param {string} label */
 function validateRun(run, outcome, label) {
   if (!plainObject(run)) throw new TypeError(`${label} must be an object`);
   assertExactKeys(run, RUN_KEYS, label);
@@ -194,6 +217,7 @@ function validateRun(run, outcome, label) {
   }
 }
 
+/** @param {any} advisory @param {string} label */
 function validateSummaryAdvisory(advisory, label) {
   if (!plainObject(advisory)) throw new TypeError(`${label} must be an object`);
   assertExactKeys(advisory, SUMMARY_ADVISORY_KEYS, label);
@@ -228,6 +252,7 @@ function validateSummaryAdvisory(advisory, label) {
   });
 }
 
+/** @param {any} value @param {string} label @param {Set<any>} [ancestors] @returns {any} */
 function cloneJsonValue(value, label, ancestors = new Set()) {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
   if (typeof value === 'number') {
@@ -256,6 +281,7 @@ function cloneJsonValue(value, label, ancestors = new Set()) {
   return clone;
 }
 
+/** @param {any} value @param {Set<any>} [seen] @returns {any} */
 function deepFreeze(value, seen = new Set()) {
   if (value === null || typeof value !== 'object' || seen.has(value)) return value;
   seen.add(value);
@@ -263,10 +289,12 @@ function deepFreeze(value, seen = new Set()) {
   return Object.freeze(value);
 }
 
+/** @param {string} provider @param {string} model @returns {string} */
 function reviewerLabel(provider, model) {
   return `${provider}/${model}`;
 }
 
+/** @param {any} outcome @param {number} index @returns {boolean} */
 function validateOutcome(outcome, index) {
   const label = `review outcome ${index}`;
   if (!plainObject(outcome)) throw new TypeError(`${label} must be an object`);
@@ -288,10 +316,12 @@ function validateOutcome(outcome, index) {
   return isSuccess;
 }
 
+/** @param {string} value @returns {string} */
 function normalizedIdentityText(value) {
   return value.normalize('NFC');
 }
 
+/** @param {DynamicObject} item @param {string} type @returns {string} */
 function itemIdentity(item, type) {
   return JSON.stringify([
     type,
@@ -303,12 +333,14 @@ function itemIdentity(item, type) {
   ]);
 }
 
+/** @param {DynamicObject} left @param {DynamicObject} right @returns {number} */
 function occurrenceRank(left, right) {
   return right.item.confidence - left.item.confidence
     || left.reviewIndex - right.reviewIndex
     || left.itemIndex - right.itemIndex;
 }
 
+/** @param {DynamicObject} left @param {DynamicObject} right @param {string} type @returns {number} */
 function compareOccurrences(left, right, type) {
   const categoryRank = type === 'finding'
     ? SEVERITY_RANK[left.item.severity] - SEVERITY_RANK[right.item.severity]
@@ -316,12 +348,13 @@ function compareOccurrences(left, right, type) {
   return categoryRank || occurrenceRank(left, right);
 }
 
+/** @param {DynamicObject[]} reviews @param {string} type @returns {DynamicObject[]} */
 function collectUnique(reviews, type) {
   const byIdentity = new Map();
   const collection = type === 'finding' ? 'findings' : 'comments';
   for (const review of reviews) {
     const items = review.result[collection] ?? [];
-    items.forEach((item, itemIndex) => {
+    items.forEach(/** @param {DynamicObject} item @param {number} itemIndex */ (item, itemIndex) => {
       const occurrence = {
         item,
         itemIndex,
@@ -343,20 +376,25 @@ function collectUnique(reviews, type) {
   return [...byIdentity.values()];
 }
 
+/** @param {DynamicObject} left @param {DynamicObject} right @returns {number} */
 function compareFindings(left, right) {
   const a = left.representative;
   const b = right.representative;
   return compareOccurrences(a, b, 'finding');
 }
 
+/** @param {DynamicObject} left @param {DynamicObject} right @returns {number} */
 function compareComments(left, right) {
   const a = left.representative;
   const b = right.representative;
   return compareOccurrences(a, b, 'comment');
 }
 
+/** @param {DynamicObject} entry @param {number} aggregateIndex @returns {DynamicObject} */
 function sourceReceipt(entry, aggregateIndex) {
+  /** @type {number[]} */
   const indices = [];
+  /** @type {string[]} */
   const labels = [];
   for (const source of entry.sources) {
     if (!indices.includes(source.reviewIndex)) indices.push(source.reviewIndex);
@@ -370,7 +408,7 @@ function sourceReceipt(entry, aggregateIndex) {
       review_index: entry.representative.reviewIndex,
       item_index: entry.representative.itemIndex
     },
-    occurrences: entry.sources.map((source) => ({
+    occurrences: entry.sources.map(/** @param {DynamicObject} source */ (source) => ({
       review_index: source.reviewIndex,
       item_index: source.itemIndex,
       reviewer_label: source.reviewerLabel
@@ -378,6 +416,7 @@ function sourceReceipt(entry, aggregateIndex) {
   };
 }
 
+/** @param {string[]} values @param {number} maximum @returns {string} */
 function boundedComposite(values, maximum) {
   const unique = [...new Set(values)];
   const joined = unique.join('+');
@@ -387,6 +426,20 @@ function boundedComposite(values, maximum) {
   return `${joined.slice(0, maximum - suffix.length)}${suffix}`;
 }
 
+/**
+ * @param {{
+ *   status: string,
+ *   successful: number,
+ *   nonAbstaining: number,
+ *   abstained: number,
+ *   attempted: number,
+ *   uniqueFindingCount: number,
+ *   shownFindings: number,
+ *   uniqueCommentCount: number,
+ *   shownComments: number
+ * }} counts
+ * @returns {string}
+ */
 function aggregateSummary({
   status,
   successful,
@@ -410,7 +463,9 @@ function aggregateSummary({
   return `${prefix}${findingClause}${commentClause}`;
 }
 
+/** @param {DynamicObject} outcome @param {number} sourceIndex @returns {DynamicObject} */
 function outputReview(outcome, sourceIndex) {
+  /** @type {DynamicObject} */
   const output = {
     source_index: sourceIndex,
     label: reviewerLabel(outcome.provider, outcome.model),
@@ -428,7 +483,9 @@ function outputReview(outcome, sourceIndex) {
   return output;
 }
 
+/** @param {DynamicObject} outcome @param {number} sourceIndex @returns {DynamicObject} */
 function outputFailure(outcome, sourceIndex) {
+  /** @type {DynamicObject} */
   const output = {
     source_index: sourceIndex,
     label: reviewerLabel(outcome.provider, outcome.model),
@@ -441,6 +498,7 @@ function outputFailure(outcome, sourceIndex) {
 }
 
 export class ReviewAggregationError extends Error {
+  /** @param {DynamicObject[]} failures */
   constructor(failures) {
     super('No reviewer completed successfully.');
     this.name = 'ReviewAggregationError';
@@ -460,12 +518,18 @@ export class ReviewAggregationError extends Error {
  * prepared request because this deliberately small legacy boundary carries no
  * evidence or snapshot payload.
  */
+/**
+ * @param {DynamicObject[]} outcomes
+ * @returns {DynamicObject}
+ */
 export function aggregateReviewOutcomes(outcomes) {
   if (!Array.isArray(outcomes) || outcomes.length < 1 || outcomes.length > 2) {
     throw new TypeError('review outcomes must be an array containing one or two entries');
   }
 
+  /** @type {DynamicObject[]} */
   const successes = [];
+  /** @type {DynamicObject[]} */
   const failures = [];
   outcomes.forEach((outcome, index) => {
     if (validateOutcome(outcome, index)) successes.push(outputReview(outcome, index));

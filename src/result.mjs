@@ -1,6 +1,25 @@
+// @ts-ignore -- noResolve keeps checked-JS confined to the authorized slice.
 import path from 'node:path';
 import { REVIEW_SCHEMA_VERSION } from './review-schema.mjs';
+// @ts-ignore -- external runtime boundary; validated by its owning module.
 import { hasUnsafeTerminalControls, normalizeRepoPath } from './policy.mjs';
+
+/** @typedef {Record<string, any>} DynamicObject */
+/** @typedef {{start: number, end: number, side?: string, kind?: any}} EvidenceRange */
+/** @typedef {{path: string, transmitted: boolean, disposition: string, file_state?: string}} PathEvidence */
+/**
+ * @typedef {{
+ *   changed_paths: string[],
+ *   excluded_paths: string[],
+ *   path_evidence: PathEvidence[],
+ *   hunk_ranges?: Record<string, EvidenceRange[]>,
+ *   line_counts?: Record<string, any>,
+ *   old_line_counts?: Record<string, any>,
+ *   incomplete_paths?: string[],
+ *   sensitive_change_count?: number,
+ *   ignored_change_count?: number
+ * }} ReviewEvidence
+ */
 
 const VALID_STATUS = new Set(['findings', 'no_findings', 'abstain']);
 const VALID_SEVERITY = new Set(['blocker', 'high', 'medium', 'low']);
@@ -13,6 +32,10 @@ const COMMENT_KEYS = new Set([
 ]);
 const VALID_COMMENT_CATEGORY = new Set(['optimization', 'reliability', 'maintainability', 'testing']);
 
+/**
+ * @param {ReviewEvidence} evidence
+ * @returns {DynamicObject | null}
+ */
 export function localReviewResultForEvidence(evidence) {
   if (!Array.isArray(evidence?.changed_paths)
       || !Array.isArray(evidence.excluded_paths)
@@ -62,11 +85,13 @@ export function localReviewResultForEvidence(evidence) {
   };
 }
 
+/** @param {DynamicObject} object @param {Set<string>} allowed @param {string} label */
 function rejectUnknownKeys(object, allowed, label) {
   const unknown = Object.keys(object).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`${label} contains unknown properties: ${unknown.join(', ')}`);
 }
 
+/** @param {string} value @returns {any} */
 function parseJsonString(value) {
   const trimmed = value.trim();
   try {
@@ -81,10 +106,12 @@ function parseJsonString(value) {
   }
 }
 
+/** @param {string} stdout @returns {any} */
 export function parseReviewerText(stdout) {
   return parseJsonString(stdout);
 }
 
+/** @param {string} stdout @returns {any} */
 export function parseReviewerOutput(stdout) {
   const outer = parseReviewerText(stdout);
   let result = outer;
@@ -100,6 +127,7 @@ export function parseReviewerOutput(stdout) {
   return result;
 }
 
+/** @param {any} value @param {string} field @param {any} maxLength */
 function assertString(value, field, maxLength) {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${field} must be a non-empty string`);
   if (value.length > maxLength) throw new Error(`${field} exceeds ${maxLength} characters`);
@@ -108,6 +136,14 @@ function assertString(value, field, maxLength) {
   }
 }
 
+/**
+ * @param {DynamicObject} item
+ * @param {number} index
+ * @param {string} label
+ * @param {ReviewEvidence} evidence
+ * @param {Set<string>} changed
+ * @returns {{repoPath: string, lineSide: string}}
+ */
 function validateGrounding(item, index, label, evidence, changed) {
   const repoPath = normalizeRepoPath(item.path);
   if (path.posix.isAbsolute(repoPath) || repoPath.split('/').includes('..') || !changed.has(repoPath)) {
@@ -150,6 +186,12 @@ function validateGrounding(item, index, label, evidence, changed) {
   return { repoPath, lineSide };
 }
 
+/**
+ * @param {DynamicObject} raw
+ * @param {ReviewEvidence} evidence
+ * @param {{minConfidence?: number}} [options]
+ * @returns {DynamicObject}
+ */
 export function validateReviewResult(raw, evidence, options = {}) {
   const minConfidence = options.minConfidence ?? 0.75;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('review result must be an object');

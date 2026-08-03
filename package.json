@@ -11,6 +11,7 @@
     "review": "node scripts/buddy-review.mjs review",
     "test": "node --test --test-timeout=900000",
     "check:syntax": "node scripts/check-syntax.mjs",
+    "check:types": "tsc -p tsconfig.json",
     "check:assets": "node scripts/buddy-review.mjs pet list --json",
     "check:atlas-structure": "node scripts/validate-pet-atlases.mjs --json",
     "eval:validate": "node scripts/buddy-eval.mjs validate --json",
@@ -21,9 +22,13 @@
     "release:verify": "node scripts/verify-public-plugin.mjs",
     "release:distribution": "node scripts/build-distribution-commit.mjs",
     "release:boundary": "node scripts/check-public-release.mjs",
-    "check:portable": "npm run check:syntax && npm run check:assets && npm run check:atlas-structure && npm run eval:validate && npm run release:boundary && node scripts/buddy-review.mjs --help && node scripts/buddy-review.mjs mode --help && node scripts/buddy-review.mjs pet --help && node scripts/buddy-review.mjs presentation --help && node scripts/buddy-review.mjs summary-guard --help && node scripts/buddy-review.mjs renderer --help && node scripts/buddy-review.mjs doctor --help && node scripts/buddy-review.mjs setup --help && node scripts/buddy-review.mjs data --help && node scripts/buddy-eval.mjs --help && node scripts/buddy-live-eval.mjs --help && node scripts/verify-host-e2e.mjs --help && node scripts/build-public-plugin.mjs --help && node scripts/verify-public-plugin.mjs --help && node scripts/build-distribution-commit.mjs --help && node scripts/check-publication-boundary.mjs --help",
+    "check:portable": "npm run check:syntax && npm run check:types && npm run check:assets && npm run check:atlas-structure && npm run eval:validate && npm run release:boundary && node scripts/buddy-review.mjs --help && node scripts/buddy-review.mjs mode --help && node scripts/buddy-review.mjs pet --help && node scripts/buddy-review.mjs presentation --help && node scripts/buddy-review.mjs summary-guard --help && node scripts/buddy-review.mjs renderer --help && node scripts/buddy-review.mjs doctor --help && node scripts/buddy-review.mjs setup --help && node scripts/buddy-review.mjs data --help && node scripts/buddy-eval.mjs --help && node scripts/buddy-live-eval.mjs --help && node scripts/verify-host-e2e.mjs --help && node scripts/build-public-plugin.mjs --help && node scripts/verify-public-plugin.mjs --help && node scripts/build-distribution-commit.mjs --help && node scripts/check-publication-boundary.mjs --help",
     "check": "npm test && npm run check:portable",
     "validate": "npm run check"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "26.1.2",
+    "typescript": "7.0.2"
+  }
 }
