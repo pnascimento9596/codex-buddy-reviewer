@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -9,8 +9,12 @@ import { promisify } from 'node:util';
 
 import {
   PUBLICATION_BATCH_CHECK_ARGS,
+  PUBLICATION_GIT_CONFIG_ARGS,
+  PUBLICATION_REACHABLE_OBJECT_ARGS,
   PublicationBoundaryError,
-  checkPublicationBoundary
+  checkPublicationBoundary,
+  parsePublicationBatchCheck,
+  parsePublicationReachableObjects
 } from '../scripts/check-publication-boundary.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -27,12 +31,83 @@ const privateLinuxPath = ['', 'home', 'alice', 'private-project'].join('/');
 const privateWindowsPath = ['C:', 'Users', 'Alice', 'private-project'].join('\\');
 const scanTemporaryPath = ['', 'tmp', 'codex-security-scans-fixture', 'artifact'].join('/');
 
-test('publication scanner pins the complete cat-file batch metadata format', () => {
+test('publication scanner pins no-echo Git metadata invocations', () => {
+  assert.deepEqual(PUBLICATION_GIT_CONFIG_ARGS, [
+    '-c', 'color.ui=false',
+    '-c', 'core.fsmonitor=false',
+    '-c', 'core.untrackedCache=false',
+    '-c', 'core.quotePath=true'
+  ]);
+  assert.deepEqual(PUBLICATION_REACHABLE_OBJECT_ARGS, ['rev-list', '--objects', '-z', '--all']);
   assert.deepEqual(PUBLICATION_BATCH_CHECK_ARGS, [
     'cat-file',
-    '--batch-check=%(objectname) %(objecttype) %(objectsize)'
+    '--batch-check=%(objecttype) %(objectsize)'
   ]);
+  assert.equal(Object.isFrozen(PUBLICATION_GIT_CONFIG_ARGS), true);
+  assert.equal(Object.isFrozen(PUBLICATION_REACHABLE_OBJECT_ARGS), true);
   assert.equal(Object.isFrozen(PUBLICATION_BATCH_CHECK_ARGS), true);
+});
+
+test('reachable-object parser accepts OID-only rev-list records', () => {
+  const first = 'a'.repeat(40);
+  const second = 'b'.repeat(64);
+  assert.deepEqual(
+    parsePublicationReachableObjects(Buffer.from(`${first}\0${second}\0`, 'ascii')),
+    [{ oid: first, path: null }, { oid: second, path: null }]
+  );
+});
+
+test('reachable-object parser accepts OID-plus-path rev-list records', () => {
+  const first = 'a'.repeat(40);
+  const second = 'b'.repeat(40);
+  assert.deepEqual(
+    parsePublicationReachableObjects(Buffer.from(
+      `${first} src/index.mjs\0${second}\0path=docs/release notes.md\0`,
+      'utf8'
+    )),
+    [
+      { oid: first, path: 'src/index.mjs' },
+      { oid: second, path: 'docs/release notes.md' }
+    ]
+  );
+});
+
+test('reachable-object parser accepts strict Git 2.43 LF records with C-quoted paths', () => {
+  const commitOid = 'a'.repeat(40);
+  const treeOid = 'b'.repeat(40);
+  const blobOid = 'c'.repeat(40);
+  assert.deepEqual(
+    parsePublicationReachableObjects(Buffer.from(
+      `${commitOid}\n${treeOid} \n${blobOid} "docs/caf\\303\\251 file.md"\n`,
+      'ascii'
+    )),
+    [
+      { oid: commitOid, path: null },
+      { oid: treeOid, path: null },
+      { oid: blobOid, path: 'docs/café file.md' }
+    ]
+  );
+});
+
+test('reachable-object parser rejects malformed legacy quoting', () => {
+  const oid = 'a'.repeat(40);
+  assert.throws(
+    () => parsePublicationReachableObjects(Buffer.from(`${oid} "unterminated\n`, 'ascii')),
+    (error) => error instanceof PublicationBoundaryError && error.code === 'GIT_OUTPUT_MALFORMED'
+  );
+  assert.throws(
+    () => parsePublicationReachableObjects(Buffer.from(`${oid} "oversized\\777"\n`, 'ascii')),
+    (error) => error instanceof PublicationBoundaryError && error.code === 'GIT_OUTPUT_MALFORMED'
+  );
+});
+
+test('batch metadata parser fails closed on cardinality drift', () => {
+  const first = 'a'.repeat(40);
+  const second = 'b'.repeat(40);
+  assert.throws(
+    () => parsePublicationBatchCheck(Buffer.from('blob 7\n', 'ascii'), [first, second]),
+    (error) => error instanceof PublicationBoundaryError && error.code === 'GIT_OUTPUT_MALFORMED'
+  );
 });
 
 test.after(async () => {
@@ -103,6 +178,40 @@ async function fixture(files, options = {}) {
   await commit(root, options.email, options.message);
   return root;
 }
+
+test('installed Git satisfies the scanner invocation and parser contract', async () => {
+  // Two Git-version breaks reached release jobs in one week; exercise the exact
+  // scanner commands in every CI matrix lane instead of discovering drift there.
+  const root = await fixture({
+    'README.md': '# Git compatibility probe\n',
+    'src/probe.mjs': 'export const probe = true;\n'
+  });
+  const listed = spawnSync('git', [
+    ...PUBLICATION_GIT_CONFIG_ARGS,
+    ...PUBLICATION_REACHABLE_OBJECT_ARGS
+  ], {
+    cwd: root,
+    encoding: null,
+    windowsHide: true
+  });
+  assert.equal(listed.status, 0, listed.stderr?.toString('utf8'));
+  const objects = parsePublicationReachableObjects(listed.stdout);
+  assert.ok(objects.length > 0);
+
+  const checked = spawnSync('git', [
+    ...PUBLICATION_GIT_CONFIG_ARGS,
+    ...PUBLICATION_BATCH_CHECK_ARGS
+  ], {
+    cwd: root,
+    encoding: null,
+    input: Buffer.from(`${objects.map((item) => item.oid).join('\n')}\n`, 'ascii'),
+    windowsHide: true
+  });
+  assert.equal(checked.status, 0, checked.stderr?.toString('utf8'));
+  const metadata = parsePublicationBatchCheck(checked.stdout, objects.map((item) => item.oid));
+  assert.equal(metadata.length, objects.length);
+  assert.equal(metadata.every((item) => Number.isSafeInteger(item.size) && item.size >= 0), true);
+});
 
 async function rejectsWithCode(promise, code) {
   await assert.rejects(promise, (error) => {
