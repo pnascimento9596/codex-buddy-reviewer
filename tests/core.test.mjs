@@ -377,7 +377,7 @@ test('working-tree evidence excludes an embedded short normalized denied value',
       && item.reason === 'content fragment matches denied path'),
     true
   );
-  assert.doesNotMatch(JSON.stringify(evidence), /café-|cafe/u);
+  assert.doesNotMatch(buildReviewPrompt(evidence), /café-|cafe/u);
 });
 
 test('working-tree privacy matching covers descendants of ignored secret directories', async () => {
