@@ -4,11 +4,13 @@ This document separates validation evidence into four explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` is `32f1121c0c916e7820d66095d2f1956793604e40`. The first-parent range after the released rc.2 source contains PR #15 (`3281a44bfb72b9ac76e6e1bee3f59f04a897bcb2`), PR #17 (`c51e6fb12fae1b5c2fb8a82cf5daa0ff20b2bfeb`), PR #19 (`bedb4565a369aa3878c8afbde28216b2aed4e47e`), PR #20 (`0219d7aa4b136e034876becb9a7dbeabf2422aa6`), and PR #21 (`32f1121c0c916e7820d66095d2f1956793604e40`). PR #17 prevents clean-filter execution during capture; PR #19 omits unproven filtered worktree representations while preserving reviewable stage-0 index evidence; PR #21 rejects non-owner release dispatches before environment approval or release-workflow concurrency can be occupied.
+Current protected `main` is `58d8abaf49a2be09322d7a44ceda306f7354ef72`. The first-parent range after the released rc.2 source contains PR #15 (`3281a44bfb72b9ac76e6e1bee3f59f04a897bcb2`), PR #17 (`c51e6fb12fae1b5c2fb8a82cf5daa0ff20b2bfeb`), PR #19 (`bedb4565a369aa3878c8afbde28216b2aed4e47e`), PR #20 (`0219d7aa4b136e034876becb9a7dbeabf2422aa6`), PR #21 (`32f1121c0c916e7820d66095d2f1956793604e40`), PR #22 (`bea53a8473b69c967eac70dd64ca01d417974fdc`), PR #23 (`c703b776bd5af95449978c4d2b025acaecd0c24c`), and PR #24 (`58d8abaf49a2be09322d7a44ceda306f7354ef72`). The later phases ship the reproduced lifecycle/publication fixes, mutation-controlled adversarial corpus cases, and a pinned strict checked-JavaScript slice.
 
-### Local exact-HEAD validation on `32f1121c0c916e7820d66095d2f1956793604e40`
+### rc.3 candidate validation based on protected main `58d8abaf49a2be09322d7a44ceda306f7354ef72`
 
-The final local verification of this protected head recorded `770` tests, `752` passes, `18` intentional skips, and `0` failures. `npm run check:syntax` checked `85` modules; bare `npm run security:publication` passed; `npm run release:boundary` verified `127` public files; and `git diff --check` was clean. Provider tests were mocked and no live provider was contacted during that local gate.
+The rc.3 candidate worktree recorded `778` tests, `760` passes, `18` intentional skips, and `0` failures. `npm run check:syntax` checked `85` modules; `npm run check:types` installed the exact lockfile graph and passed with TypeScript `7.0.2` and `@types/node` `26.1.2`; bare `npm run security:publication` passed; `npm run release:boundary` verified `130` public files; two focused release suites passed `31/31`; the review-boundary behavioral suite remained `112/112` before and after checked-JavaScript annotations; and comments-removed emitted JavaScript was byte-identical for all five authorized modules. Gitleaks found no leaks across `104` commits or the candidate worktree, both skill validators and the plugin validator passed, and `git diff --check` was clean. Provider tests were mocked and no live provider was contacted during this gate.
+
+The two frozen historical slices were byte-compared against protected main before this edit: Layer B (rc.1) is `3908` bytes with SHA-256 `145f7e78e68326cd678e39bcbadb402b890584ab1ba54c61073690b6cd946abc`; Layer C (rc.2) is `2914` bytes with SHA-256 `c734e100570f8dcb3fcaad941e5a86f330aa37267c79c4b2b6187e4d360ad33a`. Both comparisons were byte-identical.
 
 ### Protected-main GitHub validation evidence
 
@@ -20,6 +22,21 @@ The final local verification of this protected head recorded `770` tests, `752` 
 | PR #19, filtered worktree scope hardening | `30732240371` | `bedb4565a369aa3878c8afbde28216b2aed4e47e` | success |
 | PR #20, rc.2 publication reconciliation | `30752311643` | `0219d7aa4b136e034876becb9a7dbeabf2422aa6` | success |
 | PR #21, release-governance hardening | `30755603147` | `32f1121c0c916e7820d66095d2f1956793604e40` | success |
+| PR #22, Phase 2 reproduced fixes | `30771259006` | `bea53a8473b69c967eac70dd64ca01d417974fdc` | success |
+| PR #23, Phase 3 adversarial corpus | `30773941325` | `c703b776bd5af95449978c4d2b025acaecd0c24c` | success |
+| PR #24, Phase 4 checked JavaScript | `30776339242` | `58d8abaf49a2be09322d7a44ceda306f7354ef72` | success |
+
+### Phase 3 and Phase 4 exact-head delivery evidence
+
+PR #23 passed exact-head run `30773320092`, squash-merged normally as `c703b776bd5af95449978c4d2b025acaecd0c24c`, and passed protected-main run `30773941325`. Its eight-case corpus includes mutation-controlled deleted-file old-side citation, selected-evidence truncation/abstention, and control-character grounding-bait cases.
+
+PR #24 passed corrected exact-head run `30775405637` attempt 2, squash-merged normally as `58d8abaf49a2be09322d7a44ceda306f7354ef72`, and passed protected-main run `30776339242`. The initial head failed all validation lanes with `TS2688: Cannot find type definition file for 'node'` because the reusable job did not install the newly pinned development graph. The corrected `check:types` installs exactly from `package-lock.json` before invoking `tsc`; no workflow file changed. Attempt 1 on the corrected head then hit the intermittent Ubuntu Node 22 speculative-checkpoint race tracked in issue #25; the exact focused test passed four consecutive local runs, every other lane was green, and the single authorized rerun passed on the unchanged head. Issue #14 remains the related Windows preservation-assertion intermittent.
+
+### rc.3 pre-dispatch attribution
+
+release dispatch to be executed by delegated agent session under owner instruction of 2026-08-02/03.
+
+The dispatch is authorized only after this candidate merges through normal protection and its exact protected-main source SHA passes protected CI. The delegated session authenticates to GitHub as owner account `pnascimento9596` (account ID `198005926`) and will invoke `.github/workflows/release.yml` from unchanged protected `main` with `version: 0.5.0-rc.3` and `publish: true`. GitHub can establish account, workflow, source, and approval attribution; it cannot establish which person or delegated local session operated an authorized account token.
 
 ### Phase 2 independent exact-head adversarial review
 
@@ -161,15 +178,17 @@ The external scratch clone, downloaded assets, and generated attestation JSON we
 
 ## Layer D - unresolved gates
 
-The following gates remain unresolved for rc.3/stable promotion or for stronger current-head assurance:
+The following gates remain unresolved for rc.3 publication, stable promotion, or stronger current-head assurance:
 
-- Protected-merge and protected-main CI evidence for the Phase 2 fixes.
 - Fresh exact-head whole-repository Codex Deep Security Scan.
 - Five-pet artifact-bound host observations for Byte, Mochi, Orbit, Bella, and Lupo.
 - Windows current-user-only DACL creation and verification for durable Buddy state and provider temporary roots.
 - Live Windows provider egress after the DACL gate is implemented and verified.
 - Stable artifact requirements: rebuild from exact protected `main`, reverify after deterministic archive/re-extraction, install from the positive artifact boundary, and bind host evidence to that artifact rather than to the private checkout.
-- POSIX end-to-end provider execution evidence at the exact stable candidate.
+- Published-artifact POSIX end-to-end provider execution evidence for rc.3, including strict findings-array behavior, speculative receipt adoption, compact output, disable, purge, and retained-byte accounting.
 - Repository-owned Codex validator wiring: the documented skill and plugin validator commands passed on this host, but the repository still has no package-script entry point that makes those checks part of the ordinary npm validation chain.
 - GitHub account email visibility: the authenticated API token lacks the required `user` scope, so the account owner must set the durable visibility preference in the browser.
-- The Windows Node 22 preservation assertion flake from run `30682892670` is tracked in issue #14 and remains unexplained. Because it is a preservation assertion, it is higher-signal than a generic timing flake given the rc.2 no-loss work.
+- Fine-grained agent PAT inventory and browser Security Log review for the `2026-08-01T09:38:00Z`–`09:59:00Z` publication window remain owner-only browser evidence.
+- The `public-release` environment currently requires owner account `pnascimento9596`; browser confirmation remains necessary if the API cannot establish the complete required-reviewer policy and its owner-visible controls.
+- The Windows Node 22 preservation assertion intermittent from run `30682892670` is tracked in issue #14. The Ubuntu Node 22 speculative-checkpoint intermittent from run `30775405637` attempt 1 is tracked in issue #25. Both remain open because they touch checkpoint/no-loss behavior.
+- Stable `v0.5.0` promotion remains an explicit owner decision after the published-artifact POSIX half, five-pet host observations, Windows DACL/egress work, and remaining governance evidence are reconciled.
