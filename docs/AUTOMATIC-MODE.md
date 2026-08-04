@@ -2,15 +2,15 @@
 
 ## Activation
 
-Automatic review is opt-in per canonical Git workspace. The supported command-menu workflow is:
+Automatic review is opt-in per canonical Git workspace. The supported installed-skill invocation is:
 
 ```text
-/buddy-review
+$codex-buddy-reviewer:buddy-review
 ```
 
-Select **Buddy Review** from the menu and send it. Codex inserts the plugin skill mention; the skill runs the allowlisted `mode toggle --continuous-review` command and prints the resulting state. This one-step invocation is the explicit authorization for bounded intermediate evidence when the resulting state is ON. A toggle to OFF clears that authorization. Explicit `enable`, `disable`, and `status` requests are also supported.
+Send the namespaced skill mention. The skill runs the allowlisted `mode toggle --continuous-review` command and prints the resulting state. This one-step invocation is the explicit authorization for bounded intermediate evidence when the resulting state is ON. A toggle to OFF clears that authorization. Explicit `enable`, `disable`, and `status` requests are also supported.
 
-This is not a third-party registration in Codex's closed first-party slash-command enum. It is the supported skill-in-command-menu path and should be described that way.
+This is not a third-party registration in Codex's closed first-party slash-command enum. On Codex 0.146.0, typing `/buddy-review` directly is rejected as an unrecognized command; documentation and host evidence must use the namespaced skill mention.
 
 Generic raw mode enable and toggle commands remain final-only. Only `--continuous-review` records purpose-specific consent for privacy-filtered intermediate change evidence to reach every configured reviewer. It can spend up to two speculative review calls per reviewer during a turn, plus one exact final fallback call when no matching completed result is available. Final-only mode performs no speculative provider calls. Policy v2 and ambiguous policy v3 records migrate fail-closed to final-only policy v4.
 

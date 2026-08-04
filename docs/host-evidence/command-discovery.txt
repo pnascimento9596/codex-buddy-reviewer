@@ -1,0 +1,12 @@
+Capture method: owned Codex TUI under /usr/bin/screen; terminal hardcopy; ANSI/control bytes removed; personal paths replaced.
+Host: Codex CLI 0.146.0
+
+Typed native slash form:
+
+  /buddy-review
+
+Visible host result:
+
+  Unrecognized command '/buddy-review'. Type "/" for a list of supported commands.
+
+Disposition: /buddy-review is not a native Codex slash command on this host. The plugin is invoked as the namespaced skill mention shown in skill-invocation.txt.
