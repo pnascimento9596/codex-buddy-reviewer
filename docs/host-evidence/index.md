@@ -141,10 +141,10 @@ Kitty removed that graphics-protocol blocker. It rendered the owner's legacy amb
 
 | File | Visible state | UTC capture | SHA-256 |
 |---|---|---|---|
-| [`bella-ready.png`](bella-ready.png) | legacy Bella, Ready | 2026-08-04T11:14:43Z | `b73713465fefb721da3ee4fd614eaccb53aaf99ecdc8c6e44b6a777b92b6b644` |
-| [`bella-running.png`](bella-running.png) | legacy Bella, Running during genuine Codex work | 2026-08-04T11:19:48Z | `89c1dc7dc22fa4614c33f1ec708b65c2805241b656b65ce6dffe661fd914196c` |
-| [`bella-ready-after-review.png`](bella-ready-after-review.png) | legacy Bella, Ready after exact-final review | 2026-08-04T11:24:35Z | `5f36b2cbc23e6f5dd6ae924fc2a7e4be2d8269e20d4589c4da9a78784d227872` |
-| [`lupo-ready.png`](lupo-ready.png) | legacy Lupo, Ready | 2026-08-04T11:25:08Z | `896a203d2a9928eacedaf2fe538c603c21cf318e07be7980b3e7265a3e31f4e2` |
+| [`bella-ready.png`](bella-ready.png) | legacy Bella, Ready | 2026-08-04T11:14:43Z | `4c35aaf9bfdb4320e63f39f37c6840bc4df8fa53e95a885b6f1749660d3b17a3` |
+| [`bella-running.png`](bella-running.png) | legacy Bella, Running during genuine Codex work | 2026-08-04T11:19:48Z | `50aac50d72e76e4436d057e8bd2ad4cc77eacbcd6b45f61d8ad01a9994bbf7e6` |
+| [`bella-ready-after-review.png`](bella-ready-after-review.png) | legacy Bella, Ready after exact-final review | 2026-08-04T11:24:35Z | `1d501e7eb65d8a666c25164b9fbb045c5d0e585f6e3f77e6c5ee5d74d16a427e` |
+| [`lupo-ready.png`](lupo-ready.png) | legacy Lupo, Ready | 2026-08-04T11:25:08Z | `a5e897a8988dadde4e9ce827a5e20fd06e9da1efffd63ee4e6e95969b018f966` |
 
 These images prove graphics-capable native rendering and genuine Running/Ready transitions. They do **not** prove the released `buddy-bella` or `buddy-lupo` packages.
 
