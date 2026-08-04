@@ -8,7 +8,7 @@ Codex task validation:
   0 failed
   git diff --check also passed with no whitespace errors.
 
-Stop continuation review key:
+Stop continuation review identity (SHA-256 digest):
 
   ce50eb16000bfdbc5ec90f39eaee9f3c995d3a301b82531e266e7aedec4f2290
 
@@ -16,6 +16,6 @@ Visible review paragraph:
 
   Buddy review found no actionable correctness defect above the configured confidence threshold.
 
-The final Codex response preserved the task summary and appended the visible review exactly once. Turn-state and receipt files independently matched this exact-final review key. No speculative key existed for this turn.
+The final Codex response preserved the task summary and appended the visible review exactly once. Turn-state and receipt files independently matched this exact-final review identity. No speculative identity existed for this turn.
 
 Disposition: exact-final fallback and visible transcript continuation pass; speculative adoption not observed.

@@ -46,7 +46,7 @@ The private baseline was captured at `2026-08-04T14:55:36.310Z`. Stop began exac
 
 | Field | Value |
 |---|---|
-| Review key | `ce50eb16000bfdbc5ec90f39eaee9f3c995d3a301b82531e266e7aedec4f2290` |
+| Review identity (SHA-256 digest) | `ce50eb16000bfdbc5ec90f39eaee9f3c995d3a301b82531e266e7aedec4f2290` |
 | Baseline tree | `734757a28386e645649b28ae76be8eb4bcd4e0b5` |
 | Final tree | `b6f6831de106d3a78e54142b8015b1085a32169e` |
 | Changed paths | 3 |
@@ -73,7 +73,7 @@ The longer task worked for 8 minutes 21 seconds. Its private pre-review state be
 }
 ```
 
-At Stop it recorded `worker_state: superseded`, still with zero speculative launches and no ready key. Stop requested exact-final key `e4a50a0ab46ae1aca7690942b4d5013ddac3137129de4a7abb32c9ca862ce918`.
+At Stop it recorded `worker_state: superseded`, still with zero speculative launches and no ready identity. Stop requested exact-final identity `e4a50a0ab46ae1aca7690942b4d5013ddac3137129de4a7abb32c9ca862ce918`.
 
 | Field | Value |
 |---|---|
