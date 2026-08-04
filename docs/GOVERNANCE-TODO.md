@@ -4,14 +4,16 @@ This file tracks controls and observations that cannot be proved by repository C
 
 ## GitHub account controls
 
-- [ ] Review the GitHub account Security Log for release and deployment activity around `2026-08-01T09:38:00Z` through `2026-08-01T09:59:00Z`, and around each later release dispatch. Record unexpected identities, IP addresses, sessions, or token use before stable promotion.
+- [x] Review the GitHub account Security Log for release and deployment activity around `2026-08-01T09:38:00Z` through `2026-08-01T09:59:00Z`, and around each later release dispatch. Record unexpected identities, IP addresses, sessions, or token use before stable promotion.
+  - Done 2026-08-04 via Safari Security Log (signed in as `pnascimento9596`). Query `created:>=2026-08-01T09:20:00Z created:<=2026-08-01T10:20:00Z` returned exactly three events, all at `2026-08-01T09:38:46Z`, all actor GitHub System, all Copilot Pull Request Reviewer `oauth_access` regenerate/destroy/create. No unexpected identities or IPs in-window. Screenshots retained only under local excluded `.local-evidence/security-log/` (not committed). Repo-level merge/dispatch is not an account Security Log event type.
 - [ ] Inventory authorized OAuth applications and revoke any that no longer need repository access.
 - [ ] Inventory fine-grained personal access tokens and revoke stale or unrecognized credentials.
 - [ ] Replace broad agent credentials where practical with repository-selected fine-grained tokens. Agent tokens should not receive Actions write/workflow-dispatch or deployment-approval access unless the specific session requires it.
+  - Agent residue: create only under owner browser control; never expose token value to agents or commits. Suggested scope: this repository, Contents + Pull requests write, no workflow, no deployment review.
 - [ ] Decide whether to disable administrator bypass for the `public-release` environment. The repository API currently reports `can_admins_bypass: true`.
 - [ ] Review account email visibility and two-factor-authentication status in browser settings; the active API token does not expose authoritative values for these settings.
 
-The repository API successfully enforces `pnascimento9596` as the sole required reviewer for `public-release`, with protected branches only and `prevent_self_review: false`. The release workflow additionally rejects dispatches whose GitHub account actor is not exactly `pnascimento9596`. This is defense-in-depth: it identifies the GitHub account presented to the workflow, not the human, browser session, OAuth application, or agent process using an owner credential.
+The repository API successfully enforces `pnascimento9596` as the sole required reviewer for `public-release`, with protected branches only and `prevent_self_review: false` (re-verified 2026-08-04). The release workflow additionally rejects dispatches whose GitHub account actor is not exactly `pnascimento9596`. This is defense-in-depth: it identifies the GitHub account presented to the workflow, not the human, browser session, OAuth application, or agent process using an owner credential.
 
 Attempting `gh api /user/security-log` on `2026-08-02` returned verbatim:
 
