@@ -1,0 +1,14 @@
+Capture method: owned Codex TUI in Apple Terminal and /usr/bin/screen; terminal hardcopy; ANSI/control bytes removed; personal paths replaced.
+Host: Codex CLI 0.146.0
+
+Exact visible Apple Terminal/screen disposition:
+
+  Pets aren't available in this terminal. Terminal pets need image support, and this terminal environment doesn't expose a supported image protocol. Try a terminal with Kitty graphics or Sixel support, or run Codex outside tmux.
+
+Follow-up: Kitty 0.48.2 was installed with Homebrew. With TERM=xterm-kitty, Codex rendered legacy Bella and Lupo pets in Ready and Running states.
+
+Published rc.3 buddy-* packages remained absent from the Codex 0.146.0 selector despite reporting installed. The Kitty TUI also emitted:
+
+  Failed to load pet: load ambient pet
+
+Disposition: graphics limitation resolved by Kitty; released v2 pet-package compatibility remains blocked by issue #38.

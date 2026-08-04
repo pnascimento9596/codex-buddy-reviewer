@@ -30,8 +30,8 @@ Machine collection proves all of the following from local, hash-bound data:
 
 Machine collection does **not** prove any of these operator-visible facts:
 
-- `/buddy-review` appeared in the host command menu;
-- invoking `/buddy-review` with no arguments visibly toggled the intended mode;
+- `$codex-buddy-reviewer:buddy-review` resolved to the installed skill;
+- invoking that namespaced skill with no arguments visibly toggled the intended mode;
 - the operator completed the host hook-trust prompt;
 - the continued Stop visibly combined the worker and Buddy review;
 - the host did not visibly enter a second Stop continuation loop;
@@ -80,8 +80,8 @@ it outside the public artifact and repository when appropriate.
 
 Use a fresh Codex task and make one small, reviewable repository change:
 
-1. Confirm `/buddy-review` is discoverable in the command menu.
-2. Invoke `/buddy-review` with no arguments and confirm the visible mode toggle.
+1. Confirm `$codex-buddy-reviewer:buddy-review` resolves to the installed skill. Record any native `/buddy-review` result separately; do not treat an unrecognized slash command as skill discovery.
+2. Invoke the namespaced skill with no arguments and confirm the visible mode toggle.
 3. Open `/pet`, select the public pet being tested, and confirm it is visible and
    Ready before the turn.
 4. Complete the installed hook's trust prompt.

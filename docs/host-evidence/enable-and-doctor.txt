@@ -1,0 +1,17 @@
+Capture method: owned Codex TUI under /usr/bin/screen; terminal hardcopy; ANSI/control bytes removed; personal paths replaced.
+Host: Codex CLI 0.146.0
+Plugin: 0.5.0-rc.3+codex.20260803011343
+Workspace: <scratch-workspace>
+
+Visible enable result:
+
+  Buddy automatic review is ON for <scratch-workspace>
+  Reviewer: ollama/glm-5.2:cloud - advisory - workspace-scoped
+
+Authorized provider check result:
+
+  Provider check: [pass] provider: 1/1 configured reviewer health checks passed.
+
+Doctor retained UNKNOWN dispositions for manual/native host observations such as command-menu discovery, hook trust, and host pet selection/wake. Those were evaluated separately and were not converted into automated passes.
+
+Disposition: mode enable pass; one authorized provider health check pass; manual host states remain evidence-driven.

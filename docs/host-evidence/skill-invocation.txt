@@ -1,0 +1,20 @@
+Capture method: owned Codex TUI under /usr/bin/screen; terminal hardcopy; ANSI/control bytes removed; personal paths replaced.
+Host: Codex CLI 0.146.0
+
+Working invocation:
+
+  $codex-buddy-reviewer:buddy-review
+
+Visible skill execution included:
+
+  Executing plugin enable command
+
+Resolved published plugin root:
+
+  ~/.codex/plugins/cache/codex-buddy-reviewer/codex-buddy-reviewer/0.5.0-rc.3
+
+Resolved repository root:
+
+  <scratch-workspace>
+
+Disposition: pass. This is a namespaced skill invocation, not a native slash command.

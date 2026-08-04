@@ -33,7 +33,7 @@ Buddy never asks you to paste tokens into its configuration. Authentication rema
 
 Buddy has no hosted account, central review database, or cross-session reviewer memory. It keeps only bounded local recovery, receipt, and settings state. After an authorized request reaches a reviewer connection, that provider's own service and retention policies apply.
 
-Run the first-party `/pet` command once to keep the selected companion open. `/buddy-review` controls review mode, progress events, and transcript output; it does not launch, select, or wake the native pet.
+Run the first-party `/pet` command once to keep the selected companion open. Invoke Buddy through the namespaced Codex skill mention `$codex-buddy-reviewer:buddy-review`; it controls review mode, progress events, and transcript output but does not launch, select, or wake the native pet. `/buddy-review` is not a native Codex slash command.
 
 ## Status
 
@@ -43,7 +43,7 @@ This is a release candidate, not a stable release. Provider egress remains exper
 
 ## What Buddy does
 
-- Exposes `buddy-review` in Codex's command menu. Selecting `/buddy-review` with no action toggles automatic review for the current Git workspace.
+- Exposes the namespaced Codex skill `$codex-buddy-reviewer:buddy-review`. Invoking it with no action toggles automatic review for the current Git workspace.
 - Captures a private stable Git baseline, then tracks exact repository checkpoints in a detached worker while the coding turn continues. No screen capture, expanded UI panel, terminal transcript, or display setting is involved.
 - Runs one or two configured reviewers concurrently under separate capabilities and per-connection circuit breakers. Continuous mode can pre-review at most two stable generations per turn, then uses an exact final fallback only when the matching result is not already ready.
 - Accepts one valid review when the other connection fails, labels the result partial, and never substitutes an unconfigured provider.
@@ -182,42 +182,42 @@ The two-command marketplace flow was verified locally with Codex CLI `0.144.4` a
 flowchart TD
     A["Install one reviewed Buddy release tag"] --> B["Start a fresh Codex task"]
     B --> C["Review and trust hooks/hooks.json"]
-    C --> D["Run /buddy-review pet install buddy-byte"]
+    C --> D["Invoke the Buddy skill to install buddy-byte"]
     D --> E["Refresh Pets and select the installed companion"]
     E --> F["Run the first-party /pet once"]
     F --> G["Authenticate and configure one or two reviewer CLIs"]
     G --> H["Run the read-only Buddy doctor"]
-    H --> I["Run /buddy-review to enable the workspace"]
+    H --> I["Invoke the Buddy skill to enable the workspace"]
     I --> J["Work normally and receive attributed reviews"]
 ```
 
 Start a fresh Codex task after installation or upgrade. Review and explicitly trust the changed `hooks/hooks.json` definition when Codex prompts. Then:
 
-1. Type `/buddy-review pet install buddy-byte`, select the Buddy Review skill, and send it. Substitute `buddy-mochi`, `buddy-orbit`, `buddy-bella`, or `buddy-lupo` for another packaged companion.
+1. Type `$codex-buddy-reviewer:buddy-review pet install buddy-byte` and send it. Substitute `buddy-mochi`, `buddy-orbit`, `buddy-bella`, or `buddy-lupo` for another packaged companion.
 2. Open Settings, choose Pets, select Refresh, and pick the installed companion.
 3. Run the first-party `/pet` command once. Codex persists the open pet, its position, size, and appearance.
 4. Install and authenticate the reviewer CLI or CLIs you intend to use through each provider's normal sign-in flow. Buddy does not collect or store those credentials.
-5. Type `/buddy-review configure Claude Opus 4.8 as primary and Grok 4.5 as secondary`, adjust the provider and model names to match your connections, select the Buddy Review skill, and send it.
-6. Type `/buddy-review run local doctor checks` and review the read-only connection and platform status. A provider health check is separate because it makes a small authorized model call.
-7. Type `/buddy-review`, select the Buddy Review skill, and send it to enable automatic review for the current Git workspace. The no-argument toggle otherwise uses Buddy's documented default Ollama Cloud configuration, so configure first unless that is what you want.
-8. Work normally. The no-argument `/buddy-review` invocation explicitly authorizes continuous review when it toggles the workspace ON. The native pet shows Codex task animation while Buddy tracks exact Git state and prepares a compact review through the transcript and local event stream.
+5. Type `$codex-buddy-reviewer:buddy-review configure Claude Opus 4.8 as primary and Grok 4.5 as secondary`, adjusting the provider and model names to match your connections.
+6. Type `$codex-buddy-reviewer:buddy-review run local doctor checks` and review the read-only connection and platform status. A provider health check is separate because it makes a small authorized model call.
+7. Type `$codex-buddy-reviewer:buddy-review` and send it to enable automatic review for the current Git workspace. The no-argument toggle otherwise uses Buddy's documented default Ollama Cloud configuration, so configure first unless that is what you want.
+8. Work normally. The no-argument skill invocation explicitly authorizes continuous review when it toggles the workspace ON. The native pet shows Codex task animation while Buddy tracks exact Git state and prepares a compact review through the transcript and local event stream.
 
-### Installed command-menu workflow
+### Installed skill workflow
 
-Marketplace users do not need to locate the plugin directory or run relative Node commands. Select `/buddy-review` in Codex and describe the action after the command:
+Marketplace users do not need to locate the plugin directory or run relative Node commands. Invoke the installed namespaced skill and describe the action after the mention:
 
 ```text
-/buddy-review
-/buddy-review pet list
-/buddy-review pet install buddy-byte
-/buddy-review configure Claude Opus 4.8 as primary and Grok 4.5 as secondary
-/buddy-review show status
-/buddy-review run local doctor checks
-/buddy-review show local data status
-/buddy-review disable review and purge this workspace's Buddy content
+$codex-buddy-reviewer:buddy-review
+$codex-buddy-reviewer:buddy-review pet list
+$codex-buddy-reviewer:buddy-review pet install buddy-byte
+$codex-buddy-reviewer:buddy-review configure Claude Opus 4.8 as primary and Grok 4.5 as secondary
+$codex-buddy-reviewer:buddy-review show status
+$codex-buddy-reviewer:buddy-review run local doctor checks
+$codex-buddy-reviewer:buddy-review show local data status
+$codex-buddy-reviewer:buddy-review disable review and purge this workspace's Buddy content
 ```
 
-The no-argument form is the one-step workspace toggle. Configuration, diagnostics, pet installation, reversible setup, renderer control, and confirmation-gated purge are all routed through the same skill, which resolves its installed plugin root internally. Any mutating or provider-contacting action still requires the explicit request described in the skill contract.
+The no-argument form is the one-step workspace toggle. Configuration, diagnostics, pet installation, reversible setup, renderer control, and confirmation-gated purge are all routed through the same skill, which resolves its installed plugin root internally. Typing `/buddy-review` directly is not equivalent: Codex 0.146.0 reports it as an unrecognized native slash command. Any mutating or provider-contacting action still requires the explicit request described in the skill contract.
 
 The raw `node scripts/buddy-review.mjs` examples below are for a full source checkout or for advanced operators already running from the plugin root. They expose the exact underlying commands for auditability, but they are not required for normal marketplace use.
 
