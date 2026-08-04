@@ -206,3 +206,56 @@ test('mode CLI parses primary and secondary connections and documents clearing',
   assert.match(output.help, /remains final-only/);
   assert.match(output.help, /intermediate change evidence/);
 });
+
+test('human mode summary surfaces secondary reviewer and continuous-review state', async () => {
+  const { formatModeHumanSummary } = await import('../src/cli.mjs');
+  const singleFinal = formatModeHumanSummary({
+    schema_version: '1',
+    policy_version: '4',
+    config_revision: 1,
+    workspace_root: '/tmp/buddy-mode-summary',
+    enabled: true,
+    scope: 'workspace',
+    provider: 'claude',
+    model: 'claude-opus-4-8',
+    effort: 'high',
+    secondary_provider: null,
+    secondary_model: null,
+    secondary_effort: null,
+    min_confidence: 0.75,
+    max_patch_bytes: 262144,
+    timeout_ms: 1800000,
+    continuous_review_enabled: false,
+    continuous_review_consented_at: null,
+    consented_at: '2026-08-04T00:00:00.000Z',
+    updated_at: '2026-08-04T00:00:00.000Z'
+  });
+  assert.match(singleFinal, /Reviewer: claude\/claude-opus-4-8 · advisory · workspace-scoped · final-only/);
+  assert.doesNotMatch(singleFinal, /continuous-review ON/);
+
+  const dualContinuous = formatModeHumanSummary({
+    schema_version: '1',
+    policy_version: '4',
+    config_revision: 2,
+    workspace_root: '/tmp/buddy-mode-summary',
+    enabled: true,
+    scope: 'workspace',
+    provider: 'claude',
+    model: 'claude-opus-4-8',
+    effort: 'high',
+    secondary_provider: 'grok',
+    secondary_model: 'grok-4.5',
+    secondary_effort: 'high',
+    min_confidence: 0.75,
+    max_patch_bytes: 262144,
+    timeout_ms: 1800000,
+    continuous_review_enabled: true,
+    continuous_review_consented_at: '2026-08-04T00:00:00.000Z',
+    consented_at: '2026-08-04T00:00:00.000Z',
+    updated_at: '2026-08-04T00:00:00.000Z'
+  });
+  assert.match(
+    dualContinuous,
+    /Reviewer: claude\/claude-opus-4-8 \+ grok\/grok-4\.5 · advisory · workspace-scoped · continuous-review ON/
+  );
+});

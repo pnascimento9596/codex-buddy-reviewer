@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { collectEvidence } from './evidence.mjs';
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
-import { providerDefaultModel, validateReviewerConfiguration } from './mode.mjs';
+import { providerDefaultModel, reviewersForMode, validateReviewerConfiguration } from './mode.mjs';
 import { buildReviewPrompt } from './prompt.mjs';
 import {
   approveProviderReviewRequest,
@@ -393,6 +393,18 @@ export async function reviewEvidence(evidence, options) {
   };
 }
 
+export function formatModeHumanSummary(mode) {
+  const reviewers = reviewersForMode(mode)
+    .map((reviewer) => `${reviewer.provider}/${reviewer.model}`)
+    .join(' + ');
+  const continuous = mode.continuous_review_enabled
+    ? 'continuous-review ON'
+    : 'final-only';
+  return `Buddy automatic review is ${mode.enabled ? 'ON' : 'OFF'} for ${mode.workspace_root}\n`
+    + `Reviewer: ${reviewers} · advisory · workspace-scoped · ${continuous}\n`
+    + 'Use /pet in Codex to wake or tuck away the host pet.\n';
+}
+
 export async function main(argv) {
   try {
     if (argv[0] === 'pet' || argv[0] === 'pets') {
@@ -406,13 +418,7 @@ export async function main(argv) {
       const output = await runModeCommand(argv.slice(1));
       if (output.help) process.stdout.write(output.help);
       else if (output.json) process.stdout.write(`${JSON.stringify(output.mode, null, 2)}\n`);
-      else {
-        process.stdout.write(
-          `Buddy automatic review is ${output.mode.enabled ? 'ON' : 'OFF'} for ${output.mode.workspace_root}\n`
-          + `Reviewer: ${output.mode.provider}/${output.mode.model} · advisory · workspace-scoped\n`
-          + 'Use /pet in Codex to wake or tuck away the host pet.\n'
-        );
-      }
+      else process.stdout.write(formatModeHumanSummary(output.mode));
       return 0;
     }
     if (argv[0] === 'renderer') {
