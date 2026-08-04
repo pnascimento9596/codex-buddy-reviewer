@@ -30,3 +30,18 @@ The authenticated `/user` endpoint exposed the account profile for login `pnasci
 - [ ] Decide whether the verified release candidate is eligible for stable `v0.5.0` promotion. That decision remains with the account owner after independent review, published-artifact verification, and host observations are complete.
 
 CLI-observable POSIX evidence can support these checks but cannot replace native rendering, transcript-display, or host-trust observations.
+
+## Phase 7 repository-observed ledger — 2026-08-04
+
+The following repository and API evidence is complete:
+
+- rc.3 was published by protected workflow run `30861281580` from exact protected source `0c6f09ae14d834fccb2a2289f6731511dbbdb034` after all validation lanes passed.
+- GitHub attributed the dispatch, all three required-environment approvals, and publication to owner account `pnascimento9596` (`198005926`). This proves account attribution, not the human/session/token behind that account.
+- Independent anonymous verification proved annotated tag `eb6a4541cbe75c73648da806ffacd22aef2b2f0d`, parentless distribution commit `8782b70c5c664f5a73f9c225a802c71f1ff49ccf`, tree `ac9ffe81aa3b170cf519ef1b35977a15f9cfae4b`, all five asset digests and sizes, both checksum sidecars, and three policy-bound GitHub-hosted attestations.
+- The frozen rc.3 evidence shipped through protected PR #34; frozen rc.1 and rc.2 bytes remained unchanged.
+- The published-artifact POSIX trial stayed within budget: one health call per configured reviewer and one live review turn. OpenCode `openai/gpt-5.6` failed closed; Ollama Cloud `glm-5.2:cloud` detected and grounded the planted off-by-one as `blocker` / confidence `1`. The successful result included `findings`; no reviewer returned `no_findings` or `abstain`. The 323-character output, mode disable, purge, tombstone retention, zero provider-temp bytes, and zero active capabilities were verified.
+- Issue #29 was corrected through PR #33. Issues #14 and #25 remain open; #25 recurred under loaded Ubuntu Node 24 protected CI and continues to require the deterministic-timing hardening pass.
+
+The unchecked account and native-host items above remain genuinely unresolved. Repository automation cannot convert them into owner-observed evidence. In particular, the REST API refusal for `/user/security-log` is not a Security Log review, and synthetic hook invocation is not native Codex hook trust, transcript rendering, or five-pet visual observation.
+
+**Stable-promotion disposition:** do not promote `v0.5.0` yet. rc.3 is independently verified and suitable for continued prerelease evaluation, but stable promotion should wait for the exact-head deep security scan, #14/#25 timing hardening, five-pet native host bundle, Windows DACL/live-egress gate, and the remaining owner-only account review.
