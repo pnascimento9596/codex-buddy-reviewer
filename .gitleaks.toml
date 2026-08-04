@@ -1,0 +1,14 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Closed PR #39 misclassified a documented SHA-256 review identity; the corrected replacement branch removed the key-like wording."
+condition = "AND"
+commits = ["5aedc290d8ffbf242b6254d1d57c676a14333d89"]
+paths = [
+  '''^docs/host-evidence/exact-final-review-transcript\.txt$''',
+]
+regexTarget = "match"
+regexes = [
+  '''(?m)key:\s+ce50eb16000bfdbc5ec90f39eaee9f3c995d3a301b82531e266e7aedec4f2290''',
+]
