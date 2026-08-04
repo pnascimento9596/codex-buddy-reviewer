@@ -13,9 +13,9 @@ behavior:
 |---|---|
 | `clean` | Review completes without inventing a defect. |
 | `defect` | The seeded changed-line defect is reported and grounded. |
-| `abstain` | Incomplete evidence causes a local abstention and no egress. |
+| `abstain` | Incomplete evidence yields `status: abstain`. Some fixtures are local no-egress gates (`provider_call: forbidden`, e.g. binary-omitted); others require a provider call and still expect abstain (`provider_call: required`, e.g. patch-budget truncation). Trust each case's `provider_call` / `egress_expected` fields, not the category name alone. |
 | `privacy` | Sensitive-only evidence remains aggregate-only and never reaches a provider. |
-| `deletion` | A finding may use a synthetic new-side deletion anchor. |
+| `deletion` | A finding may use a synthetic new-side deletion anchor, or an old-side citation on a fully deleted file when the corpus requires `line_side: old`. |
 
 Run the offline integrity gate with:
 
