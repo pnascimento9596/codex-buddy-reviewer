@@ -173,3 +173,25 @@ test('private JSON atomic replacement stops after its bounded Windows retry budg
   assert.deepEqual(await readPrivateJson(file), { revision: 1 });
   assert.deepEqual(await readdir(directory), ['atomic.json']);
 });
+
+test('private JSON atomic write modes the temp path before rename so destination cleanup cannot race chmod', async () => {
+  const directory = await temporaryDirectory();
+  const file = path.join(directory, 'race.json');
+  await writePrivateJsonAtomic(file, { revision: 1 });
+  let renamed = false;
+  await writePrivateJsonAtomic(file, { revision: 2 }, {
+    renameImpl: async (source, destination) => {
+      // Destination mode must already be correct on the temp inode. After the
+      // rename, concurrent cleanup may delete the final path immediately.
+      if (process.platform !== 'win32') {
+        assert.equal((await lstat(source)).mode & 0o777, 0o600);
+      }
+      await rename(source, destination);
+      renamed = true;
+      await rm(destination, { force: true });
+    }
+  });
+  assert.equal(renamed, true);
+  assert.equal(await readPrivateJson(file), null);
+  assert.deepEqual((await readdir(directory)).filter((name) => name.startsWith('.')), []);
+});

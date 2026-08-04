@@ -167,8 +167,10 @@ export async function writePrivateJsonAtomic(file, value, {
     await handle.sync();
     await handle.close();
     handle = null;
+    // Mode the temp inode before rename so concurrent cleanup cannot race a
+    // post-rename chmod against a destination that has already disappeared.
+    await chmod(temporary, 0o600);
     await renamePrivateJsonAtomic(temporary, file, { platform, renameImpl, pauseImpl });
-    await chmod(file, 0o600);
     await syncParentDirectory(file);
     return file;
   } finally {
@@ -187,8 +189,8 @@ export async function writePrivateJsonExclusive(file, value) {
     await handle.sync();
     await handle.close();
     handle = null;
+    await chmod(temporary, 0o600);
     await link(temporary, file);
-    await chmod(file, 0o600);
     await syncParentDirectory(file);
     return true;
   } catch (error) {

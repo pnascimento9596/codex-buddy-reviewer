@@ -861,6 +861,7 @@ test('setup cleanup removes only expired never-started plans for the selected wo
   });
   assert.equal(result.removed, 1);
   assert.equal(result.preserved, 1);
+  assert.equal(result.limited, false);
   await assert.rejects(access(path.join(fixture.dataDir, 'setup', 'plans', first.plan_id)));
   await access(path.join(fixture.dataDir, 'setup', 'plans', second.plan_id));
 });
