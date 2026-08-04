@@ -1,16 +1,16 @@
 # Validation Record
 
-This document separates validation evidence into four explicitly labeled layers. Current evidence must not overwrite frozen publication evidence, and unresolved gates remain unresolved until a fresh run proves otherwise.
+This document separates validation evidence into five explicitly labeled layers. Current evidence must not overwrite frozen publication evidence, and unresolved gates remain unresolved until a fresh run proves otherwise.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` is `58d8abaf49a2be09322d7a44ceda306f7354ef72`. The first-parent range after the released rc.2 source contains PR #15 (`3281a44bfb72b9ac76e6e1bee3f59f04a897bcb2`), PR #17 (`c51e6fb12fae1b5c2fb8a82cf5daa0ff20b2bfeb`), PR #19 (`bedb4565a369aa3878c8afbde28216b2aed4e47e`), PR #20 (`0219d7aa4b136e034876becb9a7dbeabf2422aa6`), PR #21 (`32f1121c0c916e7820d66095d2f1956793604e40`), PR #22 (`bea53a8473b69c967eac70dd64ca01d417974fdc`), PR #23 (`c703b776bd5af95449978c4d2b025acaecd0c24c`), and PR #24 (`58d8abaf49a2be09322d7a44ceda306f7354ef72`). The later phases ship the reproduced lifecycle/publication fixes, mutation-controlled adversarial corpus cases, and a pinned strict checked-JavaScript slice.
+Current protected `main` and the published rc.3 source are `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. After the Phase 4 head, PR #26 prepared the rc.3 candidate, PRs #28/#30/#31/#32 corrected release-validation defects exposed by fail-closed publication attempts, and PR #33 stabilized synchronous observation of the expected deadline-containment rejection. Each change squash-merged normally and passed protected-main validation at its exact merge head.
 
-### rc.3 candidate validation based on protected main `58d8abaf49a2be09322d7a44ceda306f7354ef72`
+### rc.3 release-source validation based on protected main `0c6f09ae14d834fccb2a2289f6731511dbbdb034`
 
-The rc.3 candidate worktree recorded `778` tests, `760` passes, `18` intentional skips, and `0` failures. `npm run check:syntax` checked `85` modules; `npm run check:types` installed the exact lockfile graph and passed with TypeScript `7.0.2` and `@types/node` `26.1.2`; bare `npm run security:publication` passed; `npm run release:boundary` verified `130` public files; two focused release suites passed `31/31`; the review-boundary behavioral suite remained `112/112` before and after checked-JavaScript annotations; and comments-removed emitted JavaScript was byte-identical for all five authorized modules. Gitleaks found no leaks across `104` commits or the candidate worktree, both skill validators and the plugin validator passed, and `git diff --check` was clean. Provider tests were mocked and no live provider was contacted during this gate.
+The final rc.3 source recorded `786` tests, `768` passes, `18` intentional skips, and `0` failures in the authoritative serial local run. `npm run check:syntax` checked `85` modules; `npm run check:types` installed the exact lockfile graph and passed with TypeScript `7.0.2` and `@types/node` `26.1.2`; publication-boundary, portable, skill, plugin, secret, and diff validations passed. Protected-main run `30860361741` passed the repository credential scan and every Ubuntu, macOS, and Windows validation lane at the exact published source. Provider tests were mocked and no live provider was contacted during this gate.
 
-The two frozen historical slices were byte-compared against protected main before this edit: Layer B (rc.1) is `3908` bytes with SHA-256 `145f7e78e68326cd678e39bcbadb402b890584ab1ba54c61073690b6cd946abc`; Layer C (rc.2) is `2914` bytes with SHA-256 `c734e100570f8dcb3fcaad941e5a86f330aa37267c79c4b2b6187e4d360ad33a`. Both comparisons were byte-identical.
+The two prior frozen historical slices were byte-compared before this edit: Layer B (rc.1) is `3908` bytes with SHA-256 `145f7e78e68326cd678e39bcbadb402b890584ab1ba54c61073690b6cd946abc`; Layer C (rc.2) is `2914` bytes with SHA-256 `c734e100570f8dcb3fcaad941e5a86f330aa37267c79c4b2b6187e4d360ad33a`. Both comparisons were byte-identical. Layer D separately freezes rc.3.
 
 ### Protected-main GitHub validation evidence
 
@@ -25,6 +25,12 @@ The two frozen historical slices were byte-compared against protected main befor
 | PR #22, Phase 2 reproduced fixes | `30771259006` | `bea53a8473b69c967eac70dd64ca01d417974fdc` | success |
 | PR #23, Phase 3 adversarial corpus | `30773941325` | `c703b776bd5af95449978c4d2b025acaecd0c24c` | success |
 | PR #24, Phase 4 checked JavaScript | `30776339242` | `58d8abaf49a2be09322d7a44ceda306f7354ef72` | success |
+| PR #26, rc.3 candidate | `30815410789` | `4eae98b1c5924e710417ec20af1eae02ccb322b8` | success |
+| PR #28, randomized privacy assertion | `30820920884` | `e0de954d2e0a8dc35e1c8b8a7914e74fdd9a0b51` | success |
+| PR #30, explicit Git object format | `30827388304` | `916e644676b46ab4bebdc116c45797640fb2c54f` | success |
+| PR #31, cross-version Git compatibility | `30841814619` | `b28ef5bfad03d1563ddda4676ed6d536c266f6ea` | success after flake protocol |
+| PR #32, reachable-history dispositions | `30853151362` | `c9bc4441cd4fc43533b834402e10507982d242af` | success |
+| PR #33, deadline-containment observation | `30860361741` | `0c6f09ae14d834fccb2a2289f6731511dbbdb034` | success |
 
 ### Phase 3 and Phase 4 exact-head delivery evidence
 
@@ -230,6 +236,7 @@ The external scratch clone, downloaded assets, extracted artifact, bundle checko
 
 The following gates remain unresolved after rc.3 publication for stable promotion or stronger current-head assurance:
 
+- Fresh exact-head whole-repository Codex Deep Security Scan.
 - Five-pet artifact-bound host observations for Byte, Mochi, Orbit, Bella, and Lupo.
 - Windows current-user-only DACL creation and verification for durable Buddy state and provider temporary roots.
 - Live Windows provider egress after the DACL gate is implemented and verified.
