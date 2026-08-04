@@ -7,9 +7,11 @@ Use Codex's native floating pet as Buddy's persistent animated presence:
 1. Install a packaged companion, for example `node scripts/buddy-review.mjs pet install buddy-byte`.
 2. Open Codex Settings → Pets, select **Refresh**, and choose the appearance.
 3. Run `/pet` once to wake it.
-4. Run the `buddy-review` command-menu skill to toggle the review behavior.
+4. Run `$codex-buddy-reviewer:buddy-review` to toggle the review behavior.
 
 The host persists pet selection, position, size, and open state. During the task, the native pet derives animation from Codex task status: active review remains Running; completed unread output becomes Ready.
+
+Terminal rendering requires a host that exposes Kitty graphics or Sixel. Apple Terminal and terminal multiplexers that do not expose a supported image protocol cannot render `/pet`; use Kitty, another supported graphics terminal, or a Codex host with equivalent image support.
 
 With one or two configured reviewers, Buddy can begin reviewing stable privacy-filtered repository generations while Codex is still implementing. It publishes local `review_started` events for executable review work and one final `review_completed` event containing ordered attributed outcomes. A partial result keeps the failed or open lane visible instead of substituting a provider. The companion mood and XP derive from the durable exact aggregate completion, not from a speculative generation or a claim that every reviewer succeeded.
 
