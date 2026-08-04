@@ -115,6 +115,7 @@ test('OpenCode uses an empty private cwd, isolated config, denied tools, and std
   assert.equal(options.timeoutMs > 0 && options.timeoutMs <= 12_345, true);
   assert.equal(options.maxOutputBytes, 4 * 1024 * 1024);
   assert.equal(options.protectFromParentDeath, true);
+  assert.deepEqual(options.acceptedExitCodes, [0, 1]);
 
   const config = JSON.parse(options.env.OPENCODE_CONFIG_CONTENT);
   assert.equal(config.autoupdate, false);
@@ -525,6 +526,11 @@ test('OpenCode rejects tool, error, malformed, unknown, and incomplete transport
       'error event',
       event('error', { error: { name: 'private diagnostic' } }),
       /error event/
+    ],
+    [
+      'error event with safe message',
+      event('error', { error: { name: 'UnknownError', data: { message: 'Unexpected server error. Check server logs for details.' } } }),
+      /Unexpected server error/
     ],
     ['malformed JSONL', '{not-json}\n', /invalid JSON event/],
     ['unknown event', event('tool_result', { part: { type: 'tool-result' } }), /unknown event/],

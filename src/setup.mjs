@@ -42,7 +42,10 @@ const DEFAULT_PLAN_TTL_MS = 15 * 60_000;
 const MAX_PLAN_TTL_MS = 24 * 60 * 60_000;
 export const SETUP_TERMINAL_RETENTION_MS = 24 * 60 * 60_000;
 export const SETUP_PLAN_SCAN_LIMIT = 128;
-const SETUP_PLAN_SCAN_DEADLINE_MS = 250;
+// Cleanup is not on the Stop hot path. A 250ms wall clock was short enough that
+// loaded Windows runners could mark the scan limited after the first plan and
+// leave other-workspace plans uncounted (issue #14).
+export const SETUP_PLAN_SCAN_DEADLINE_MS = 5_000;
 const SETUP_PLAN_TREE_LIMIT = 32;
 const SETUP_RECORD_MAX_BYTES = 1024 * 1024;
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;

@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 import { explicitProviderCheck, parseDoctorArgs } from '../src/doctor-cli.mjs';
 import { runDoctor } from '../src/doctor.mjs';
-import { modeFile } from '../src/mode.mjs';
+import { changeMode, modeFile } from '../src/mode.mjs';
 import { beginPetTransaction, recordPetTransactionStep } from '../src/pet-transactions.mjs';
 import {
   approveProviderReviewRequest,
@@ -170,6 +170,51 @@ test('POSIX process containment diagnostic reports lifecycle cleanup without cla
   assert.equal(check(result, 'process_containment').status, 'pass');
   assert.match(check(result, 'process_containment').summary, /POSIX process-group cleanup/);
   assert.match(check(result, 'process_containment').detail, /not an OS sandbox/);
+  assert.equal(check(result, 'opencode_cli_surface').status, 'pass');
+});
+
+test('doctor reports offline OpenCode CLI surface when OpenCode is configured', async () => {
+  const root = await temporaryDirectory('codex-buddy-doctor-opencode-');
+  const workspace = await realpath(await mkdir(path.join(root, 'workspace'), { recursive: true }).then(() => path.join(root, 'workspace')));
+  const dataDir = path.join(root, 'state');
+  await changeMode({
+    root: workspace,
+    resolveRoot: async (value) => value,
+    dataDir,
+    action: 'enable',
+    provider: 'opencode',
+    model: 'openai/gpt-5.6',
+    effort: 'high'
+  });
+  let resolveCalls = 0;
+  const missing = await runDoctor({
+    root: workspace,
+    resolveRoot: async (value) => value,
+    codexHome: path.join(root, 'codex'),
+    dataDir,
+    pluginRoot: repositoryRoot,
+    platform: 'linux',
+    resolveOpenCodeExecutable: async () => {
+      resolveCalls += 1;
+      throw new Error('opencode is not on PATH');
+    }
+  });
+  assert.equal(resolveCalls, 1);
+  assert.equal(check(missing, 'opencode_cli_surface').status, 'fail');
+  assert.match(check(missing, 'opencode_cli_surface').summary, /not resolvable on PATH/);
+
+  const present = await runDoctor({
+    root: workspace,
+    resolveRoot: async (value) => value,
+    codexHome: path.join(root, 'codex'),
+    dataDir,
+    pluginRoot: repositoryRoot,
+    platform: 'linux',
+    resolveOpenCodeExecutable: async () => '/fixture/bin/opencode'
+  });
+  assert.equal(check(present, 'opencode_cli_surface').status, 'pass');
+  assert.match(check(present, 'opencode_cli_surface').summary, /opencode/);
+  assert.match(check(present, 'opencode_cli_surface').detail, /does not contact a model provider/);
 });
 
 test('Windows process containment diagnostic uses CI helper overrides but labels metadata-only proof', async () => {
