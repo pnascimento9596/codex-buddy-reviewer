@@ -180,11 +180,56 @@ All three subjects resolve to the same signed identity:
 
 The external scratch clone, downloaded assets, and generated attestation JSON were removed after verification.
 
-## Layer D - unresolved gates
+## Layer D - frozen `v0.5.0-rc.3` publication evidence, historical
 
-The following gates remain unresolved for rc.3 publication, stable promotion, or stronger current-head assurance:
+This layer freezes the rc.3 publication identity and the independent post-publication verification performed on `2026-08-04`. These values describe the published artifact and must not be replaced with later `main` state.
 
-- Fresh exact-head whole-repository Codex Deep Security Scan.
+### Published RC identity
+
+- source commit: `0c6f09ae14d834fccb2a2289f6731511dbbdb034`
+- release run: `30861281580` (attempt 1, `workflow_dispatch`, success)
+- published at: `2026-08-04T01:09:55Z`
+- annotated tag object: `eb6a4541cbe75c73648da806ffacd22aef2b2f0d`
+- parentless distribution commit: `8782b70c5c664f5a73f9c225a802c71f1ff49ccf` (`0` parents)
+- distribution tree: `ac9ffe81aa3b170cf519ef1b35977a15f9cfae4b`
+- release manifest SHA-256: `f0e1556ae89c12446c736b6fd2fa11e056fc311a3ee54fc0d9623ed5740882e9`
+- artifact content SHA-256: `b12014419d18d490bb3efaf244a9d47021d619eca6bff83e4e68f80836a4046b`
+
+An anonymous credential-disabled clone resolved public `main` to the source commit above. The rc.3 ref was an annotated tag object, its annotation embedded the exact `Source-Commit`, release-manifest digest, artifact-content digest, and distribution tree, and its peeled target was the zero-parent distribution commit. The downloaded distribution JSON independently reported the same tag object, commit, tree, source commit, and digests. The distribution bundle verified as complete, reproduced the same tag/commit/tree identities, and its checked-out 131-file tree was byte-exact with the independently extracted tarball. The trusted source verifier accepted the extracted 130-file public package and all five cleared pet IDs.
+
+### Dispatch and protected-environment attribution
+
+GitHub attributed the dispatch actor and triggering actor to `pnascimento9596`, account ID `198005926`, at exact protected-main source `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. Every reusable validation lane passed before artifact construction. The protected `public-release` environment required that same owner account and presented three separate approvals for build, attestation, and publication. The approvals API records all three as `approved`; deployments `5735240282`, `5735258101`, and `5736203039` bind the protected stages to the exact source SHA. This proves the configured account path, not which person, browser session, token, or delegated process exercised the account.
+
+### Release assets and hashes
+
+Both checksum sidecars passed `shasum -a 256 -c`. Independently computed hashes and sizes matched GitHub's asset metadata for all five anonymously downloaded assets:
+
+| Release asset | Bytes | SHA-256 | Provenance subject |
+|---|---:|---|---|
+| `codex-buddy-reviewer-0.5.0-rc.3.tar.gz` | `13662721` | `6de1ab3c4a47a96abbc5faf868d862d614a2e2a196fd4ec730f4b7c7b9d0b759` | yes |
+| `codex-buddy-reviewer-0.5.0-rc.3.tar.gz.sha256` | `105` | `a7237c233ceb3dd523fe05c32c53437f698fb77f90920da4424ae9c77745dbe3` | no; checksum metadata asset |
+| `codex-buddy-reviewer-0.5.0-rc.3-distribution.bundle` | `13705017` | `4a954f2eea8069430857c650687f1152365da17dcdcab3b02b9e411c3b4854e1` | yes |
+| `codex-buddy-reviewer-0.5.0-rc.3-distribution.bundle.sha256` | `118` | `9f5923ee65f02991035fa98918fb394094c2015ce4a72c93b8888f5f092e96b0` | no; checksum metadata asset |
+| `codex-buddy-reviewer-0.5.0-rc.3-distribution.json` | `592` | `f7d61e73a7448fc02dd9966f35aaaf2e118023d3ab32703ccd2a0cedd540fd11` | yes |
+
+### Policy-bound attestation verification
+
+`gh attestation verify` succeeded independently for the tarball, distribution bundle, and distribution JSON while enforcing repository `pnascimento9596/codex-buddy-reviewer`, source digest `0c6f09ae14d834fccb2a2289f6731511dbbdb034`, source ref `refs/heads/main`, signer workflow `pnascimento9596/codex-buddy-reviewer/.github/workflows/release.yml`, and denial of self-hosted runners. Certificate-backed fields were identical for all three subjects:
+
+- subject alternative name: `https://github.com/pnascimento9596/codex-buddy-reviewer/.github/workflows/release.yml@refs/heads/main`
+- trigger: `workflow_dispatch`
+- source and workflow digest: `0c6f09ae14d834fccb2a2289f6731511dbbdb034`
+- source ref: `refs/heads/main`
+- runner environment: `github-hosted`
+- invocation: `https://github.com/pnascimento9596/codex-buddy-reviewer/actions/runs/30861281580/attempts/1`
+
+The external scratch clone, downloaded assets, extracted artifact, bundle checkout, and generated attestation JSON were removed after the evidence was recorded.
+
+## Layer E - unresolved gates
+
+The following gates remain unresolved after rc.3 publication for stable promotion or stronger current-head assurance:
+
 - Five-pet artifact-bound host observations for Byte, Mochi, Orbit, Bella, and Lupo.
 - Windows current-user-only DACL creation and verification for durable Buddy state and provider temporary roots.
 - Live Windows provider egress after the DACL gate is implemented and verified.
@@ -194,5 +239,5 @@ The following gates remain unresolved for rc.3 publication, stable promotion, or
 - GitHub account email visibility: the authenticated API token lacks the required `user` scope, so the account owner must set the durable visibility preference in the browser.
 - Fine-grained agent PAT inventory and browser Security Log review for the `2026-08-01T09:38:00Z`–`09:59:00Z` publication window remain owner-only browser evidence.
 - The `public-release` environment currently requires owner account `pnascimento9596`; browser confirmation remains necessary if the API cannot establish the complete required-reviewer policy and its owner-visible controls.
-- The Windows Node 22 preservation assertion intermittent from run `30682892670` is tracked in issue #14. The Ubuntu Node 22 speculative-checkpoint intermittent from run `30775405637` attempt 1 is tracked in issue #25. Both remain open because they touch checkpoint/no-loss behavior.
+- The Windows Node 22 preservation assertion intermittent from run `30682892670` is tracked in issue #14. The Ubuntu Node 22 speculative-checkpoint intermittent from run `30775405637` attempt 1 is tracked in issue #25. Both remain open because they touch checkpoint/no-loss behavior. The macOS containment-classification race tracked in #29 was deterministically corrected through PR #33 before rc.3 publication.
 - Stable `v0.5.0` promotion remains an explicit owner decision after the published-artifact POSIX half, five-pet host observations, Windows DACL/egress work, and remaining governance evidence are reconciled.
