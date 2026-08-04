@@ -4,7 +4,7 @@ This document separates validation evidence into five explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` and the published rc.3 source are `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. After the Phase 4 head, PR #26 prepared the rc.3 candidate, PRs #28/#30/#31/#32 corrected release-validation defects exposed by fail-closed publication attempts, and PR #33 stabilized synchronous observation of the expected deadline-containment rejection. Each change squash-merged normally and passed protected-main validation at its exact merge head.
+Current protected `main` is `27b5e9ad73e3d4ff1e7c37d20ec82ae98d00c9d0`; the immutable published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. After the Phase 4 head, PR #26 prepared the rc.3 candidate, PRs #28/#30/#31/#32 corrected release-validation defects exposed by fail-closed publication attempts, PR #33 stabilized synchronous observation of the expected deadline-containment rejection, and PR #34 froze independently verified rc.3 evidence without changing the prior frozen layers.
 
 ### rc.3 release-source validation based on protected main `0c6f09ae14d834fccb2a2289f6731511dbbdb034`
 
@@ -31,6 +31,7 @@ The two prior frozen historical slices were byte-compared before this edit: Laye
 | PR #31, cross-version Git compatibility | `30841814619` | `b28ef5bfad03d1563ddda4676ed6d536c266f6ea` | success after flake protocol |
 | PR #32, reachable-history dispositions | `30853151362` | `c9bc4441cd4fc43533b834402e10507982d242af` | success |
 | PR #33, deadline-containment observation | `30860361741` | `0c6f09ae14d834fccb2a2289f6731511dbbdb034` | success |
+| PR #34, frozen rc.3 evidence | `30870061618` attempt 2 | `27b5e9ad73e3d4ff1e7c37d20ec82ae98d00c9d0` | success after one failed-job rerun under #25 protocol |
 
 ### Phase 3 and Phase 4 exact-head delivery evidence
 
@@ -46,7 +47,23 @@ The dispatch is authorized only after this candidate merges through normal prote
 
 ### Phase 7 pre-stable engineering work item
 
-- [ ] Deterministic-timing hardening pass over process-supervision tests (#14, #25, and #29).
+- [ ] Deterministic-timing hardening pass over process-supervision tests. PR #33 closed the #29 promise-observation race; #14 and #25 remain open. Issue #25 recurred on Ubuntu Node 24 in protected-main run `30870061618` attempt 1, then passed the exact focused test locally `5/5` and passed the one permitted failed-job rerun on unchanged source in attempt 2.
+
+### Phase 6 published-artifact POSIX evidence
+
+Phase 6 used only a fresh anonymous download of `codex-buddy-reviewer-0.5.0-rc.3.tar.gz`. Its checksum sidecar passed, the independently calculated archive SHA-256 was `6de1ab3c4a47a96abbc5faf868d862d614a2e2a196fd4ec730f4b7c7b9d0b759`, and `release-manifest.json` bound the 130-file artifact to source `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. No source-checkout executable drove the trial.
+
+Offline doctor ran at `2026-08-04T01:55:42Z` with provider contact disabled. It validated plugin version `0.5.0-rc.3`, both hook definitions, POSIX process-group containment configuration, complete workspace resolution, zero active egress capabilities, and the ordered disabled reviewer configuration. Native host-hook trust, command discovery, pet selection, and visual state remained explicitly unknown/manual.
+
+The one authorized bounded health-check window was `2026-08-04T01:56:14Z`–`01:56:17Z`. It made exactly one no-repository-content call per configured reviewer: OpenCode `openai/gpt-5.6` failed closed with `transport_exit`; Ollama Cloud `glm-5.2:cloud` passed. No provider or model was substituted.
+
+One live review turn ran from `2026-08-04T02:03:43Z` through `02:03:49Z` after explicit continuous-mode enablement, baseline capture, and a one-line `index < items.length` to `index <= items.length` mutation. The synthetic shell host did not preserve the detached speculative worker after the `UserPromptSubmit` process exited, so Stop performed the exact final fallback rather than claiming receipt adoption. Both reviewer lanes received the same 4,077-byte bounded prompt. OpenCode `openai/gpt-5.6` failed closed at inference with `transport_exit` after 1,083 ms; Ollama Cloud `glm-5.2:cloud` completed in 3,297 ms. That is one partial review, not two review turns and not a fallback substitution.
+
+The successful Ollama result returned `status: findings` with an explicit `findings` array. It cited changed path `bounds.mjs`, current line 2, detected the planted off-by-one, and classified it `blocker` with confidence `1`. Local execution independently reproduced the claim: for a two-item array, `withinBounds(2, items)` returned `true` even though index 2 is invalid. No live reviewer returned `no_findings` or `abstain`, so no such status omitted the required findings array; the OpenCode lane returned no review object because its transport failed.
+
+The exact Stop receipt bound baseline tree `c621c897124fc1ea7cb92cd738da99597880fe71`, final tree `13b889f7ac24cc63eeca14748f28ee59e3df8907`, and patch SHA-256 `4bd6d9b24cf54f1eab7dc75abb3a2079393853a437ed515a4e9da1e933dc53cb`. Its visible single-paragraph review was 323 characters, below the 700-character ceiling, and honestly labeled the partial connection state. Before cleanup, status accounted for 9 review-content files / 18,538 bytes, 5 settings files / 1,130 bytes, no provider temporary files, and zero active capabilities. Mode was disabled before confirmation-gated purge. After purge, receipts and renderer outbox were absent, provider temporary bytes remained zero, active capabilities remained zero, and only the required 561-byte content-free completed-turn tombstone remained as review content.
+
+This proves the published artifact's POSIX exact-final provider path, strict successful-result shape, changed-line validation, compact output, honest partial status, disable, and bounded purge accounting. Synthetic CLI driving does not prove native pet rendering, native host trust, transcript continuation display, or speculative-worker survival under a real Codex host.
 
 ### Phase 2 independent exact-head adversarial review
 
@@ -81,7 +98,7 @@ The merge, dispatch, three approvals, and publication form one 20-minute account
 
 The published rc.2 source did not receive the fresh independent exact-head review prescribed by the roadmap gates before publication. Phase 2 supplied that review against post-rc.2 protected main and one exact cleanup-fix head; later reproduced fixes were not provider-re-reviewed because the authorized call ceiling was exhausted.
 
-Both Phase 2 GLM responses included `findings: []` explicitly, so the strict findings-array requirement held on that route despite the model-attribution anomaly. Published-artifact end-to-end confirmation for the configured reviewer pair remains a Phase 6 gate. The published rc.2 artifact also predates the clean-filter, filtered-path, governance, and Phase 2 corrections.
+Both Phase 2 GLM responses included `findings: []` explicitly, so the strict findings-array requirement held on that route despite the model-attribution anomaly. The published rc.2 artifact predates the clean-filter, filtered-path, governance, and Phase 2 corrections; the published rc.3 POSIX trial above is the current artifact-bound evidence.
 
 ## Layer B - frozen `v0.5.0-rc.1` publication evidence, historical
 
@@ -241,10 +258,10 @@ The following gates remain unresolved after rc.3 publication for stable promotio
 - Windows current-user-only DACL creation and verification for durable Buddy state and provider temporary roots.
 - Live Windows provider egress after the DACL gate is implemented and verified.
 - Stable artifact requirements: rebuild from exact protected `main`, reverify after deterministic archive/re-extraction, install from the positive artifact boundary, and bind host evidence to that artifact rather than to the private checkout.
-- Published-artifact POSIX end-to-end provider execution evidence for rc.3, including strict findings-array behavior, speculative receipt adoption, compact output, disable, purge, and retained-byte accounting.
+- Published-artifact speculative receipt adoption under a real host. The rc.3 POSIX trial proved exact-final execution, but its synthetic shell did not preserve the detached worker and therefore did not prove exact-match adoption without rerunning providers.
 - Repository-owned Codex validator wiring: the documented skill and plugin validator commands passed on this host, but the repository still has no package-script entry point that makes those checks part of the ordinary npm validation chain.
 - GitHub account email visibility: the authenticated API token lacks the required `user` scope, so the account owner must set the durable visibility preference in the browser.
 - Fine-grained agent PAT inventory and browser Security Log review for the `2026-08-01T09:38:00Z`–`09:59:00Z` publication window remain owner-only browser evidence.
 - The `public-release` environment currently requires owner account `pnascimento9596`; browser confirmation remains necessary if the API cannot establish the complete required-reviewer policy and its owner-visible controls.
 - The Windows Node 22 preservation assertion intermittent from run `30682892670` is tracked in issue #14. The Ubuntu Node 22 speculative-checkpoint intermittent from run `30775405637` attempt 1 is tracked in issue #25. Both remain open because they touch checkpoint/no-loss behavior. The macOS containment-classification race tracked in #29 was deterministically corrected through PR #33 before rc.3 publication.
-- Stable `v0.5.0` promotion remains an explicit owner decision after the published-artifact POSIX half, five-pet host observations, Windows DACL/egress work, and remaining governance evidence are reconciled.
+- Stable `v0.5.0` promotion remains an explicit owner decision after five-pet host observations, published-artifact speculative receipt adoption, Windows DACL/egress work, deterministic-timing hardening, the exact-head security scan, and remaining governance evidence are reconciled.
