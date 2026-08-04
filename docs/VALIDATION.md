@@ -1,16 +1,16 @@
 # Validation Record
 
-This document separates validation evidence into four explicitly labeled layers. Current evidence must not overwrite frozen publication evidence, and unresolved gates remain unresolved until a fresh run proves otherwise.
+This document separates validation evidence into five explicitly labeled layers. Current evidence must not overwrite frozen publication evidence, and unresolved gates remain unresolved until a fresh run proves otherwise.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` is `58d8abaf49a2be09322d7a44ceda306f7354ef72`. The first-parent range after the released rc.2 source contains PR #15 (`3281a44bfb72b9ac76e6e1bee3f59f04a897bcb2`), PR #17 (`c51e6fb12fae1b5c2fb8a82cf5daa0ff20b2bfeb`), PR #19 (`bedb4565a369aa3878c8afbde28216b2aed4e47e`), PR #20 (`0219d7aa4b136e034876becb9a7dbeabf2422aa6`), PR #21 (`32f1121c0c916e7820d66095d2f1956793604e40`), PR #22 (`bea53a8473b69c967eac70dd64ca01d417974fdc`), PR #23 (`c703b776bd5af95449978c4d2b025acaecd0c24c`), and PR #24 (`58d8abaf49a2be09322d7a44ceda306f7354ef72`). The later phases ship the reproduced lifecycle/publication fixes, mutation-controlled adversarial corpus cases, and a pinned strict checked-JavaScript slice.
+Current protected `main` and the published rc.3 source are `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. After the Phase 4 head, PR #26 prepared the rc.3 candidate, PRs #28/#30/#31/#32 corrected release-validation defects exposed by fail-closed publication attempts, and PR #33 stabilized synchronous observation of the expected deadline-containment rejection. Each change squash-merged normally and passed protected-main validation at its exact merge head.
 
-### rc.3 candidate validation based on protected main `58d8abaf49a2be09322d7a44ceda306f7354ef72`
+### rc.3 release-source validation based on protected main `0c6f09ae14d834fccb2a2289f6731511dbbdb034`
 
-The rc.3 candidate worktree recorded `778` tests, `760` passes, `18` intentional skips, and `0` failures. `npm run check:syntax` checked `85` modules; `npm run check:types` installed the exact lockfile graph and passed with TypeScript `7.0.2` and `@types/node` `26.1.2`; bare `npm run security:publication` passed; `npm run release:boundary` verified `130` public files; two focused release suites passed `31/31`; the review-boundary behavioral suite remained `112/112` before and after checked-JavaScript annotations; and comments-removed emitted JavaScript was byte-identical for all five authorized modules. Gitleaks found no leaks across `104` commits or the candidate worktree, both skill validators and the plugin validator passed, and `git diff --check` was clean. Provider tests were mocked and no live provider was contacted during this gate.
+The final rc.3 source recorded `786` tests, `768` passes, `18` intentional skips, and `0` failures in the authoritative serial local run. `npm run check:syntax` checked `85` modules; `npm run check:types` installed the exact lockfile graph and passed with TypeScript `7.0.2` and `@types/node` `26.1.2`; publication-boundary, portable, skill, plugin, secret, and diff validations passed. Protected-main run `30860361741` passed the repository credential scan and every Ubuntu, macOS, and Windows validation lane at the exact published source. Provider tests were mocked and no live provider was contacted during this gate.
 
-The two frozen historical slices were byte-compared against protected main before this edit: Layer B (rc.1) is `3908` bytes with SHA-256 `145f7e78e68326cd678e39bcbadb402b890584ab1ba54c61073690b6cd946abc`; Layer C (rc.2) is `2914` bytes with SHA-256 `c734e100570f8dcb3fcaad941e5a86f330aa37267c79c4b2b6187e4d360ad33a`. Both comparisons were byte-identical.
+The two prior frozen historical slices were byte-compared before this edit: Layer B (rc.1) is `3908` bytes with SHA-256 `145f7e78e68326cd678e39bcbadb402b890584ab1ba54c61073690b6cd946abc`; Layer C (rc.2) is `2914` bytes with SHA-256 `c734e100570f8dcb3fcaad941e5a86f330aa37267c79c4b2b6187e4d360ad33a`. Both comparisons were byte-identical. Layer D separately freezes rc.3.
 
 ### Protected-main GitHub validation evidence
 
@@ -25,6 +25,12 @@ The two frozen historical slices were byte-compared against protected main befor
 | PR #22, Phase 2 reproduced fixes | `30771259006` | `bea53a8473b69c967eac70dd64ca01d417974fdc` | success |
 | PR #23, Phase 3 adversarial corpus | `30773941325` | `c703b776bd5af95449978c4d2b025acaecd0c24c` | success |
 | PR #24, Phase 4 checked JavaScript | `30776339242` | `58d8abaf49a2be09322d7a44ceda306f7354ef72` | success |
+| PR #26, rc.3 candidate | `30815410789` | `4eae98b1c5924e710417ec20af1eae02ccb322b8` | success |
+| PR #28, randomized privacy assertion | `30820920884` | `e0de954d2e0a8dc35e1c8b8a7914e74fdd9a0b51` | success |
+| PR #30, explicit Git object format | `30827388304` | `916e644676b46ab4bebdc116c45797640fb2c54f` | success |
+| PR #31, cross-version Git compatibility | `30841814619` | `b28ef5bfad03d1563ddda4676ed6d536c266f6ea` | success after flake protocol |
+| PR #32, reachable-history dispositions | `30853151362` | `c9bc4441cd4fc43533b834402e10507982d242af` | success |
+| PR #33, deadline-containment observation | `30860361741` | `0c6f09ae14d834fccb2a2289f6731511dbbdb034` | success |
 
 ### Phase 3 and Phase 4 exact-head delivery evidence
 
@@ -180,9 +186,55 @@ All three subjects resolve to the same signed identity:
 
 The external scratch clone, downloaded assets, and generated attestation JSON were removed after verification.
 
-## Layer D - unresolved gates
+## Layer D - frozen `v0.5.0-rc.3` publication evidence, historical
 
-The following gates remain unresolved for rc.3 publication, stable promotion, or stronger current-head assurance:
+This layer freezes the rc.3 publication identity and the independent post-publication verification performed on `2026-08-04`. These values describe the published artifact and must not be replaced with later `main` state.
+
+### Published RC identity
+
+- source commit: `0c6f09ae14d834fccb2a2289f6731511dbbdb034`
+- release run: `30861281580` (attempt 1, `workflow_dispatch`, success)
+- published at: `2026-08-04T01:09:55Z`
+- annotated tag object: `eb6a4541cbe75c73648da806ffacd22aef2b2f0d`
+- parentless distribution commit: `8782b70c5c664f5a73f9c225a802c71f1ff49ccf` (`0` parents)
+- distribution tree: `ac9ffe81aa3b170cf519ef1b35977a15f9cfae4b`
+- release manifest SHA-256: `f0e1556ae89c12446c736b6fd2fa11e056fc311a3ee54fc0d9623ed5740882e9`
+- artifact content SHA-256: `b12014419d18d490bb3efaf244a9d47021d619eca6bff83e4e68f80836a4046b`
+
+An anonymous credential-disabled clone resolved public `main` to the source commit above. The rc.3 ref was an annotated tag object, its annotation embedded the exact `Source-Commit`, release-manifest digest, artifact-content digest, and distribution tree, and its peeled target was the zero-parent distribution commit. The downloaded distribution JSON independently reported the same tag object, commit, tree, source commit, and digests. The distribution bundle verified as complete, reproduced the same tag/commit/tree identities, and its checked-out 131-file tree was byte-exact with the independently extracted tarball. The trusted source verifier accepted the extracted 130-file public package and all five cleared pet IDs.
+
+### Dispatch and protected-environment attribution
+
+GitHub attributed the dispatch actor and triggering actor to `pnascimento9596`, account ID `198005926`, at exact protected-main source `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. Every reusable validation lane passed before artifact construction. The protected `public-release` environment required that same owner account and presented three separate approvals for build, attestation, and publication. The approvals API records all three as `approved`; deployments `5735240282`, `5735258101`, and `5736203039` bind the protected stages to the exact source SHA. This proves the configured account path, not which person, browser session, token, or delegated process exercised the account.
+
+### Release assets and hashes
+
+Both checksum sidecars passed `shasum -a 256 -c`. Independently computed hashes and sizes matched GitHub's asset metadata for all five anonymously downloaded assets:
+
+| Release asset | Bytes | SHA-256 | Provenance subject |
+|---|---:|---|---|
+| `codex-buddy-reviewer-0.5.0-rc.3.tar.gz` | `13662721` | `6de1ab3c4a47a96abbc5faf868d862d614a2e2a196fd4ec730f4b7c7b9d0b759` | yes |
+| `codex-buddy-reviewer-0.5.0-rc.3.tar.gz.sha256` | `105` | `a7237c233ceb3dd523fe05c32c53437f698fb77f90920da4424ae9c77745dbe3` | no; checksum metadata asset |
+| `codex-buddy-reviewer-0.5.0-rc.3-distribution.bundle` | `13705017` | `4a954f2eea8069430857c650687f1152365da17dcdcab3b02b9e411c3b4854e1` | yes |
+| `codex-buddy-reviewer-0.5.0-rc.3-distribution.bundle.sha256` | `118` | `9f5923ee65f02991035fa98918fb394094c2015ce4a72c93b8888f5f092e96b0` | no; checksum metadata asset |
+| `codex-buddy-reviewer-0.5.0-rc.3-distribution.json` | `592` | `f7d61e73a7448fc02dd9966f35aaaf2e118023d3ab32703ccd2a0cedd540fd11` | yes |
+
+### Policy-bound attestation verification
+
+`gh attestation verify` succeeded independently for the tarball, distribution bundle, and distribution JSON while enforcing repository `pnascimento9596/codex-buddy-reviewer`, source digest `0c6f09ae14d834fccb2a2289f6731511dbbdb034`, source ref `refs/heads/main`, signer workflow `pnascimento9596/codex-buddy-reviewer/.github/workflows/release.yml`, and denial of self-hosted runners. Certificate-backed fields were identical for all three subjects:
+
+- subject alternative name: `https://github.com/pnascimento9596/codex-buddy-reviewer/.github/workflows/release.yml@refs/heads/main`
+- trigger: `workflow_dispatch`
+- source and workflow digest: `0c6f09ae14d834fccb2a2289f6731511dbbdb034`
+- source ref: `refs/heads/main`
+- runner environment: `github-hosted`
+- invocation: `https://github.com/pnascimento9596/codex-buddy-reviewer/actions/runs/30861281580/attempts/1`
+
+The external scratch clone, downloaded assets, extracted artifact, bundle checkout, and generated attestation JSON were removed after the evidence was recorded.
+
+## Layer E - unresolved gates
+
+The following gates remain unresolved after rc.3 publication for stable promotion or stronger current-head assurance:
 
 - Fresh exact-head whole-repository Codex Deep Security Scan.
 - Five-pet artifact-bound host observations for Byte, Mochi, Orbit, Bella, and Lupo.
@@ -194,5 +246,5 @@ The following gates remain unresolved for rc.3 publication, stable promotion, or
 - GitHub account email visibility: the authenticated API token lacks the required `user` scope, so the account owner must set the durable visibility preference in the browser.
 - Fine-grained agent PAT inventory and browser Security Log review for the `2026-08-01T09:38:00Z`–`09:59:00Z` publication window remain owner-only browser evidence.
 - The `public-release` environment currently requires owner account `pnascimento9596`; browser confirmation remains necessary if the API cannot establish the complete required-reviewer policy and its owner-visible controls.
-- The Windows Node 22 preservation assertion intermittent from run `30682892670` is tracked in issue #14. The Ubuntu Node 22 speculative-checkpoint intermittent from run `30775405637` attempt 1 is tracked in issue #25. Both remain open because they touch checkpoint/no-loss behavior.
+- The Windows Node 22 preservation assertion intermittent from run `30682892670` is tracked in issue #14. The Ubuntu Node 22 speculative-checkpoint intermittent from run `30775405637` attempt 1 is tracked in issue #25. Both remain open because they touch checkpoint/no-loss behavior. The macOS containment-classification race tracked in #29 was deterministically corrected through PR #33 before rc.3 publication.
 - Stable `v0.5.0` promotion remains an explicit owner decision after the published-artifact POSIX half, five-pet host observations, Windows DACL/egress work, and remaining governance evidence are reconciled.
