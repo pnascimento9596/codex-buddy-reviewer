@@ -298,7 +298,8 @@ export function parseOpenCodeTransport(stdout) {
       throw new Error('OpenCode attempted to use a denied tool');
     }
     if (event.type === 'error') {
-      throw new Error('OpenCode returned an error event');
+      const detail = openCodeErrorDetail(event.error);
+      throw new Error(detail ? `OpenCode returned an error event: ${detail}` : 'OpenCode returned an error event');
     }
     if (event.type !== 'text') continue;
     if (!plainObject(event.part) || event.part.type !== 'text'
@@ -322,6 +323,24 @@ export function parseOpenCodeTransport(stdout) {
     throw new Error('OpenCode review JSON must be one object');
   }
   return { reviewPayload };
+}
+
+function openCodeErrorDetail(value) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return /^[\x20-\x7e]{1,160}$/u.test(trimmed) ? trimmed : null;
+  }
+  if (!plainObject(value)) return null;
+  for (const candidate of [
+    value.message,
+    plainObject(value.data) ? value.data.message : null,
+    value.name
+  ]) {
+    if (typeof candidate !== 'string') continue;
+    const trimmed = candidate.trim();
+    if (/^[\x20-\x7e]{1,160}$/u.test(trimmed)) return trimmed;
+  }
+  return null;
 }
 
 export async function reviewWithOpenCode({
@@ -441,6 +460,11 @@ export async function reviewWithOpenCode({
           env,
           input: prompt,
           protectFromParentDeath: true,
+          // OpenCode reports structured provider/OAuth failures as JSONL error
+          // events on stdout with a non-zero process exit. Accept 0/1 so the
+          // transport parser can classify those envelopes instead of collapsing
+          // them into a generic transport_exit before stdout is inspected.
+          acceptedExitCodes: [0, 1],
           timeoutMs: inferenceTimeoutMs,
           maxOutputBytes: MAX_OUTPUT_BYTES,
           signal
@@ -459,9 +483,15 @@ export async function reviewWithOpenCode({
       try {
         transport = parseOpenCodeTransport(result.stdout);
       } catch (error) {
+        const detail = typeof error?.message === 'string' && /^OpenCode returned an error event: /.test(error.message)
+          ? error.message.slice('OpenCode returned an error event: '.length)
+          : null;
         const failure = providerFailure({
           provider: 'opencode', model: resolvedModel, stage: 'transport',
-          failureCode: 'invalid_transport_envelope', durationMs: elapsed(), cause: error
+          failureCode: 'invalid_transport_envelope', durationMs: elapsed(), cause: error,
+          safeMessage: detail
+            ? `The provider returned an invalid transport envelope: ${detail}`.slice(0, 240)
+            : undefined
         });
         // No-loss contract: the malformed transport must survive for private
         // preservation instead of vanishing with the rejection. Non-enumerable

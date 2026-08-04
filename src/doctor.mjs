@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadPetCatalog, resolveCodexHome } from './pet-catalog.mjs';
+import { resolveExternalExecutable } from './executable.mjs';
 import { modeFile, resolveRepositoryRoot, reviewersForMode } from './mode.mjs';
 import { validatePresentationProfile } from './presentation-state.mjs';
 import { supportedProviderIds } from './provider-registry.mjs';
@@ -526,6 +527,61 @@ async function processContainmentCheck(mode, options) {
   }
 }
 
+async function openCodeCliSurfaceCheck(mode, options = {}) {
+  if (!mode || mode.exists !== true) {
+    return check(
+      'opencode_cli_surface',
+      'pass',
+      'No stored mode configuration; OpenCode CLI surface resolution is not required.'
+    );
+  }
+  let reviewers = Array.isArray(mode.reviewers) ? mode.reviewers : null;
+  if (!reviewers) {
+    try {
+      reviewers = reviewersForMode(mode.state);
+    } catch (error) {
+      return check(
+        'opencode_cli_surface',
+        'fail',
+        'Configured reviewer descriptors are invalid.',
+        { detail: error instanceof Error ? error.message : String(error) }
+      );
+    }
+  }
+  if (!reviewers.some((reviewer) => reviewer.provider === 'opencode')) {
+    return check(
+      'opencode_cli_surface',
+      'pass',
+      'OpenCode is not a configured reviewer; CLI surface resolution is not required.'
+    );
+  }
+  try {
+    const resolveExecutable = options.resolveOpenCodeExecutable ?? resolveExternalExecutable;
+    const resolved = await resolveExecutable('opencode', {
+      env: options.env ?? process.env,
+      platform: options.platform ?? process.platform
+    });
+    const basename = path.basename(resolved);
+    return check(
+      'opencode_cli_surface',
+      'pass',
+      `OpenCode CLI is resolvable (${basename}).`,
+      { detail: 'Offline PATH/preflight only; this does not contact a model provider.' }
+    );
+  } catch (error) {
+    const enabled = mode.state?.enabled === true;
+    return check(
+      'opencode_cli_surface',
+      enabled ? 'fail' : 'warn',
+      'OpenCode is configured but the opencode executable is not resolvable on PATH.',
+      {
+        detail: error instanceof Error ? error.message : String(error),
+        mode_enabled: enabled
+      }
+    );
+  }
+}
+
 function providerEgressPrivacyCheck(mode, options) {
   const policy = providerEgressPlatformPolicy(options.platform ?? process.platform);
   if (policy.allowed) {
@@ -778,6 +834,7 @@ export async function runDoctor(options = {}) {
 
   checks.push(providerEgressPrivacyCheck(mode, options));
   checks.push(await processContainmentCheck(mode, options));
+  checks.push(await openCodeCliSurfaceCheck(mode, options));
 
   try {
     const petState = await inspectPetStateReadOnly(options);
