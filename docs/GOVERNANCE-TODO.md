@@ -44,4 +44,4 @@ The following repository and API evidence is complete:
 
 The unchecked account and native-host items above remain genuinely unresolved. Repository automation cannot convert them into owner-observed evidence. In particular, the REST API refusal for `/user/security-log` is not a Security Log review, and synthetic hook invocation is not native Codex hook trust, transcript rendering, or five-pet visual observation.
 
-**Stable-promotion disposition:** do not promote `v0.5.0` yet. rc.3 is independently verified and suitable for continued prerelease evaluation, but stable promotion should wait for the exact-head deep security scan, #14/#25 timing hardening, five-pet native host bundle, Windows DACL/live-egress gate, and the remaining owner-only account review.
+**Stable-promotion disposition:** do not promote `v0.5.0` yet. rc.3 is independently verified and suitable for continued prerelease evaluation, but stable promotion should wait for the exact-head deep security scan, #14/#25 timing hardening, published-artifact speculative receipt adoption under a real host, five-pet native host bundle, Windows DACL/live-egress gate, and the remaining owner-only account review.
