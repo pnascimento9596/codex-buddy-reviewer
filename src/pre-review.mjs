@@ -165,7 +165,7 @@ function continuousModeMatches(current, expected, baselineRecord) {
     && current.continuous_review_consented_at === expected.continuous_review_consented_at;
 }
 
-function createRepositoryMutationMonitor(root) {
+export function createRepositoryMutationMonitor(root) {
   let revision = 0;
   const waiters = new Set();
   const notify = () => {
@@ -175,7 +175,10 @@ function createRepositoryMutationMonitor(root) {
   };
   let watcher;
   try {
-    watcher = watch(root, { recursive: true, persistent: false }, notify);
+    // persistent:true is load-bearing for the detached worker: wait timers are the
+    // only scheduled work while idle, and unref'd handles let Node exit underneath
+    // the top-level await (leaving worker_state stuck active with no process).
+    watcher = watch(root, { recursive: true, persistent: true }, notify);
   } catch {
     return null;
   }
@@ -196,8 +199,9 @@ function createRepositoryMutationMonitor(root) {
         };
         waiters.add(settle);
         signal?.addEventListener('abort', settle, { once: true });
+        // Keep the timer referenced so an idle detached worker cannot drain the
+        // event loop while it still owns the turn.
         timer = setTimeout(() => settle(revision), timeoutMs);
-        timer.unref?.();
       });
     },
     close() {
@@ -838,7 +842,9 @@ export async function runPreReviewWorker(rawInput, options = {}) {
   const lifetimeTimer = deps.setTimer(() => {
     lifetimeController.abort(new DOMException('Speculative worker expired', 'AbortError'));
   }, deps.workerLifetimeMs);
-  lifetimeTimer?.unref?.();
+  // Keep the absolute lifetime timer referenced. The detached worker has no parent
+  // IPC after stdin closes; an unref'd lifetime handle cannot keep it alive while
+  // idle between captures, and Node will exit under the top-level await.
 
   const disable = async (reason) => {
     await deps.finishWorker(directory, input.worker_nonce, 'disabled');
