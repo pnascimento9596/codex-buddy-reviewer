@@ -2082,16 +2082,20 @@ test('plugin exposes explicit manual and automatic skills with default-path trus
   assert.match(buddyAgent, /allow_implicit_invocation: false/);
   assert.ok(hooks.hooks.UserPromptSubmit);
   assert.ok(hooks.hooks.Stop);
-  assert.equal(hooks.hooks.UserPromptSubmit[0].hooks[0].timeout, 60);
+  // Host hook timeouts must cover capture (180s) and default provider (1800s)
+  // ceilings so Codex does not SIGKILL mid-flight after attempt markers land.
+  assert.equal(hooks.hooks.UserPromptSubmit[0].hooks[0].timeout, 210);
   assert.equal(
     hooks.hooks.UserPromptSubmit[0].hooks[0].command,
     'node "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/buddy-hook.mjs"'
   );
-  assert.equal(hooks.hooks.Stop[0].hooks[0].timeout, 600);
+  assert.equal(hooks.hooks.Stop[0].hooks[0].timeout, 1890);
   assert.equal(
     hooks.hooks.Stop[0].hooks[0].command,
     'node "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/buddy-hook.mjs"'
   );
+  assert.ok(hooks.hooks.Stop[0].hooks[0].timeout * 1000 >= 1_800_000);
+  assert.ok(hooks.hooks.UserPromptSubmit[0].hooks[0].timeout * 1000 >= 180_000);
 });
 
 test('checked-in JSON schema stays aligned with the runtime schema', async () => {
