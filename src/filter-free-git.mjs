@@ -67,12 +67,31 @@ async function cleanFilterPaths(root, candidatePaths, options) {
     ...options,
     acceptedExitCodes: [0, 128]
   });
+  // Worktree and index attribute sources are available on every supported Git.
+  // `--source=<tree-ish>` requires Git ≥ 2.40. Probe it independently so hosts
+  // still shipping 2.34–2.39 (Ubuntu 22.04 / Debian 12) keep capture working
+  // from the two always-available sources rather than failing the whole turn.
   const sources = [[], ['--cached']];
-  if (head.stdout.trim()) sources.push([`--source=${head.stdout.trim()}`]);
   const resolved = await Promise.all(
     sources.map((sourceArgs) => cleanFilterPathsFrom(root, candidatePaths, sourceArgs, options))
   );
-  return new Set(resolved.flatMap((paths) => [...paths]));
+  const active = new Set(resolved.flatMap((paths) => [...paths]));
+  const headSha = head.stdout.trim();
+  if (headSha) {
+    try {
+      const historical = await cleanFilterPathsFrom(
+        root,
+        candidatePaths,
+        [`--source=${headSha}`],
+        options
+      );
+      for (const path of historical) active.add(path);
+    } catch {
+      // Older Git: omit the historical attribute source. Worktree + index still
+      // classify active clean filters for current capture.
+    }
+  }
+  return active;
 }
 
 function pathspecBytes(paths) {

@@ -646,11 +646,14 @@ terminate:
       error_code == WAIT_TIMEOUT ? "cleanup_job" : "terminate_job",
       error_code
     );
+    /* ERROR control records must exit 125 so the Node validator surfaces the
+       stage/Win32 error instead of a control_protocol mismatch. */
+    result_code = 125;
   } else {
     (void)cbj_write_terminated(control, termination_reason);
+    result_code = 124;
   }
   terminal_written = TRUE;
-  result_code = 124;
 
 cleanup:
   if (provider_assigned && !terminal_written) {
