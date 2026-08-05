@@ -32,14 +32,26 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-test('release publication accepts only a proven missing remote tag as absence', async () => {
+test('release publication delegates remote tag ensure to the retrying helper after local verification', async () => {
   const workflow = await readFile(path.join(projectRoot, '.github', 'workflows', 'release.yml'), 'utf8');
-  assert.match(workflow, /lookup_remote_tag_object\(\) \{/);
-  assert.match(workflow, /if response="\$\(gh api .* --jq '\.object\.sha' 2>\/dev\/null\)"; then/);
-  assert.match(workflow, /\(\.status \| tostring\) == "404" and \.message == "Not Found"/);
-  assert.match(workflow, /lookup failed without proving absence/);
-  assert.equal((workflow.match(/remote_tag_object="\$\(lookup_remote_tag_object\)"/g) ?? []).length, 3);
-  assert.doesNotMatch(workflow, /\.object\.sha(?: \/\/ empty)?' 2>\/dev\/null \|\| true/);
+  const publishStart = workflow.indexOf('  publish:\n');
+  assert.ok(publishStart > -1);
+  const publishJob = workflow.slice(publishStart);
+  assert.match(publishJob, /^\s+node scripts\/ensure-release-tag\.mjs \\$/mu);
+  assert.match(publishJob, /--expected-tag-object "\$expected_tag_object"/);
+  assert.doesNotMatch(publishJob, /lookup_remote_tag_object\(\)/);
+  assert.doesNotMatch(publishJob, /git -C "\$repository" push --porcelain origin "\$tag_ref:\$tag_ref"/);
+  assert.ok(
+    publishJob.indexOf('downloaded distribution bundle does not match its verified receipt')
+      < publishJob.indexOf('node scripts/ensure-release-tag.mjs')
+  );
+
+  const helper = await readFile(path.join(projectRoot, 'scripts', 'lib', 'release-tag-publish.mjs'), 'utf8');
+  assert.match(helper, /status: 'absent'/);
+  assert.match(helper, /Not Found/);
+  assert.match(helper, /planPostPushVerification/);
+  assert.match(helper, /DEFAULT_POST_PUSH_BACKOFF_MS/);
+  assert.doesNotMatch(helper, /\.object\.sha(?: \/\/ empty)?' 2>\/dev\/null \|\| true/);
 });
 
 test('release dispatch requires the owner account before reusable validation', async () => {
