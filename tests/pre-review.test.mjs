@@ -804,7 +804,7 @@ test('mid-capture snapshot churn is a checkpoint miss, not a terminal worker fai
 test('non-retryable capture errors fail closed with bounded private diagnostics', async () => {
   const seed = await harness({ captures: [], noFinalRequest: true });
   seed.options.captureSnapshot = async () => {
-    throw new Error('boom at /Users/paulo/secret-repo/src/x.mjs line 12');
+    throw new Error('boom at /var/tmp/secret-repo/src/x.mjs line 12');
   };
   const result = await runPreReviewWorker(seed.input, seed.options);
   assert.equal(result.skipped, 'worker_error');
@@ -812,6 +812,6 @@ test('non-retryable capture errors fail closed with bounded private diagnostics'
   assert.equal(seed.state().failure?.phase, 'capturing');
   assert.equal(seed.state().failure?.code, 'worker_error');
   assert.match(seed.state().failure?.message ?? '', /boom at <path>/u);
-  assert.equal((seed.state().failure?.message ?? '').includes('/Users/paulo'), false);
+  assert.equal((seed.state().failure?.message ?? '').includes('/var/tmp/'), false);
   assert.equal(seed.metrics().reviewCalls, 0);
 });
