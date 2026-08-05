@@ -2169,6 +2169,7 @@ test('cleanup preserves active pre-review inputs and removes them after the owne
         ready_review_key: reviewKey,
         final_requested: true,
         final_review_key: reviewKey,
+        failure: null,
         updated_at: new Date().toISOString()
       })}\n`);
       return { status: 'ready', terminal, ownerActive: true };
@@ -2188,6 +2189,7 @@ test('cleanup preserves active pre-review inputs and removes them after the owne
     ready_review_key: stopped.reviewKey,
     final_requested: true,
     final_review_key: stopped.reviewKey,
+    failure: null,
     updated_at: new Date().toISOString()
   })}\n`);
   const observed = await reviewTurnStop({

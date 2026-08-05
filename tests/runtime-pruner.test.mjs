@@ -36,6 +36,7 @@ function preReviewState(overrides = {}) {
     ready_review_key: null,
     final_requested: false,
     final_review_key: null,
+    failure: null,
     updated_at: '2020-01-01T00:00:00.000Z',
     ...overrides
   };

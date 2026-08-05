@@ -5,10 +5,12 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  boundWorkerFailure,
   claimPreReviewWorker,
   finishPreReviewWorker,
   incrementPreReviewLaunch,
   notePreReviewMutation,
+  readPreReviewState,
   requestFinalReview,
   updatePreReviewWorker,
   waitForPreReviewFinalization
@@ -42,6 +44,7 @@ test('Stop atomically takes over a worker that has not fenced a provider attempt
   assert.equal(result.state.active_generation, null);
   assert.equal(result.state.active_review_key, null);
   assert.equal(result.state.final_review_key, reviewKey);
+  assert.equal(result.state.failure, null);
   const lateLaunch = await incrementPreReviewLaunch(
     directory,
     noted.workerNonce,
@@ -50,6 +53,32 @@ test('Stop atomically takes over a worker that has not fenced a provider attempt
   );
   assert.equal(lateLaunch.incremented, false);
   assert.equal(lateLaunch.state.worker_state, 'superseded');
+});
+
+test('failed workers persist bounded path-free diagnostics and clear them on relaunch', async () => {
+  const { directory } = await fixture();
+  const noted = await notePreReviewMutation(directory);
+  await claimPreReviewWorker(directory, noted.workerNonce);
+  const diagnostic = boundWorkerFailure(
+    Object.assign(new Error('turn snapshot failed under /tmp/scratch-repo/file.mjs'), {
+      stack: 'Error: turn snapshot failed under /tmp/scratch-repo/file.mjs\n    at run (file:///workspace/src/pre-review.mjs:10:5)'
+    }),
+    'capturing',
+    { at: '2026-08-04T12:00:00.000Z' }
+  );
+  assert.match(diagnostic.message, /<path>/u);
+  assert.equal(diagnostic.message.includes('/tmp/'), false);
+  assert.match(diagnostic.stack, /at run \(<path>\)/u);
+  assert.equal(diagnostic.stack.includes('file://'), false);
+  assert.equal(diagnostic.stack.includes('/workspace/'), false);
+  await finishPreReviewWorker(directory, noted.workerNonce, 'failed', null, diagnostic);
+  const failed = await readPreReviewState(directory);
+  assert.equal(failed.worker_state, 'failed');
+  assert.deepEqual(failed.failure, diagnostic);
+  const relaunched = await notePreReviewMutation(directory);
+  assert.equal(relaunched.launched, true);
+  assert.equal(relaunched.state.failure, null);
+  assert.equal(relaunched.state.worker_state, 'starting');
 });
 
 test('Stop preserves an active exact attempt as ambiguous and never takes ownership', async () => {
