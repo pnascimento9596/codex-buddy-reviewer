@@ -248,3 +248,56 @@ Pixel window capture was blocked by ScreenCaptureKit/TCC automation limits in th
 | Five released pets selectable on fixed packages | **pass** (Byte/Mochi/Orbit + buddy-Bella/Lupo listed); artifact-bound host-e2e bundle still required for stable publication |
 | Published rc.3 immutability | preserved |
 | Stable promotion | still requires owner instruction + remaining residue (#37, Windows DACL, governance) |
+
+
+---
+
+# Published rc.4 host evidence (2026-08-05)
+
+Collected against the immutable published `v0.5.0-rc.4` artifact only (not a dev `main` install).
+
+## Artifact and host identity
+
+| Item | Value |
+|---|---|
+| Release | `v0.5.0-rc.4` prerelease |
+| Release archive SHA-256 | `2ba45154d1e5c5218900b295412744ea9cfa1fe3a452085f9f77693651453df7` |
+| Artifact tree SHA-256 (collector) | `39171a1b15eb0187483fbf06771152293ca89b00a0da7f26a0242017169dd7e6` |
+| Source commit | `b56224fb8e37ca02e071cda41702af4ef20f1ebb` |
+| Distribution commit | `ac9f870f455645613c9f3dc8de4196fdc8a25d6d` |
+| Release run | `31013433126` attempt 2 |
+| Codex | `codex-cli 0.146.0` |
+| Installed plugin | `0.5.0-rc.4` from marketplace `--ref v0.5.0-rc.4` |
+| Graphics terminal | Kitty `0.48.2` |
+| Host surface | Codex TUI in terminal; no GUI app required |
+| Host-e2e v2 bundle | validated complete (`schema_version` 1, 5 reports); gzip+b64 3992 bytes under local excluded evidence |
+
+## Gates
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Verified published artifact install | pass | marketplace ref `v0.5.0-rc.4`; release-manifest hash match |
+| Native `/buddy-review` | fail as documented | [`rc4-command-discovery.txt`](rc4-command-discovery.txt) |
+| Namespaced skill | pass | same |
+| Hook trust | manual_pass | UserPromptSubmit + Stop executed |
+| Enable + #37 baseline message | pass | [`rc4-enable-and-doctor.txt`](rc4-enable-and-doctor.txt) |
+| Authorized doctor provider check | pass (1/1) | same |
+| Speculative adoption on published artifact | **pass** | [`rc4-speculative-adoption-2026-08-05.txt`](rc4-speculative-adoption-2026-08-05.txt) — key `425a466f…`; review_started before turn_finished; no second review_started |
+| Five-pet selectability | pass | [`rc4-pet-selector-*.txt`](rc4-pet-selector-all.txt) |
+| Compact output | pass | 274 chars |
+| Disable + purge | pass | remaining content files 0; pets retained outside scope |
+| Host-e2e v2 bundle validate-bundle | **pass** | private bundle bound to artifact; all five public pets |
+
+## Provider ledger (this published-artifact pass)
+
+Budget: 1 doctor + ≤3 live review turns.
+
+1. `doctor --provider-check` — 1/1 ollama/glm-5.2:cloud pass  
+2. Multi-file adopted review `425a466f551ae40d38558c6d50ed24b5b152100520e6289b54c5b222a21a6b27` — findings, 12888 ms  
+3. Concurrent speculative sibling receipt `068784493a1ca39bad9d3aae9fbbeb45232f43ac678688474f4148948d30b18b` — findings, 14039 ms (not Stop-presented)  
+
+Local `no_findings` with `provider: none` on an empty-delta exit turn is not a provider call.
+
+## Pixel note
+
+ScreenCaptureKit/TCC blocked automated window capture. Terminal-content capture remains the committed method for pet selector and TUI state.
