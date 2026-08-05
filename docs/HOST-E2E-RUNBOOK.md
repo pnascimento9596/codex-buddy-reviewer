@@ -56,6 +56,25 @@ without editing it. Keep the artifact directory and the installed plugin
 snapshot until acceptance is complete. Also install one public pet package from
 that artifact into `<codex-home>/pets/<pet-id>`.
 
+### What users actually run
+
+Codex marketplace installation clones the published plugin ref. The live install
+directory therefore commonly contains a `.git` directory (and only that extra
+VCS substrate relative to the published tarball). Host-e2e collection treats the
+**plugin payload** as the acceptance surface:
+
+- `--installed-snapshot` may point at a marketplace clone or at an extracted
+  tarball;
+- collection skips only the install-method directory `.git` at the snapshot
+  root;
+- every remaining path and byte must still match the release artifact exactly.
+
+Substituting a clean tarball extract is valid but not more representative than a
+marketplace clone once `.git` is excluded. Do not strip other files to force a
+match. If `tree_file_oversized` fires, the usual cause is an unskipped `.git`
+pack from an older collector; current collectors skip `.git` and keep the 16 MiB
+per-file payload ceiling for real plugin files.
+
 Before starting the host interaction, record:
 
 - an absolute path to the disposable acceptance repository;

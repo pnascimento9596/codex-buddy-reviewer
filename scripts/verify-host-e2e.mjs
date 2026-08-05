@@ -47,6 +47,10 @@ const MAX_REPORT_BYTES = 1024 * 1024;
 const MAX_BUNDLE_BYTES = 128 * 1024;
 const MAX_SECRET_BASE64_BYTES = 48 * 1024;
 const MAX_SECRET_GZIP_BYTES = 36 * 1024;
+// Install-method substrate only. Codex marketplace installs clone the plugin
+// ref and leave a `.git` directory; that metadata is not part of the published
+// plugin payload and must not participate in artifact byte-identity.
+const INSTALLED_SNAPSHOT_SKIP_DIRECTORIES = new Set(['.git']);
 const BUNDLE_SCHEMA_VERSION = '1';
 const SUCCESSFUL_REVIEW_STATUSES = new Set(['findings', 'no_findings', 'abstain']);
 const REVIEW_PROVIDERS = new Set(['claude', 'grok', 'ollama', 'opencode']);
@@ -313,15 +317,20 @@ function parseJson(bytes, label) {
   }
 }
 
-async function collectTree(root, relative = '', files = []) {
+async function collectTree(root, relative = '', files = [], options = {}) {
+  const skipDirectories = options.skipDirectories instanceof Set
+    ? options.skipDirectories
+    : null;
   const directory = relative ? path.join(root, ...relative.split('/')) : root;
   const entries = await readdir(directory, { withFileTypes: true });
   entries.sort((left, right) => left.name.localeCompare(right.name));
   for (const entry of entries) {
     const child = relative ? `${relative}/${entry.name}` : entry.name;
     if (entry.isSymbolicLink()) fail('tree_symlink', `tree contains a symbolic link at ${child}`);
-    if (entry.isDirectory()) await collectTree(root, child, files);
-    else if (entry.isFile()) {
+    if (entry.isDirectory()) {
+      if (!relative && skipDirectories && skipDirectories.has(entry.name)) continue;
+      await collectTree(root, child, files, options);
+    } else if (entry.isFile()) {
       const bytes = await regularBytes(path.join(root, ...child.split('/')), 'tree_file');
       files.push({ path: child, bytes: bytes.length, sha256: sha256(bytes) });
     } else fail('tree_unsupported_type', `tree contains an unsupported filesystem type at ${child}`);
@@ -439,7 +448,9 @@ async function verifyReleaseArtifact(root) {
 }
 
 async function inspectInstalledSnapshot(root, artifact) {
-  const files = await collectTree(root);
+  const files = await collectTree(root, '', [], {
+    skipDirectories: INSTALLED_SNAPSHOT_SKIP_DIRECTORIES
+  });
   files.sort((left, right) => left.path.localeCompare(right.path));
   const byPath = new Map(files.map((entry) => [entry.path, entry]));
   const plugin = byPath.get('.codex-plugin/plugin.json') ?? null;
@@ -771,7 +782,9 @@ export async function collectHostEvidenceV2(options) {
     return inspected.evidence;
   }, 'installed_snapshot_unavailable');
   if (machineChecks.installed_snapshot.status === 'fail') {
-    const files = await collectTree(installedSnapshotRoot).catch(() => null);
+    const files = await collectTree(installedSnapshotRoot, '', [], {
+      skipDirectories: INSTALLED_SNAPSHOT_SKIP_DIRECTORIES
+    }).catch(() => null);
     if (files) {
       files.sort((left, right) => left.path.localeCompare(right.path));
       const byPath = new Map(files.map((entry) => [entry.path, entry]));
