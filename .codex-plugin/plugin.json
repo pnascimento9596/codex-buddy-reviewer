@@ -1,6 +1,6 @@
 {
   "name": "codex-buddy-reviewer",
-  "version": "0.5.0-rc.3+codex.20260803011343",
+  "version": "0.5.0-rc.4+codex.20260805125508",
   "description": "One or two independent reviewers track exact Git changes in the background and finish with a compact Buddy review.",
   "author": {
     "name": "Paulo Nascimento",

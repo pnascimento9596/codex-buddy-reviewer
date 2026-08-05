@@ -4,13 +4,13 @@ This document separates validation evidence into five explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` is `27b5e9ad73e3d4ff1e7c37d20ec82ae98d00c9d0`; the immutable published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. After the Phase 4 head, PR #26 prepared the rc.3 candidate, PRs #28/#30/#31/#32 corrected release-validation defects exposed by fail-closed publication attempts, PR #33 stabilized synchronous observation of the expected deadline-containment rejection, and PR #34 froze independently verified rc.3 evidence without changing the prior frozen layers.
+Current protected `main` at the rc.4 candidate base is `065c4704e7c5e37ff979b2a2daea67acf0163a16` (#37 first-enable baseline UX). The immutable published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. Post-rc.3 protected merges closed both #36 defects (PRs #44 and #46), the #38 pet atlas packaging defect (PR #45), first-enable baseline messaging (PR #50), and recorded post-fix host evidence (PR #48). Frozen Layers B–D are unchanged historical publication evidence.
 
-### rc.3 release-source validation based on protected main `0c6f09ae14d834fccb2a2289f6731511dbbdb034`
+### rc.4 candidate local validation (pre-merge head)
 
-The final rc.3 source recorded `786` tests, `768` passes, `18` intentional skips, and `0` failures in the authoritative serial local run. `npm run check:syntax` checked `85` modules; `npm run check:types` installed the exact lockfile graph and passed with TypeScript `7.0.2` and `@types/node` `26.1.2`; publication-boundary, portable, skill, plugin, secret, and diff validations passed. Protected-main run `30860361741` passed the repository credential scan and every Ubuntu, macOS, and Windows validation lane at the exact published source. Provider tests were mocked and no live provider was contacted during this gate.
+Authoritative serial local `npm run check` on the #37 head recorded `793` tests, `775` passes, `18` intentional skips, and `0` failures. Publication-boundary, portable, skill, plugin, secret, and help-surface validations passed. Provider tests were mocked and no live provider was contacted during this gate. Exact protected-main CI for the rc.4 candidate merge head is recorded in the table below after merge.
 
-The two prior frozen historical slices were byte-compared before this edit: Layer B (rc.1) is `3908` bytes with SHA-256 `145f7e78e68326cd678e39bcbadb402b890584ab1ba54c61073690b6cd946abc`; Layer C (rc.2) is `2914` bytes with SHA-256 `c734e100570f8dcb3fcaad941e5a86f330aa37267c79c4b2b6187e4d360ad33a`. Both comparisons were byte-identical. Layer D separately freezes rc.3.
+The two prior frozen historical slices were byte-compared before this edit: Layer B (rc.1) is `3908` bytes with SHA-256 `145f7e78e68326cd678e39bcbadb402b890584ab1ba54c61073690b6cd946abc`; Layer C (rc.2) is `2914` bytes with SHA-256 `c734e100570f8dcb3fcaad941e5a86f330aa37267c79c4b2b6187e4d360ad33a`. Both comparisons were byte-identical. Layer D freezes rc.3 and remains historical.
 
 ### Protected-main GitHub validation evidence
 
@@ -32,22 +32,33 @@ The two prior frozen historical slices were byte-compared before this edit: Laye
 | PR #32, reachable-history dispositions | `30853151362` | `c9bc4441cd4fc43533b834402e10507982d242af` | success |
 | PR #33, deadline-containment observation | `30860361741` | `0c6f09ae14d834fccb2a2289f6731511dbbdb034` | success |
 | PR #34, frozen rc.3 evidence | `30870061618` attempt 2 | `27b5e9ad73e3d4ff1e7c37d20ec82ae98d00c9d0` | success after one failed-job rerun under #25 protocol |
+| PR #44, #36 snapshot-retry | (see post-merge validate) | `3ac754b211917dda15ca5e5fadb5e4bbb908dc43` | success |
+| PR #45, #38 host-compatible pets | (see post-merge validate) | `23784a3a495ab09e60ac9283080b26410e5d744a` | success |
+| PR #46, #36 worker keepalive | `30971047977` after flake job rerun | `866e359c53614ba4fa1c9a4bd0d4e1c32fb4ecdb` | success after flake protocol |
+| PR #48, post-fix host evidence | `30992257722` | `9896aa3ebee7f99b239266ae764d98ae37637764` | success |
+| PR #50, #37 first-enable baseline UX | `31007708098` | `065c4704e7c5e37ff979b2a2daea67acf0163a16` | pending at candidate write; re-verify after merge |
+| PR (this), rc.4 candidate | (post-merge) | (candidate merge SHA) | pending |
+
+### Post-rc.3 host and supersession evidence
+
+- Speculative adoption observed on a real Codex 0.146 host after PRs #44/#46: ready key `5a646cf08ad7402bf40ba41ccce08faa7efb73b356953406b4dfce8265cfd489` exact-matched completed key; outbox had no `review_started` after `turn_finished`. Evidence: `docs/host-evidence/speculative-adoption-2026-08-05.txt`.
+- Five-pet selectability observed on fixed packages (terminal-content method; ScreenCaptureKit/TCC blocked pixels). Artifact-bound host-e2e bundle against a published archive remains open for stable.
+- **Supersession invariant:** a prior real-host turn with mismatched ready/completed identity correctly refused adoption (stale-key / non-matching speculative receipt rejected; no false Stop adoption). Exact-final or failed fallback remains the safe path when identities diverge.
+- **Prior-lane provider overrun (honest):** host-verify budget was 4 live review turns; verification used 5+ after the second #36 root cause appeared mid-run (1 doctor + 2 exact-final + mismatched-key turn + gate-closing adoption). Cause recorded; not silently normalized to budget.
 
 ### Phase 3 and Phase 4 exact-head delivery evidence
 
-PR #23 passed exact-head run `30773320092`, squash-merged normally as `c703b776bd5af95449978c4d2b025acaecd0c24c`, and passed protected-main run `30773941325`. Its eight-case corpus includes mutation-controlled deleted-file old-side citation, selected-evidence truncation/abstention, and control-character grounding-bait cases.
+Historical (unchanged): PR #23 → `c703b776…` / run `30773941325`; PR #24 → `58d8abaf…` / run `30776339242`. Issue #25 and related timing flakes were later closed through PR #42 deterministic-timing work; residual process-family flakes may still appear under load and follow the authorized flake ladder.
 
-PR #24 passed corrected exact-head run `30775405637` attempt 2, squash-merged normally as `58d8abaf49a2be09322d7a44ceda306f7354ef72`, and passed protected-main run `30776339242`. The initial head failed all validation lanes with `TS2688: Cannot find type definition file for 'node'` because the reusable job did not install the newly pinned development graph. The corrected `check:types` installs exactly from `package-lock.json` before invoking `tsc`; no workflow file changed. Attempt 1 on the corrected head then hit the intermittent Ubuntu Node 22 speculative-checkpoint race tracked in issue #25; the exact focused test passed four consecutive local runs, every other lane was green, and the single authorized rerun passed on the unchanged head. Issue #14 remains the related Windows preservation-assertion intermittent.
+### rc.4 pre-dispatch attribution
 
-### rc.3 pre-dispatch attribution
+release dispatch to be executed by delegated agent session under owner instruction of 2026-08-05.
 
-release dispatch to be executed by delegated agent session under owner instruction of 2026-08-02/03.
-
-The dispatch is authorized only after this candidate merges through normal protection and its exact protected-main source SHA passes protected CI. The delegated session authenticates to GitHub as owner account `pnascimento9596` (account ID `198005926`) and will invoke `.github/workflows/release.yml` from unchanged protected `main` with `version: 0.5.0-rc.3` and `publish: true`. GitHub can establish account, workflow, source, and approval attribution; it cannot establish which person or delegated local session operated an authorized account token.
+The dispatch is authorized only after this candidate merges through normal protection and its exact protected-main source SHA passes protected CI. The delegated session authenticates to GitHub as owner account `pnascimento9596` (account ID `198005926`) and will invoke `.github/workflows/release.yml` from unchanged protected `main` with `version: 0.5.0-rc.4` and `publish: true`. GitHub can establish account, workflow, source, and approval attribution; it cannot establish which person or delegated local session operated an authorized account token.
 
 ### Phase 7 pre-stable engineering work item
 
-- [ ] Deterministic-timing hardening pass over process-supervision tests. PR #33 closed the #29 promise-observation race; #14 and #25 remain open. Issue #25 recurred on Ubuntu Node 24 in protected-main run `30870061618` attempt 1, then passed the exact focused test locally `5/5` and passed the one permitted failed-job rerun on unchanged source in attempt 2.
+- [x] Deterministic-timing hardening for the original #14/#25/#29 family shipped in PR #42; intermittent process-containment flakes may still appear and use the authorized flake ladder (local 5× → failed-job rerun → full workflow rerun).
 
 ### Phase 6 published-artifact POSIX evidence
 
@@ -251,17 +262,17 @@ The external scratch clone, downloaded assets, extracted artifact, bundle checko
 
 ## Layer E - unresolved gates
 
-The following gates remain unresolved after rc.3 publication for stable promotion or stronger current-head assurance:
+The following gates remain unresolved for stable promotion or stronger current-head assurance after the post-rc.3 fix lane and rc.4 candidate:
 
-- Fresh exact-head whole-repository Codex Deep Security Scan.
-- Five-pet artifact-bound host observations for Byte, Mochi, Orbit, Bella, and Lupo.
+- Five-pet **artifact-bound** host-e2e bundle validated against the published rc.4 archive (selectability on fixed packages is not a substitute).
 - Windows current-user-only DACL creation and verification for durable Buddy state and provider temporary roots.
 - Live Windows provider egress after the DACL gate is implemented and verified.
-- Stable artifact requirements: rebuild from exact protected `main`, reverify after deterministic archive/re-extraction, install from the positive artifact boundary, and bind host evidence to that artifact rather than to the private checkout.
-- Published-artifact speculative receipt adoption under a real host. The rc.3 POSIX trial proved exact-final execution, but its synthetic shell did not preserve the detached worker and therefore did not prove exact-match adoption without rerunning providers.
-- Repository-owned Codex validator wiring: the documented skill and plugin validator commands passed on this host, but the repository still has no package-script entry point that makes those checks part of the ordinary npm validation chain.
-- GitHub account email visibility: the authenticated API token lacks the required `user` scope, so the account owner must set the durable visibility preference in the browser.
-- Fine-grained agent PAT inventory and browser Security Log review for the `2026-08-01T09:38:00Z`–`09:59:00Z` publication window remain owner-only browser evidence.
-- The `public-release` environment currently requires owner account `pnascimento9596`; browser confirmation remains necessary if the API cannot establish the complete required-reviewer policy and its owner-visible controls.
-- The Windows Node 22 preservation assertion intermittent from run `30682892670` is tracked in issue #14. The Ubuntu Node 22 speculative-checkpoint intermittent from run `30775405637` attempt 1 is tracked in issue #25. Both remain open because they touch checkpoint/no-loss behavior. The macOS containment-classification race tracked in #29 was deterministically corrected through PR #33 before rc.3 publication.
-- Stable `v0.5.0` promotion remains an explicit owner decision after five-pet host observations, published-artifact speculative receipt adoption, Windows DACL/egress work, deterministic-timing hardening, the exact-head security scan, and remaining governance evidence are reconciled.
+- Stable artifact requirements: rebuild from exact protected `main`, reverify after deterministic archive/re-extraction, install from the positive artifact boundary, and bind host evidence to that artifact rather than to a private checkout or dev marketplace slot.
+- Repository-owned Codex validator wiring: skill/plugin validators pass on this host, but the repository still has no package-script entry point in the ordinary npm chain.
+- Owner-only browser governance: OAuth app inventory, fine-grained PAT inventory, 2FA/email visibility, and admin-bypass decision for `public-release` (Security Log windows for rc.2/rc.3 were reviewed; each later release dispatch needs its own window).
+- Optional: fresh exact-head whole-repository deep security scan at the final promotion head if owner policy requires it.
+- Stable `v0.5.0` promotion remains an explicit owner decision after the remaining gates above close.
+
+Closed relative to the prior Layer E list (evidence elsewhere in this document and the readiness ledger): deterministic-timing issues #14/#25/#29; first-enable baseline UX #37; five-pet **selectability** on fixed packages #38 (not the artifact-bound bundle).
+
+Still open as separate claims: **published-artifact** speculative receipt adoption (post-#36 adoption was observed on a dev marketplace install of protected main, not yet on the published rc.4 archive); five-pet artifact-bound host-e2e bundle against that archive.

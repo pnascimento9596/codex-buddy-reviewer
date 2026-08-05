@@ -2,6 +2,25 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
+## 0.5.0-rc.4 - 2026-08-05
+
+### Fixed
+
+- **#36 (both defects), PRs #44 and #46.** Speculative pre-review no longer terminalizes on ordinary mid-capture churn: `turn snapshot changed during capture; retry` returns to debounce instead of `worker_state: failed` (PR #44 / `3ac754b`). Detached workers also keep the event loop alive while idle — non-persistent `fs.watch` and unref'd timers previously let Node exit under a top-level await with no live PID and zero launches (PR #46 / `866e359`).
+- **#38, PR #45 (`23784a3`).** Public pet packages ship Codex 0.146-compatible base **8×9 / 1536×1872** atlases and host-shaped manifests. rc.3's extended 8×11 / 1536×2288 look-direction atlases were a packaging defect relative to the host contract, not a graphics-protocol failure.
+- **#37, PR #50 (`065c470`).** First-enable UX is explicit: mode enable does not capture a baseline; the next Codex turn establishes the private start snapshot at prompt submit; mid-turn enable does not invent a missing baseline. Fail-closed no-provider / no whole-tree-fallback behavior is unchanged.
+
+### Observed on real host (post-fix, pre-rc.4 publish)
+
+- Speculative adoption: exact ready key matched completed key with no second provider execution at Stop (evidence under `docs/host-evidence/`, PR #48).
+- Five-pet selectability on fixed packages: Byte, Mochi, Orbit, Bella, and Lupo listed in `/pet` (terminal-content captures; ScreenCaptureKit/TCC blocked pixel screenshots).
+- Stale/mismatched ready≠completed keys correctly rejected (supersession invariant); Stop did not adopt a non-matching speculative receipt.
+- Prior real-host verification provider overrun recorded honestly: budget 4 live review turns, used 5+ after discovering the second #36 root cause mid-verify (doctor + two exact-final turns + mismatched-key turn + gate-closing adoption turn).
+
+### Release status
+
+- This remains an RC. Artifact-bound five-pet host-e2e bundle validation against the published rc.4 artifact is still required before stable `v0.5.0`. Windows current-user-only DACL and live Windows provider egress remain deferred. Owner governance residue is unchanged.
+
 ## 0.5.0-rc.3 - 2026-08-03
 
 ### Reviewed
