@@ -273,4 +273,6 @@ The following gates remain unresolved for stable promotion or stronger current-h
 - Optional: fresh exact-head whole-repository deep security scan at the final promotion head if owner policy requires it.
 - Stable `v0.5.0` promotion remains an explicit owner decision after the remaining gates above close.
 
-Closed relative to the prior Layer E list (evidence elsewhere in this document and the readiness ledger): published-artifact speculative receipt adoption under a real host (post-#36); deterministic-timing issues #14/#25/#29; first-enable baseline UX #37; five-pet selectability on fixed packages #38 (bundle still open).
+Closed relative to the prior Layer E list (evidence elsewhere in this document and the readiness ledger): deterministic-timing issues #14/#25/#29; first-enable baseline UX #37; five-pet **selectability** on fixed packages #38 (not the artifact-bound bundle).
+
+Still open as separate claims: **published-artifact** speculative receipt adoption (post-#36 adoption was observed on a dev marketplace install of protected main, not yet on the published rc.4 archive); five-pet artifact-bound host-e2e bundle against that archive.
