@@ -722,6 +722,24 @@ test('host evidence v2 records bounded machine failures without manufacturing ac
   assert.equal(outboxResult.machine_complete, false);
 });
 
+test('host evidence v2 installed snapshot skips marketplace .git substrate and still binds payload bytes', async () => {
+  const fixture = await hostEvidenceFixture();
+  const gitDir = path.join(fixture.installedSnapshotRoot, '.git');
+  await mkdir(path.join(gitDir, 'objects', 'pack'), { recursive: true });
+  // Larger than the 16 MiB per-file ceiling: must be ignored as install substrate.
+  await writeFile(path.join(gitDir, 'objects', 'pack', 'pack-fixture.pack'), Buffer.alloc((16 * 1024 * 1024) + 1, 1));
+  await writeFile(path.join(gitDir, 'HEAD'), 'ref: refs/heads/main\n');
+
+  const report = await collectHostEvidenceV2(fixture.collectOptions);
+  assert.equal(report.machine_checks.installed_snapshot.status, 'pass');
+  assert.equal(report.installed_snapshot.snapshot_sha256, report.release.artifact_sha256);
+  assert.equal(
+    report.installed_snapshot.file_count,
+    report.machine_checks.installed_snapshot.evidence.file_count
+  );
+  assert.ok(report.installed_snapshot.file_count >= 1);
+});
+
 async function completeReportsForFixture(fixture, petIds) {
   const reports = [];
   for (const petId of petIds) {
