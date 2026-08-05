@@ -8,7 +8,6 @@
  * Does not create GitHub Releases. Does not move or delete tags.
  */
 
-import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +15,8 @@ import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_POST_PUSH_BACKOFF_MS,
   ensureRemoteTagMatches,
-  isSha1
+  isSha1,
+  runCaptured
 } from './lib/release-tag-publish.mjs';
 
 const scriptName = path.basename(fileURLToPath(import.meta.url));
@@ -69,31 +69,6 @@ tag_object, pushes the exact local tag ref when proven absent, and verifies the
 remote object with bounded backoff after push. Never force-pushes or deletes.
 `;
 
-function run(command, args, options = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      env: options.env ?? process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    child.on('error', (error) => {
-      resolve({ exitCode: 1, stdout, stderr: `${stderr}${error.message}\n` });
-    });
-    child.on('close', (code) => {
-      resolve({ exitCode: code === null ? 1 : code, stdout, stderr });
-    });
-  });
-}
-
 function loadExpectedTagObject(options) {
   if (options.expectedTagObject) {
     if (!isSha1(options.expectedTagObject)) {
@@ -116,7 +91,7 @@ function loadExpectedTagObject(options) {
 async function lookupRemoteTag({ repository, tag }) {
   // Prefer structured JSON so annotated-tag object identity is distinct from a
   // peeled commit. Fall back classification still accepts bare SHA stdout.
-  const result = await run('gh', [
+  const result = await runCaptured('gh', [
     'api',
     `repos/${repository}/git/ref/tags/${tag}`,
     '--jq',
@@ -147,7 +122,7 @@ async function pushLocalTag({ localRepository, tagRef, repository, githubServerU
   const server = githubServerUrl || process.env.GITHUB_SERVER_URL || 'https://github.com';
   const remoteUrl = `${server.replace(/\/$/u, '')}/${repository}.git`;
 
-  const auth = await run('gh', ['auth', 'setup-git']);
+  const auth = await runCaptured('gh', ['auth', 'setup-git']);
   if (auth.exitCode !== 0) {
     return {
       exitCode: auth.exitCode,
@@ -157,11 +132,11 @@ async function pushLocalTag({ localRepository, tagRef, repository, githubServerU
   }
 
   // Replace any prior origin so reruns are deterministic.
-  await run('git', ['remote', 'remove', 'origin'], { cwd: localRepository });
-  const add = await run('git', ['remote', 'add', 'origin', remoteUrl], { cwd: localRepository });
+  await runCaptured('git', ['remote', 'remove', 'origin'], { cwd: localRepository });
+  const add = await runCaptured('git', ['remote', 'add', 'origin', remoteUrl], { cwd: localRepository });
   if (add.exitCode !== 0) {
     // remote add can fail if remove was a no-op and origin still exists with same URL; try set-url
-    const setUrl = await run('git', ['remote', 'set-url', 'origin', remoteUrl], { cwd: localRepository });
+    const setUrl = await runCaptured('git', ['remote', 'set-url', 'origin', remoteUrl], { cwd: localRepository });
     if (setUrl.exitCode !== 0) {
       return {
         exitCode: setUrl.exitCode,
@@ -171,7 +146,7 @@ async function pushLocalTag({ localRepository, tagRef, repository, githubServerU
     }
   }
 
-  return run('git', ['push', '--porcelain', 'origin', `${tagRef}:${tagRef}`], {
+  return runCaptured('git', ['push', '--porcelain', 'origin', `${tagRef}:${tagRef}`], {
     cwd: localRepository
   });
 }
@@ -193,7 +168,7 @@ try {
     }
 
     const expectedTagObject = loadExpectedTagObject(options);
-    const localTag = await run('git', ['rev-parse', options.tagRef], {
+    const localTag = await runCaptured('git', ['rev-parse', options.tagRef], {
       cwd: options.localRepository
     });
     if (localTag.exitCode !== 0 || localTag.stdout.trim() !== expectedTagObject) {

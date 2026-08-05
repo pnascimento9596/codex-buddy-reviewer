@@ -8,8 +8,10 @@ import {
   classifyRemoteTagLookup,
   ensureRemoteTagMatches,
   planPostPushVerification,
-  planPrePushAction
+  planPrePushAction,
+  runCaptured
 } from '../scripts/lib/release-tag-publish.mjs';
+
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const expected = 'b5d8fbc47515b6ae0ab96491b4125cc6ea8f9149';
@@ -241,5 +243,44 @@ test('release workflow verifies receipt, attestations, and local bundle before t
 test('ensure-release-tag helper is path-stable for the workflow', async () => {
   const source = await readFile(path.join(projectRoot, 'scripts', 'ensure-release-tag.mjs'), 'utf8');
   assert.match(source, /ensureRemoteTagMatches/);
+  assert.match(source, /runCaptured/);
   assert.match(source, /Never force-pushes or deletes/);
+});
+
+test('runCaptured classifies successful stdout, nonzero exits, missing binaries, and bad args', async () => {
+  const ok = await runCaptured(process.execPath, ['-e', 'process.stdout.write("hello-out"); process.stderr.write("hello-err");']);
+  assert.equal(ok.exitCode, 0);
+  assert.equal(ok.stdout, 'hello-out');
+  assert.equal(ok.stderr, 'hello-err');
+
+  const fail = await runCaptured(process.execPath, ['-e', 'process.stderr.write("boom"); process.exit(7);']);
+  assert.equal(fail.exitCode, 7);
+  assert.equal(fail.stdout, '');
+  assert.match(fail.stderr, /boom/);
+
+  const missing = await runCaptured('codex-buddy-definitely-missing-binary-7f3a9c', ['--version']);
+  assert.equal(missing.exitCode, 1);
+  assert.equal(missing.stdout, '');
+  assert.match(missing.stderr, /ENOENT|not found|codex-buddy-definitely-missing-binary-7f3a9c/i);
+
+  const badArgs = await runCaptured(process.execPath, [123]);
+  assert.equal(badArgs.exitCode, 1);
+  assert.match(badArgs.stderr, /args must be an array of strings/);
+
+  const emptyCommand = await runCaptured('', []);
+  assert.equal(emptyCommand.exitCode, 1);
+  assert.match(emptyCommand.stderr, /command is required/);
+});
+
+test('runCaptured never throws when the child emits error after partial stdout', async () => {
+  // A closed pipe / killed child still resolves a structured result.
+  const result = await runCaptured(process.execPath, ['-e', `
+    process.stdout.write('partial');
+    process.kill(process.pid, 'SIGKILL');
+  `]);
+  assert.equal(typeof result.exitCode, 'number');
+  assert.equal(typeof result.stdout, 'string');
+  assert.equal(typeof result.stderr, 'string');
+  // SIGKILL typically yields null code → normalized to 1 by the wrapper.
+  assert.equal(result.exitCode === 0, false);
 });

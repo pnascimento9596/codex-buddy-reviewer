@@ -16,9 +16,75 @@
  *   mismatch still fails closed immediately; the mismatch check is not weakened.
  */
 
+import { spawn } from 'node:child_process';
+
 const SHA1_PATTERN = /^[0-9a-f]{40}$/u;
 
 export const DEFAULT_POST_PUSH_BACKOFF_MS = Object.freeze([200, 400, 800, 1600, 3200]);
+
+/**
+ * Capture-only subprocess runner for release publish helpers.
+ * Never throws: spawn errors and null close codes become exitCode 1.
+ * stdout/stderr are always strings (possibly empty).
+ */
+export function runCaptured(command, args, options = {}) {
+  if (typeof command !== 'string' || !command) {
+    return Promise.resolve({ exitCode: 1, stdout: '', stderr: 'command is required\n' });
+  }
+  if (!Array.isArray(args) || args.some((arg) => typeof arg !== 'string')) {
+    return Promise.resolve({ exitCode: 1, stdout: '', stderr: 'args must be an array of strings\n' });
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve({
+        exitCode: Number.isInteger(result.exitCode) ? result.exitCode : 1,
+        stdout: typeof result.stdout === 'string' ? result.stdout : '',
+        stderr: typeof result.stderr === 'string' ? result.stderr : ''
+      });
+    };
+    let child;
+    try {
+      child = spawn(command, args, {
+        cwd: options.cwd,
+        env: options.env ?? process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true
+      });
+    } catch (error) {
+      finish({
+        exitCode: 1,
+        stdout: '',
+        stderr: `${error && error.message ? error.message : String(error)}\n`
+      });
+      return;
+    }
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.on('error', (error) => {
+      finish({
+        exitCode: 1,
+        stdout,
+        stderr: `${stderr}${error && error.message ? error.message : String(error)}\n`
+      });
+    });
+    child.on('close', (code) => {
+      finish({
+        exitCode: code === null ? 1 : code,
+        stdout,
+        stderr
+      });
+    });
+  });
+}
 
 export function isSha1(value) {
   return typeof value === 'string' && SHA1_PATTERN.test(value);
