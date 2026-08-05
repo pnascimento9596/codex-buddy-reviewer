@@ -209,11 +209,11 @@ Collected after protected merges `#44` (`3ac754b`), `#45` (`23784a3`), and `#46`
 | Field | Value |
 |---|---|
 | Host | Codex CLI `0.146.0` in Kitty `0.48.2` |
-| Review key | `5a646cf08ad7402bf40ba41ccce08faa7efb73b356953406b4dfce8265cfd489` |
+| Review identity | `5a646cf08ad7402bf40ba41ccce08faa7efb73b356953406b4dfce8265cfd489` |
 | Speculative launches | 2 (live worker PIDs observed) |
-| Receipt created | `2026-08-05T02:52:08.345Z` |
+| Automatic-review created | `2026-08-05T02:52:08.345Z` |
 | Completed | `2026-08-05T02:53:01.371Z` |
-| Terminal status | `findings` |
+| Outcome | `findings` |
 | Provider | `ollama` / `glm-5.2:cloud` / 29616 ms |
 | Changed paths | 4 |
 | Baseline tree | `83708e17eca1956897521df6c20449ae75f54bcb` |
