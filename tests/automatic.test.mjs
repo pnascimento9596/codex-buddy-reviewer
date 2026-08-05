@@ -4020,6 +4020,9 @@ test('automatic lifecycle abstains rather than falling back when the baseline is
   }, { modeDataDir, runtimeDataDir });
   assert.equal(stopped.skipped, 'missing_baseline');
   assert.match(stopped.output.systemMessage, /exact start snapshot/);
+  assert.match(stopped.output.systemMessage, /Mode enable does not capture a baseline/);
+  assert.match(stopped.output.systemMessage, /next full turn establishes one at prompt submit/);
+  assert.match(stopped.output.systemMessage, /No provider was called/);
 });
 
 test('pet outbox is immutable, deduplicated, bounded, and omits raw review evidence', async () => {

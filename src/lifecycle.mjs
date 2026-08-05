@@ -777,7 +777,14 @@ export async function reviewTurnStop(input, options = {}) {
     await writePrivateJsonExclusive(completedFile, {
       schema_version: '1', terminal_status: 'missing_baseline', completed_at: new Date().toISOString()
     });
-    return { output: { systemMessage: 'Buddy Review abstained because the exact start snapshot was unavailable.' }, skipped: 'missing_baseline' };
+    return {
+      output: {
+        systemMessage: 'Buddy Review abstained because the exact start snapshot was unavailable. '
+          + 'Mode enable does not capture a baseline; the next full turn establishes one at prompt submit, '
+          + 'and review begins from that point. No provider was called and Buddy did not fall back to the whole working tree.'
+      },
+      skipped: 'missing_baseline'
+    };
   }
   if (baselineRecord.mode_revision !== mode.config_revision) {
     await writePrivateJsonExclusive(completedFile, {
