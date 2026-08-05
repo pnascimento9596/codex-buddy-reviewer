@@ -410,6 +410,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out the exact source revision for publish helpers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.source_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ensure-release-tag.mjs
+            scripts/lib/release-tag-publish.mjs
+          sparse-checkout-cone-mode: false
+
       - name: Download the verified release candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -426,6 +437,13 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
+
+          if [[ "$(git rev-parse HEAD)" != "$SOURCE_SHA" ]]; then
+            echo 'Publish helpers checkout does not match the verified source SHA.' >&2
+            exit 1
+          fi
+          test -f scripts/ensure-release-tag.mjs
+          test -f scripts/lib/release-tag-publish.mjs
 
           candidate="$RUNNER_TEMP/release-candidate"
           tarball="$candidate/$ARTIFACT_NAME.tar.gz"
@@ -509,47 +527,20 @@ jobs:
           NODE
 
           expected_tag_object="$(RECEIPT="$receipt" node --input-type=module -e "import {readFileSync} from 'node:fs'; process.stdout.write(JSON.parse(readFileSync(process.env.RECEIPT, 'utf8')).tag_object)")"
-          lookup_remote_tag_object() {
-            local response
-            if response="$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null)"; then
-              if [[ ! "$response" =~ ^[0-9a-f]{40}$ ]]; then
-                echo 'The remote release tag returned an invalid object identity.' >&2
-                return 1
-              fi
-              printf '%s' "$response"
-              return 0
-            fi
-            if jq -e '(.status | tostring) == "404" and .message == "Not Found"' \
-                <<<"$response" >/dev/null 2>&1; then
-              return 0
-            fi
-            echo 'The remote release tag lookup failed without proving absence.' >&2
-            return 1
-          }
 
-          remote_tag_object="$(lookup_remote_tag_object)"
-          if [[ -n "$remote_tag_object" && "$remote_tag_object" != "$expected_tag_object" ]]; then
-            echo 'The release tag already exists with a different object. Publication refuses to overwrite it.' >&2
-            exit 1
-          fi
-
-          if [[ -z "$remote_tag_object" ]]; then
-            gh auth setup-git
-            git -C "$repository" remote add origin "${GITHUB_SERVER_URL}/${REPOSITORY}.git"
-            if ! git -C "$repository" push --porcelain origin "$tag_ref:$tag_ref"; then
-              remote_tag_object="$(lookup_remote_tag_object)"
-              if [[ "$remote_tag_object" != "$expected_tag_object" ]]; then
-                echo 'Tag publication failed and exact remote reconciliation did not prove success.' >&2
-                exit 1
-              fi
-            fi
-          fi
-
-          remote_tag_object="$(lookup_remote_tag_object)"
-          if [[ "$remote_tag_object" != "$expected_tag_object" ]]; then
-            echo 'Published tag object does not match the verified distribution receipt.' >&2
-            exit 1
-          fi
+          # Tag mutation happens only after receipt, attestation, and local bundle
+          # verification above. ensure-release-tag.mjs owns remote lookup idempotency,
+          # the single non-force push, and bounded post-push consistency retries so a
+          # stale REST read cannot burn an immutable tag version after git push OK.
+          node scripts/ensure-release-tag.mjs \
+            --repository "$REPOSITORY" \
+            --tag "$tag" \
+            --tag-ref "$tag_ref" \
+            --local-repository "$repository" \
+            --expected-tag-object "$expected_tag_object" \
+            --receipt "$receipt" \
+            --github-server-url "${GITHUB_SERVER_URL}" \
+            --json
 
           release_title="Codex Buddy Reviewer $tag"
           release_notes='Verified artifact-only Codex Buddy Reviewer release. Install this exact tag and verify the attached checksums and GitHub provenance attestation.'
