@@ -892,7 +892,7 @@ test('atlas structural gate validates checked-in RIFF boundaries without claimin
   const result = await validatePetAtlases();
   assert.equal(result.pet_count, 5);
   assert.equal(result.full_pixel_decode, false);
-  assert.ok(result.pets.every((pet) => pet.width === 1536 && pet.height === 2288 && pet.image_encoding === 'VP8L'));
+  assert.ok(result.pets.every((pet) => pet.width === 1536 && pet.height === 1872 && pet.image_encoding === 'VP8L'));
   const bytes = await readFile('assets/pets/buddy-byte/spritesheet.webp');
   const corrupt = Buffer.concat([bytes, Buffer.from([0])]);
   assert.throws(() => inspectWebpStructure(corrupt), /RIFF length/);

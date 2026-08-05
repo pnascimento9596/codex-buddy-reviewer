@@ -2,6 +2,5 @@
   "id": "buddy-mochi",
   "displayName": "Mochi",
   "description": "A warm cat-like reviewer with expressive waiting and review poses.",
-  "spriteVersionNumber": 2,
   "spritesheetPath": "spritesheet.webp"
 }

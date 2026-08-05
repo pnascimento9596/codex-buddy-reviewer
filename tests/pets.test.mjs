@@ -162,7 +162,6 @@ async function fixtureCatalog(options = {}) {
       id,
       displayName,
       description,
-      spriteVersionNumber: 2,
       spritesheetPath: 'spritesheet.webp'
     };
     const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
@@ -172,7 +171,7 @@ async function fixtureCatalog(options = {}) {
       schema_version: '1',
       pet_id: id,
       scope,
-      status: available ? 'validated' : 'awaiting-v2-artwork',
+      status: available ? 'validated' : 'awaiting-host-artwork',
       redistribution: scope === 'private' ? 'private-only' : available ? 'cleared' : 'not-cleared',
       binary_asset_present: available,
       ...(scope === 'public' && available ? fixturePublicRights(id, spritesheetSha256) : {}),
@@ -184,7 +183,7 @@ async function fixtureCatalog(options = {}) {
       displayName,
       description,
       scope,
-      spriteVersionNumber: 2,
+      spriteVersionNumber: 1,
       available,
       notReadyReason: available ? null : 'Fixture asset is not ready.',
       manifestPath: `./${id}/pet.json`,
@@ -199,11 +198,11 @@ async function fixtureCatalog(options = {}) {
   return { root, catalogRoot, catalogFile, codexHome, dataDir, sprite };
 }
 
-test('checked-in catalog exposes exactly five public, validated V2 entries with cleared provenance', async () => {
+test('checked-in catalog exposes exactly five public, validated host-compatible entries with cleared provenance', async () => {
   const pets = await listPets();
   const catalog = await loadPetCatalog();
   assert.deepEqual(pets.map((pet) => pet.id), definitions.map(([id]) => id));
-  assert.equal(pets.every((pet) => pet.spriteVersionNumber === 2), true);
+  assert.equal(pets.every((pet) => pet.spriteVersionNumber === 1), true);
   assert.equal(pets.every((pet) => pet.available === true && pet.notReadyReason === null), true);
   assert.equal(pets.every((pet) => pet.scope === 'public'), true);
   assert.equal(catalog.pets.every((pet) => pet.provenance.redistribution === 'cleared'), true);
@@ -243,13 +242,13 @@ test('checked-in Byte package installs without claiming native selection or wake
   assert.match(renderPetCommand(output), /No pet was selected or woken/);
 });
 
-test('checked-in spritesheets are exact 1536x2288 extended WebP atlases', async () => {
+test('checked-in spritesheets are exact 1536x1872 host-compatible WebP atlases', async () => {
   const catalog = await loadPetCatalog();
   for (const pet of catalog.pets) {
     const bytes = await readFile(pet.spritesheetFile);
     assert.equal(bytes.subarray(0, 4).toString('ascii'), 'RIFF', pet.id);
     assert.equal(bytes.subarray(8, 12).toString('ascii'), 'WEBP', pet.id);
-    assert.deepEqual(webpDimensions(bytes), { width: 1536, height: 2288 }, pet.id);
+    assert.deepEqual(webpDimensions(bytes), { width: 1536, height: 1872 }, pet.id);
   }
 });
 

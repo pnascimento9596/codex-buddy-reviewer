@@ -9,9 +9,10 @@ import { escapeDiagnosticLine } from '../src/policy.mjs';
 export const DEFAULT_PET_CATALOG = fileURLToPath(new URL('../assets/pets/catalog.json', import.meta.url));
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const EXPECTED_WIDTH = 1536;
-const EXPECTED_HEIGHT = 2288;
+const EXPECTED_HEIGHT = 1872;
 const GRID_COLUMNS = 8;
-const GRID_ROWS = 11;
+const GRID_ROWS = 9;
+const HOST_SPRITE_VERSION = 1;
 
 function fail(message) {
   throw new Error(`Buddy atlas validation: ${message}`);
@@ -137,8 +138,10 @@ export async function validatePetAtlases(catalogFile = DEFAULT_PET_CATALOG) {
   for (const entry of catalog.pets) {
     if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string' || ids.has(entry.id)) fail('catalog contains an invalid or duplicate pet id');
     ids.add(entry.id);
-    if (entry.available !== true || entry.spriteVersionNumber !== 2 || !SHA256_PATTERN.test(entry.manifestSha256)
-        || !SHA256_PATTERN.test(entry.spritesheetSha256)) fail(`${entry.id} is not a hash-pinned available V2 package`);
+    if (entry.available !== true || entry.spriteVersionNumber !== HOST_SPRITE_VERSION || !SHA256_PATTERN.test(entry.manifestSha256)
+        || !SHA256_PATTERN.test(entry.spritesheetSha256)) {
+      fail(`${entry.id} is not a hash-pinned available host-compatible package`);
+    }
     const manifestFile = inside(root, entry.manifestPath, `${entry.id} manifestPath`);
     const spritesheetFile = inside(root, entry.spritesheetPath, `${entry.id} spritesheetPath`);
     const provenanceFile = inside(root, entry.provenancePath, `${entry.id} provenancePath`);
@@ -153,8 +156,10 @@ export async function validatePetAtlases(catalogFile = DEFAULT_PET_CATALOG) {
     }
     const manifest = JSON.parse(manifestBytes.toString('utf8'));
     const provenance = JSON.parse(provenanceBytes.toString('utf8'));
-    if (manifest.id !== entry.id || manifest.spriteVersionNumber !== 2 || manifest.spritesheetPath !== 'spritesheet.webp') {
-      fail(`${entry.id} manifest does not describe the expected V2 spritesheet`);
+    if (manifest.id !== entry.id
+        || Object.hasOwn(manifest, 'spriteVersionNumber')
+        || manifest.spritesheetPath !== 'spritesheet.webp') {
+      fail(`${entry.id} manifest must be the host package shape without spriteVersionNumber`);
     }
     validatePetProvenance(provenance, entry, { requirePublicRights: true });
     const structure = inspectWebpStructure(spritesheetBytes);
@@ -198,7 +203,7 @@ async function main() {
     const result = await validatePetAtlases();
     process.stdout.write(args.includes('--json')
       ? `${JSON.stringify(result, null, 2)}\n`
-      : `Buddy atlas structure: ${result.pet_count} hash-pinned V2 packages passed (container structure only; no full pixel decode).\n`);
+      : `Buddy atlas structure: ${result.pet_count} hash-pinned host-compatible packages passed (container structure only; no full pixel decode).\n`);
   } catch (error) {
     process.stderr.write(`${escapeDiagnosticLine(error?.message ?? error)}\n`);
     process.exitCode = 2;

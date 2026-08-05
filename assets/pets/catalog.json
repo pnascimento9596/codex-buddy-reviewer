@@ -6,70 +6,70 @@
       "displayName": "Byte",
       "description": "A curious robot engineer with crisp technical gestures.",
       "scope": "public",
-      "spriteVersionNumber": 2,
+      "spriteVersionNumber": 1,
       "available": true,
       "notReadyReason": null,
       "manifestPath": "./buddy-byte/pet.json",
-      "manifestSha256": "bdcfa7213a6728f774f8d73dc864bce8333dbc3f0615bac4c33970094f3e6677",
+      "manifestSha256": "bcc36f5f9de1ecd8480396f27c894b71939760dae503991ef9be8b4b0f380b62",
       "spritesheetPath": "./buddy-byte/spritesheet.webp",
       "provenancePath": "./buddy-byte/provenance.json",
-      "spritesheetSha256": "0a6310229b6dbe12294314abf2bceef88e34aee8c5ca5f12eb9ac09a762f38b5"
+      "spritesheetSha256": "b5036d0c08c1133611530a7a24e3f519ab7c4f1371b373945dbd4bb0f3fbba3e"
     },
     {
       "id": "buddy-mochi",
       "displayName": "Mochi",
       "description": "A warm cat-like reviewer with expressive waiting and review poses.",
       "scope": "public",
-      "spriteVersionNumber": 2,
+      "spriteVersionNumber": 1,
       "available": true,
       "notReadyReason": null,
       "manifestPath": "./buddy-mochi/pet.json",
-      "manifestSha256": "0cf5f2a344f092b9c6b00c12a64570087a908713ed2b89132cc81a757376f672",
+      "manifestSha256": "e8c4fb0056bbbd914ac5719d579f2ff1a10da39438c189626779568f0060a95b",
       "spritesheetPath": "./buddy-mochi/spritesheet.webp",
       "provenancePath": "./buddy-mochi/provenance.json",
-      "spritesheetSha256": "3f1dc884f8ab4a691cfc84692b998a991da8de734ccbccfa27c137bf8f30be3a"
+      "spritesheetSha256": "8e8138a811d99bb9193c60d3f09a4dbb1e16495f74c78d04413346989f2053a0"
     },
     {
       "id": "buddy-orbit",
       "displayName": "Orbit",
       "description": "A small floating alien designed for readable pointer-facing movement.",
       "scope": "public",
-      "spriteVersionNumber": 2,
+      "spriteVersionNumber": 1,
       "available": true,
       "notReadyReason": null,
       "manifestPath": "./buddy-orbit/pet.json",
-      "manifestSha256": "728bbe3d67cb5e1ef052a8bf784c6ed4dd821a44814d6589380634f5cf6db9bd",
+      "manifestSha256": "90a2a7656fd69115a3abcf6e18bff2a70abcda200102a4fe3c453df2251602f3",
       "spritesheetPath": "./buddy-orbit/spritesheet.webp",
       "provenancePath": "./buddy-orbit/provenance.json",
-      "spritesheetSha256": "26efcaa8fc2b96999db2bbc2b82d934df6660de8c45997a16b11f3b1c7c389f7"
+      "spritesheetSha256": "9a81394f8cbb6521b499b5ea2857fe24ab826c38d07dd24ee071b1a548fa7493"
     },
     {
       "id": "buddy-bella",
       "displayName": "Bella",
       "description": "A cheerful tan-and-white dog with warm, attentive review poses.",
       "scope": "public",
-      "spriteVersionNumber": 2,
+      "spriteVersionNumber": 1,
       "available": true,
       "notReadyReason": null,
       "manifestPath": "./buddy-bella/pet.json",
-      "manifestSha256": "f1bb65827ff097e45d62c630bb8e726c5ddf009cf4861625eaa32784cd70943d",
+      "manifestSha256": "bd6af6f55d949d3382cf74174b5a7b4e63c0a77ce02d445cb46a87c13ea6ff20",
       "spritesheetPath": "./buddy-bella/spritesheet.webp",
       "provenancePath": "./buddy-bella/provenance.json",
-      "spritesheetSha256": "3454b0b4b05a1c36fcc74840a835498e7b6f4fd092af7b532bb94e7d3ce6ef0f"
+      "spritesheetSha256": "64e484a08f0ab52341260c5b82a1c2896727f0e13c3cec659bc3fec81ca6caa6"
     },
     {
       "id": "buddy-lupo",
       "displayName": "Lupo",
       "description": "A cheerful white speckled dog with playful, energetic review poses.",
       "scope": "public",
-      "spriteVersionNumber": 2,
+      "spriteVersionNumber": 1,
       "available": true,
       "notReadyReason": null,
       "manifestPath": "./buddy-lupo/pet.json",
-      "manifestSha256": "9dd0130d26e63c44d161841af6395619c5bde2b717ce9e0db4c28f774d59d2e3",
+      "manifestSha256": "3e1f8bbdf4868f6a853d24b687cdcea9d698f35f43df34d9da8e59959abb4b71",
       "spritesheetPath": "./buddy-lupo/spritesheet.webp",
       "provenancePath": "./buddy-lupo/provenance.json",
-      "spritesheetSha256": "5d20b8fffc10c7282f05909ac5bbbe3c5f3b36f473edbebaeea325580bbb8a4e"
+      "spritesheetSha256": "f028b6e5c09042787608436355fab7d999bb5bc3c598fe033f085daf077c262f"
     }
   ]
 }
