@@ -1,0 +1,19 @@
+Capture method: CLI + Codex TUI under kitty remote-control; paths redacted.
+Host: Codex CLI 0.146.0
+Plugin: published 0.5.0-rc.4 (marketplace ref v0.5.0-rc.4)
+Artifact SHA-256: 2ba45154d1e5c5218900b295412744ea9cfa1fe3a452085f9f77693651453df7
+
+Visible enable result (CLI continuous enable):
+
+  Buddy automatic review is ON for <scratch-workspace>
+  Reviewer: ollama/glm-5.2:cloud · advisory · workspace-scoped · continuous-review ON
+  Use /pet in Codex to wake or tuck away the host pet.
+  The next Codex turn captures a private start snapshot at prompt submit; review covers only changes observed after that baseline. Enabling mid-turn does not invent a missing baseline.
+
+Authorized provider check result:
+
+  Provider check: [pass] provider: 1/1 configured reviewer health checks passed.
+
+Skill status path restated the same #37 baseline contract after UserPromptSubmit hook context proved hooks trusted.
+
+Disposition: mode enable pass with #37 message; one authorized provider health check pass; hooks executed.

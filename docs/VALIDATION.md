@@ -4,7 +4,7 @@ This document separates validation evidence into five explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` at rc.4 publication is `b56224fb8e37ca02e071cda41702af4ef20f1ebb` (rc.4 candidate PR #51). The immutable published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. Post-rc.3 protected merges closed both #36 defects (PRs #44 and #46), the #38 pet atlas packaging defect (PR #45), first-enable baseline messaging (PR #50), and recorded post-fix host evidence (PR #48). Frozen Layers B–D are unchanged historical publication evidence.
+Current protected `main` after rc.4 freeze is advanced by host-e2e evidence PRs; immutable rc.4 source remains `b56224fb8e37ca02e071cda41702af4ef20f1ebb`. The immutable published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. Post-rc.3 protected merges closed both #36 defects (PRs #44 and #46), the #38 pet atlas packaging defect (PR #45), first-enable baseline messaging (PR #50), and recorded post-fix host evidence (PR #48). Frozen Layers B–D are unchanged historical publication evidence.
 
 ### rc.4 candidate local validation (pre-merge head)
 
@@ -312,17 +312,13 @@ The external scratch clone, downloaded assets, extracted artifact, and generated
 
 ## Layer F - unresolved gates
 
-The following gates remain unresolved for stable promotion or stronger current-head assurance after the post-rc.3 fix lane and rc.4 candidate:
+The following gates remain unresolved for stable promotion after published rc.4 and artifact-bound host-e2e:
 
-- Five-pet **artifact-bound** host-e2e bundle validated against the published rc.4 archive (selectability on fixed packages is not a substitute).
 - Windows current-user-only DACL creation and verification for durable Buddy state and provider temporary roots.
 - Live Windows provider egress after the DACL gate is implemented and verified.
-- Stable artifact requirements: rebuild from exact protected `main`, reverify after deterministic archive/re-extraction, install from the positive artifact boundary, and bind host evidence to that artifact rather than to a private checkout or dev marketplace slot.
 - Repository-owned Codex validator wiring: skill/plugin validators pass on this host, but the repository still has no package-script entry point in the ordinary npm chain.
-- Owner-only browser governance: OAuth app inventory, fine-grained PAT inventory, 2FA/email visibility, and admin-bypass decision for `public-release` (Security Log windows for rc.2/rc.3 were reviewed; each later release dispatch needs its own window).
+- Owner-only browser governance: OAuth app inventory, fine-grained PAT inventory, 2FA/email visibility, and admin-bypass decision for `public-release` (each later release dispatch needs its own Security Log window, including rc.4).
 - Optional: fresh exact-head whole-repository deep security scan at the final promotion head if owner policy requires it.
 - Stable `v0.5.0` promotion remains an explicit owner decision after the remaining gates above close.
 
-Closed relative to the prior Layer E list (evidence elsewhere in this document and the readiness ledger): deterministic-timing issues #14/#25/#29; first-enable baseline UX #37; five-pet **selectability** on fixed packages #38 (not the artifact-bound bundle).
-
-Still open as separate claims: **published-artifact** speculative receipt adoption (post-#36 adoption was observed on a dev marketplace install of protected main, not yet on the published rc.4 archive); five-pet artifact-bound host-e2e bundle against that archive.
+Closed on published rc.4 (see `docs/host-evidence/index.md` rc.4 section and readiness ledger): published-artifact speculative receipt adoption; five-pet host-e2e v2 bundle against the published archive; first-enable baseline UX #37; #36/#38 root causes.

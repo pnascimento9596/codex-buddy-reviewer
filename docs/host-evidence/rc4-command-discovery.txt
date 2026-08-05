@@ -1,0 +1,10 @@
+Capture method: kitty remote-control get-text; paths redacted.
+Host: Codex CLI 0.146.0 + published plugin 0.5.0-rc.4
+
+Native slash:
+  Unrecognized command '/buddy-review'. Type "/" for a list of supported commands.
+
+Namespaced skill:
+  $codex-buddy-reviewer:buddy-review status loaded installed 0.5.0-rc.4 skill and ran allowlisted mode status.
+
+Slash menu lists /pets (choose or hide the terminal pet).

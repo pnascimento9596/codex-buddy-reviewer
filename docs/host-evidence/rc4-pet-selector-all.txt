@@ -1,0 +1,23 @@
+# /pet unfiltered list excerpt — Codex 0.146.0 in kitty 0.48.2
+# Capture method: kitty remote-control get-text; paths redacted
+# Artifact: published v0.5.0-rc.4 (tarball SHA-256 2ba45154d1e5c5218900b295412744ea9cfa1fe3a452085f9f77693651453df7)
+# Installed plugin: 0.5.0-rc.4 from marketplace ref v0.5.0-rc.4 (distribution ac9f870f…)
+
+Select Pet
+Choose a pet to wake in the terminal.
+Type to filter pets...
+
+Byte             A curious robot engineer with crisp technical gestures.          (buddy-byte)
+Mochi            A warm cat-like reviewer with expressive waiting and review poses. (buddy-mochi)
+Orbit (current)  A small floating alien designed for readable pointer-facing movement. (buddy-orbit)
+Bella            A cheerful tan-and-white dog with warm, attentive review poses.  (buddy-bella)
+Bella            A compact Codex digital pet based on Bella...                    (legacy)
+Lupo             A cheerful white speckled dog with playful, energetic review poses. (buddy-lupo)
+Lupo             A compact Codex digital pet based on Lupo...                     (legacy)
+
+Press enter to confirm or esc to go back
+
+Notes:
+- Pixel screenshots blocked by ScreenCaptureKit/TCC automation limits; terminal-content is the committed method.
+- Filter captures for Byte/Mochi/Orbit/Bella/Lupo each matched the released package displayName.
+- Dual Bella/Lupo entries (legacy ambient + buddy packages) remain as issue #49.
