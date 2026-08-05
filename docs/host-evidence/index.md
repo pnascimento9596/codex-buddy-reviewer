@@ -160,7 +160,7 @@ The v2 packages use 1536x2288 atlases and `spriteVersionNumber: 2`; working lega
 
 See [`pet-terminal-limitation.txt`](pet-terminal-limitation.txt) for the compact visible-host record.
 
-## Gate summary
+## Gate summary (rc.3 historical)
 
 | Gate | Disposition |
 |---|---|
@@ -171,12 +171,12 @@ See [`pet-terminal-limitation.txt`](pet-terminal-limitation.txt) for the compact
 | Authorized provider doctor check | pass |
 | Exact-final safe fallback | pass twice |
 | First-enable baseline UX | fail-closed pass; issue #37 |
-| Speculative adoption | **blocked by #36** |
+| Speculative adoption | **blocked by #36 on rc.3; closed post-fix below** |
 | Kitty graphics rendering | pass for legacy ambient pets |
-| Five released v2 pets | **blocked by #38** |
-| Stable promotion | **not ready** |
+| Five released v2 pets | **blocked by #38 on rc.3; closed post-fix below** |
+| Stable promotion | **not ready** (see current readiness ledger) |
 
-## Restoration
+## Restoration (rc.3 attempt)
 
 Continuous mode was explicitly disabled at `2026-08-04T18:20:05.165Z`, clearing continuous-review consent. Workspace purge then ran with settings included. Final status reported:
 
@@ -197,3 +197,54 @@ Continuous mode was explicitly disabled at `2026-08-04T18:20:05.165Z`, clearing 
 Shared pet ownership and rollback state remained intentionally outside workspace review-content purge: 14 files / 13,232 bytes, including the Byte backup named above. The rc.3 marketplace plugin and five installed pet packages remain in place.
 
 No stable release was dispatched, no release/tag was mutated, and no published rc.3 artifact was edited.
+
+---
+
+# Post-fix host evidence (2026-08-05)
+
+Collected after protected merges `#44` (`3ac754b`), `#45` (`23784a3`), and `#46` (`866e359`). Marketplace slot held a **dev verification install** of protected main; the immutable published `v0.5.0-rc.3` release was not mutated.
+
+## Speculative adoption
+
+| Field | Value |
+|---|---|
+| Host | Codex CLI `0.146.0` in Kitty `0.48.2` |
+| Review key | `5a646cf08ad7402bf40ba41ccce08faa7efb73b356953406b4dfce8265cfd489` |
+| Speculative launches | 2 (live worker PIDs observed) |
+| Receipt created | `2026-08-05T02:52:08.345Z` |
+| Completed | `2026-08-05T02:53:01.371Z` |
+| Terminal status | `findings` |
+| Provider | `ollama` / `glm-5.2:cloud` / 29616 ms |
+| Changed paths | 4 |
+| Baseline tree | `83708e17eca1956897521df6c20449ae75f54bcb` |
+| Final tree | `0d35f4be81ebaa1305908e8dd478cd2112062215` |
+| Outbox order | `turn_started` → `review_started` ×2 → `turn_finished` → `review_completed` |
+| Second provider at Stop | **none** (no `review_started` after `turn_finished`) |
+
+Evidence: [`speculative-adoption-2026-08-05.txt`](speculative-adoption-2026-08-05.txt)
+
+**Root causes closed on #36:** (1) snapshot-changed escaped to terminal `failed`; (2) detached worker drained the event loop via non-persistent watch + unref'd timers.
+
+## Five-pet selectability
+
+After packaging host-compatible 8×9 / 1536×1872 atlases and host-shaped manifests, `/pet` lists Byte, Mochi, Orbit, buddy-Bella, and buddy-Lupo.
+
+| Evidence | Content |
+|---|---|
+| [`pet-selector-byte.txt`](pet-selector-byte.txt) | filter Byte match |
+| [`pet-selector-mochi.txt`](pet-selector-mochi.txt) | filter Mochi match |
+| [`pet-selector-orbit.txt`](pet-selector-orbit.txt) | filter Orbit match |
+| [`pet-selector-all.txt`](pet-selector-all.txt) | unfiltered list excerpt |
+
+Pixel window capture was blocked by ScreenCaptureKit/TCC automation limits in this environment. Terminal-content capture is the committed host method for this pass.
+
+**Root cause closed on #38:** rc.3 shipped extended 8×11 atlases; Codex 0.146.0 accepts the base 8×9 grid only.
+
+## Post-fix gate summary
+
+| Gate | Disposition |
+|---|---|
+| Speculative adoption | **pass** (exact key match; no second Stop provider) |
+| Five released pets selectable | **pass** (Byte/Mochi/Orbit + buddy-Bella/Lupo listed) |
+| Published rc.3 immutability | preserved |
+| Stable promotion | still requires owner instruction + remaining residue (#37, Windows DACL, governance) |

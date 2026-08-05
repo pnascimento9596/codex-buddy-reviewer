@@ -1,0 +1,30 @@
+speculative adoption observed (post-keepalive fix)
+
+host: Codex CLI 0.146.0 in kitty 0.48.2
+plugin: marketplace install of protected main (dev verification; published rc.3 artifact untouched)
+workspace: disposable scratch git repo (path redacted)
+
+timeline (turn 7455d7ed…):
+- worker PIDs alive throughout
+- worker_state: debouncing -> capturing -> reviewing (L=1) -> capturing -> reviewing (L=2)
+- ready_review_key observed: 5a646cf08ad7…
+- workspace fingerprint stable while ready
+- completed.review_key: 5a646cf08ad7402bf40ba41ccce08faa7efb73b356953406b4dfce8265cfd489
+- receipt created_at: 2026-08-05T02:52:08.345Z (speculative)
+- completed_at: 2026-08-05T02:53:01.371Z
+- terminal_status: findings
+- provider/model: ollama / glm-5.2:cloud
+- provider_duration_ms: 29616
+- changed_path_count: 4
+- baseline_tree: 83708e17eca1956897521df6c20449ae75f54bcb
+- final_tree: 0d35f4be81ebaa1305908e8dd478cd2112062215
+
+outbox ordering for this turn:
+- turn_started
+- review_started (speculative generation 1)
+- review_started (speculative generation 2)
+- turn_finished
+- review_completed
+NO review_started after turn_finished => Stop adopted the exact matching speculative receipt without a second provider execution.
+
+visible host: Buddy review paragraph appended once after the worker summary (findings).
