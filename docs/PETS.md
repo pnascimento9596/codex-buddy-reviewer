@@ -31,7 +31,7 @@ Those actions are private host behavior, not public plugin APIs. Buddy will not 
 
 ## Packaged companions
 
-The repository contains five hash-pinned V2 packages. The positive public release artifact contains all five:
+The repository contains five hash-pinned host-compatible packages. The positive public release artifact contains all five:
 
 | Name | Package ID | Scope | Character |
 |---|---|---|---|

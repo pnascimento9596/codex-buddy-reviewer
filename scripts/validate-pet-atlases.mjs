@@ -203,7 +203,7 @@ async function main() {
     const result = await validatePetAtlases();
     process.stdout.write(args.includes('--json')
       ? `${JSON.stringify(result, null, 2)}\n`
-      : `Buddy atlas structure: ${result.pet_count} hash-pinned V2 packages passed (container structure only; no full pixel decode).\n`);
+      : `Buddy atlas structure: ${result.pet_count} hash-pinned host-compatible packages passed (container structure only; no full pixel decode).\n`);
   } catch (error) {
     process.stderr.write(`${escapeDiagnosticLine(error?.message ?? error)}\n`);
     process.exitCode = 2;
