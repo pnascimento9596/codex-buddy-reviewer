@@ -67,12 +67,32 @@ async function cleanFilterPaths(root, candidatePaths, options) {
     ...options,
     acceptedExitCodes: [0, 128]
   });
+  // Worktree and index attribute sources cover the live endpoints. The historical
+  // `--source=<tree-ish>` pass (Git ≥ 2.40) is required to detect clean filters
+  // that applied on HEAD even after `.gitattributes` is removed or a denied path
+  // is renamed to an allowed destination. Without it, privacy coverage is
+  // incomplete, so unsupported Git must fail closed with a named diagnosis
+  // rather than silently dropping the historical source.
   const sources = [[], ['--cached']];
-  if (head.stdout.trim()) sources.push([`--source=${head.stdout.trim()}`]);
-  const resolved = await Promise.all(
-    sources.map((sourceArgs) => cleanFilterPathsFrom(root, candidatePaths, sourceArgs, options))
-  );
-  return new Set(resolved.flatMap((paths) => [...paths]));
+  const headSha = head.stdout.trim();
+  if (headSha) sources.push([`--source=${headSha}`]);
+  try {
+    const resolved = await Promise.all(
+      sources.map((sourceArgs) => cleanFilterPathsFrom(root, candidatePaths, sourceArgs, options))
+    );
+    return new Set(resolved.flatMap((paths) => [...paths]));
+  } catch (error) {
+    const detail = String(error?.message || error);
+    if (/unknown option.*source|unknown option [`']source/i.test(detail)) {
+      const failure = new Error(
+        'Buddy requires Git 2.40+ for clean-filter attribute capture (git check-attr --source). Older Git cannot prove historical denied-path filter coverage.'
+      );
+      failure.code = 'GIT_VERSION_UNSUPPORTED';
+      failure.failureCode = 'git_version_unsupported';
+      throw failure;
+    }
+    throw error;
+  }
 }
 
 function pathspecBytes(paths) {
