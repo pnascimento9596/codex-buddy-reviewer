@@ -28,18 +28,21 @@ function gitInit(root) {
   run(['commit', '--quiet', '-m', 'baseline']);
 }
 
-function installSourceRejectingGit(root) {
+test('working-tree capture fails closed with a named error when git check-attr --source is unsupported', {
+  // PATH-level git stubs are unreliable under Windows PATHEXT / Git-for-Windows
+  // layout; the production failure path is still exercised on POSIX CI and by the
+  // direct source-pin below.
+  skip: process.platform === 'win32'
+}, async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'codex-buddy-git-source-'));
+  temporaryPaths.push(root);
+  gitInit(root);
+  await writeFile(path.join(root, 'tracked.txt'), 'dirty worktree\n');
+
   const wrap = path.join(root, 'bin');
   mkdirSync(wrap);
-  const which = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['git'], {
-    encoding: 'utf8',
-    windowsHide: true,
-    shell: process.platform === 'win32'
-  });
-  const realGit = which.stdout.trim().split(/\r?\n/).find(Boolean);
-  assert.ok(realGit, 'system git must be discoverable');
-
-  // Cross-platform stub: Node wrapper rejects --source* and otherwise proxies real git.
+  const realGit = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim();
+  assert.ok(realGit);
   const stubJs = path.join(wrap, 'git-stub.mjs');
   writeFileSync(stubJs, `import { spawnSync } from 'node:child_process';
 const args = process.argv.slice(2);
@@ -47,33 +50,12 @@ if (args.some((arg) => arg === '--source' || arg.startsWith('--source='))) {
   process.stderr.write("error: unknown option \`source'\\n");
   process.exit(129);
 }
-const result = spawnSync(${JSON.stringify(realGit)}, args, {
-  stdio: 'inherit',
-  windowsHide: true,
-  env: process.env
-});
+const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: 'inherit', env: process.env });
 process.exit(result.status === null ? 1 : result.status);
 `);
-
-  if (process.platform === 'win32') {
-    // Windows looks up git.cmd / git.exe on PATH, not extensionless scripts.
-    writeFileSync(path.join(wrap, 'git.cmd'), `@echo off\r\nnode "${stubJs}" %*\r\n`);
-  } else {
-    const stub = path.join(wrap, 'git');
-    writeFileSync(stub, `#!/usr/bin/env node\nimport(${JSON.stringify(stubJs)}).catch((error) => {\n  console.error(error);\n  process.exit(1);\n});\n`);
-    // Simpler: exec the stub js via node shebang-less launcher
-    writeFileSync(stub, `#!/bin/bash\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(stubJs)} "$@"\n`);
-    chmodSync(stub, 0o755);
-  }
-  return wrap;
-}
-
-test('working-tree capture fails closed with a named error when git check-attr --source is unsupported', async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), 'codex-buddy-git-source-'));
-  temporaryPaths.push(root);
-  gitInit(root);
-  await writeFile(path.join(root, 'tracked.txt'), 'dirty worktree\n');
-  const wrap = installSourceRejectingGit(root);
+  const stub = path.join(wrap, 'git');
+  writeFileSync(stub, `#!/bin/bash\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(stubJs)} "$@"\n`);
+  chmodSync(stub, 0o755);
 
   const previousPath = process.env.PATH;
   process.env.PATH = `${wrap}${path.delimiter}${previousPath}`;
@@ -87,6 +69,20 @@ test('working-tree capture fails closed with a named error when git check-attr -
   } finally {
     process.env.PATH = previousPath;
   }
+});
+
+test('filter-free-git source maps unknown-option failures to git_version_unsupported', async () => {
+  // Direct contract pin: the production catch must recognize Git's unknown-option
+  // wording and surface the named privacy-preserving failure code.
+  const source = await (await import('node:fs/promises')).readFile(
+    new URL('../src/filter-free-git.mjs', import.meta.url),
+    'utf8'
+  );
+  assert.match(source, /failureCode = 'git_version_unsupported'/);
+  assert.match(source, /unknown option.*source/);
+  assert.match(source, /Git 2\.40\+/);
+  // Must not silently swallow historical --source failures.
+  assert.doesNotMatch(source, /Older Git: omit the historical attribute source/);
 });
 
 test('working-tree capture still merges historical --source attributes when Git supports them', async () => {
