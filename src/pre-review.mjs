@@ -17,6 +17,7 @@ import {
   MAX_SPECULATIVE_GENERATIONS,
   PRE_REVIEW_DEBOUNCE_MS,
   PRE_REVIEW_POLL_MS,
+  boundWorkerFailure,
   claimPreReviewWorker,
   finishPreReviewWorker,
   incrementPreReviewLaunch,
@@ -225,6 +226,77 @@ function intentionalProviderCancellation(error) {
     || ['cancelled', 'superseded'].includes(error?.failureCode);
 }
 
+export function isRetryableCheckpointCaptureError(error) {
+  if (error instanceof PreReviewOwnershipLostError || error instanceof PreReviewWorkerExpiredError) {
+    return false;
+  }
+  return error?.message === 'turn snapshot changed during capture; retry';
+}
+
+async function captureCheckpoint({ root, directory, baseline, workerNonce, deps }) {
+  return deps.withSnapshotActivity(directory, async () => {
+    const state = await deps.readState(directory);
+    if (state.worker_nonce !== workerNonce) throw new PreReviewOwnershipLostError();
+    return deps.captureSnapshot({
+      root,
+      workDir: path.join(directory, 'snapshot'),
+      privacySalt: baseline.privacy_fragment_salt
+    });
+  });
+}
+
+async function captureCheckpointAllowingRetryableMiss(args) {
+  try {
+    return await captureCheckpoint(args);
+  } catch (error) {
+    if (isRetryableCheckpointCaptureError(error)) return null;
+    throw error;
+  }
+}
+
+async function stableCheckpoint({
+  root,
+  directory,
+  baseline,
+  workerNonce,
+  initial,
+  mutationMonitor,
+  deadline,
+  lifetimeSignal,
+  deps
+}) {
+  assertWorkerLifetime(deadline, lifetimeSignal, deps.now);
+  let candidate = initial ?? null;
+  while (true) {
+    assertWorkerLifetime(deadline, lifetimeSignal, deps.now);
+    if (!candidate) {
+      candidate = await captureCheckpointAllowingRetryableMiss({
+        root, directory, baseline, workerNonce, deps
+      });
+      if (!candidate) {
+        await pauseWithinWorkerLifetime(deps.debounceMs, deadline, lifetimeSignal, deps);
+        continue;
+      }
+    }
+    const digest = deps.snapshotDigest(candidate);
+    await pauseWithinWorkerLifetime(deps.debounceMs, deadline, lifetimeSignal, deps);
+    const beforeConfirmation = mutationMonitor?.revision ?? 0;
+    const confirmation = await captureCheckpointAllowingRetryableMiss({
+      root, directory, baseline, workerNonce, deps
+    });
+    assertWorkerLifetime(deadline, lifetimeSignal, deps.now);
+    if (!confirmation) {
+      candidate = null;
+      continue;
+    }
+    const afterConfirmation = mutationMonitor?.revision ?? beforeConfirmation;
+    if (afterConfirmation === beforeConfirmation && deps.snapshotDigest(confirmation) === digest) {
+      return { checkpoint: confirmation, mutationRevision: afterConfirmation };
+    }
+    candidate = confirmation;
+  }
+}
+
 function circuitOpenOutcome(reviewer) {
   return {
     provider: reviewer.provider,
@@ -352,50 +424,6 @@ async function pauseUnlessAborted(milliseconds, signal, pauseImpl) {
   if (onAbort) signal.removeEventListener('abort', onAbort);
 }
 
-async function captureCheckpoint({ root, directory, baseline, workerNonce, deps }) {
-  return deps.withSnapshotActivity(directory, async () => {
-    const state = await deps.readState(directory);
-    if (state.worker_nonce !== workerNonce) throw new PreReviewOwnershipLostError();
-    return deps.captureSnapshot({
-      root,
-      workDir: path.join(directory, 'snapshot'),
-      privacySalt: baseline.privacy_fragment_salt
-    });
-  });
-}
-
-async function stableCheckpoint({
-  root,
-  directory,
-  baseline,
-  workerNonce,
-  initial,
-  mutationMonitor,
-  deadline,
-  lifetimeSignal,
-  deps
-}) {
-  assertWorkerLifetime(deadline, lifetimeSignal, deps.now);
-  let candidate = initial ?? await captureCheckpoint({
-    root, directory, baseline, workerNonce, deps
-  });
-  while (true) {
-    assertWorkerLifetime(deadline, lifetimeSignal, deps.now);
-    const digest = deps.snapshotDigest(candidate);
-    await pauseWithinWorkerLifetime(deps.debounceMs, deadline, lifetimeSignal, deps);
-    const beforeConfirmation = mutationMonitor?.revision ?? 0;
-    const confirmation = await captureCheckpoint({
-      root, directory, baseline, workerNonce, deps
-    });
-    assertWorkerLifetime(deadline, lifetimeSignal, deps.now);
-    const afterConfirmation = mutationMonitor?.revision ?? beforeConfirmation;
-    if (afterConfirmation === beforeConfirmation && deps.snapshotDigest(confirmation) === digest) {
-      return { checkpoint: confirmation, mutationRevision: afterConfirmation };
-    }
-    candidate = confirmation;
-  }
-}
-
 async function monitorSupersession({
   root,
   directory,
@@ -447,10 +475,10 @@ async function monitorSupersession({
     const repositoryEvent = mutationMonitor && observedRevision !== beforeWait;
     const fallbackDue = deps.now() >= fallbackAt;
     if (!repositoryEvent && !fallbackDue) continue;
-    const observed = await captureCheckpoint({
+    const observed = await captureCheckpointAllowingRetryableMiss({
       root, directory, baseline, workerNonce, deps
     });
-    if (deps.snapshotDigest(observed) !== checkpointDigest) {
+    if (!observed || deps.snapshotDigest(observed) !== checkpointDigest) {
       controller.abort(new DOMException('Speculative review superseded', 'AbortError'));
       return 'superseded';
     }
@@ -507,10 +535,10 @@ async function waitAfterReady({
     const repositoryEvent = mutationMonitor && observedRevision !== beforeWait;
     const fallbackDue = deps.now() >= fallbackAt;
     if (!repositoryEvent && !fallbackDue) continue;
-    const observed = await captureCheckpoint({
+    const observed = await captureCheckpointAllowingRetryableMiss({
       root, directory, baseline, workerNonce, deps
     });
-    if (deps.snapshotDigest(observed) !== checkpointDigest) {
+    if (!observed || deps.snapshotDigest(observed) !== checkpointDigest) {
       return { status: 'changed', checkpoint: observed };
     }
     fallbackAt = deps.now() + deps.checkpointPollMs;
@@ -817,13 +845,21 @@ export async function runPreReviewWorker(rawInput, options = {}) {
     return { skipped: reason, root, directory };
   };
   let mutationMonitor = null;
+  let phase = 'starting';
+  const failClosed = async (error, failurePhase = phase) => {
+    const diagnostic = boundWorkerFailure(error, failurePhase);
+    await deps.finishWorker(directory, input.worker_nonce, 'failed', null, diagnostic).catch(() => null);
+    return { skipped: 'worker_error', error, root, directory, failure: diagnostic };
+  };
   try {
+    phase = 'mode_check';
     const mode = await deps.readMode({ root, dataDir: modeDataDir });
     if (!mode.enabled || !mode.continuous_review_enabled
         || !validConsentTimestamp(mode.continuous_review_consented_at)) {
       return disable('continuous_disabled');
     }
     if (!deps.platformPolicy(deps.platform).allowed) return disable('platform_blocked');
+    phase = 'baseline_load';
     const baselineRecord = await deps.readJson(path.join(directory, 'baseline.json'));
     if (!baselineRecord?.snapshot || baselineRecord.mode_revision !== mode.config_revision) {
       return disable(baselineRecord ? 'mode_changed' : 'missing_baseline');
@@ -838,6 +874,7 @@ export async function runPreReviewWorker(rawInput, options = {}) {
 
     let pendingCheckpoint = null;
     while (true) {
+      phase = 'debouncing';
       assertWorkerLifetime(workerDeadline, lifetimeController.signal, deps.now);
       const stable = await debounceGeneration({
         directory,
@@ -853,6 +890,7 @@ export async function runPreReviewWorker(rawInput, options = {}) {
       }
       const stateGeneration = stable.generation;
       const batchGeneration = stable.speculative_launches + 1;
+      phase = 'capturing';
       await deps.updateWorker(directory, input.worker_nonce, {
         worker_state: 'capturing',
         active_generation: batchGeneration,
@@ -874,6 +912,7 @@ export async function runPreReviewWorker(rawInput, options = {}) {
       pendingCheckpoint = null;
       const checkpointDigest = deps.snapshotDigest(final);
       const mutationRevision = stableCapture.mutationRevision;
+      phase = 'evidence';
       const evidence = await deps.buildEvidence({
         baseline: baselineRecord.snapshot,
         final,
@@ -944,8 +983,12 @@ export async function runPreReviewWorker(rawInput, options = {}) {
         (item) => item.transmitted === true && item.disposition === 'complete'
       );
       if (providerEligible && !deps.privacyComplete(evidence.privacy_coverage, 'turn_evidence')) {
-        await deps.finishWorker(directory, input.worker_nonce, 'failed');
-        return { skipped: 'privacy_coverage_incomplete', reviewKey, root, directory };
+        const diagnostic = boundWorkerFailure(
+          Object.assign(new Error('privacy coverage incomplete'), { failureCode: 'privacy_coverage_incomplete' }),
+          'evidence'
+        );
+        await deps.finishWorker(directory, input.worker_nonce, 'failed', null, diagnostic);
+        return { skipped: 'privacy_coverage_incomplete', reviewKey, root, directory, failure: diagnostic };
       }
       if (!providerEligible) {
         await deps.updateWorker(directory, input.worker_nonce, {
@@ -978,6 +1021,7 @@ export async function runPreReviewWorker(rawInput, options = {}) {
         return { skipped: 'non_reviewable_final', reviewKey, root, directory };
       }
       assertWorkerLifetime(workerDeadline, lifetimeController.signal, deps.now);
+      phase = 'reviewing';
       const launched = await deps.incrementLaunch(
         directory,
         input.worker_nonce,
@@ -995,15 +1039,18 @@ export async function runPreReviewWorker(rawInput, options = {}) {
       });
       if (!attemptStored) {
         const racedReceipt = await deps.readJson(receipt);
-        await deps.finishWorker(
-          directory,
-          input.worker_nonce,
-          racedReceipt?.review_key === reviewKey ? 'ready' : 'failed',
-          racedReceipt?.review_key === reviewKey ? reviewKey : null
+        if (racedReceipt?.review_key === reviewKey) {
+          await deps.finishWorker(directory, input.worker_nonce, 'ready', reviewKey);
+          return { status: 'ready', reused: true, reviewKey, receipt, root, directory };
+        }
+        const diagnostic = boundWorkerFailure(
+          Object.assign(new Error('prior speculative attempt incomplete'), {
+            failureCode: 'prior_attempt_incomplete'
+          }),
+          'reviewing'
         );
-        return racedReceipt?.review_key === reviewKey
-          ? { status: 'ready', reused: true, reviewKey, receipt, root, directory }
-          : { skipped: 'prior_attempt_incomplete', reviewKey, root, directory };
+        await deps.finishWorker(directory, input.worker_nonce, 'failed', null, diagnostic);
+        return { skipped: 'prior_attempt_incomplete', reviewKey, root, directory, failure: diagnostic };
       }
       const reviewers = reviewersForMode(mode);
       let terminal;
@@ -1115,13 +1162,13 @@ export async function runPreReviewWorker(rawInput, options = {}) {
             reviewKey, reviewers, reviewerRuns: execution.reviewerRuns,
             output: execution.output, baseline: baselineRecord.snapshot, final, evidence
           });
-      const currentCheckpoint = await captureCheckpoint({
+      const currentCheckpoint = await captureCheckpointAllowingRetryableMiss({
         root, directory, baseline: baselineRecord.snapshot,
         workerNonce: input.worker_nonce,
         deps
       });
       assertWorkerLifetime(workerDeadline, lifetimeController.signal, deps.now);
-      if (deps.snapshotDigest(currentCheckpoint) !== checkpointDigest) {
+      if (!currentCheckpoint || deps.snapshotDigest(currentCheckpoint) !== checkpointDigest) {
         const latest = await deps.readState(directory);
         if (!latest.final_requested
             && latest.speculative_launches < MAX_SPECULATIVE_GENERATIONS
@@ -1188,8 +1235,7 @@ export async function runPreReviewWorker(rawInput, options = {}) {
       await deps.finishWorker(directory, input.worker_nonce, 'expired').catch(() => null);
       return { skipped: 'worker_expired', root, directory };
     }
-    await deps.finishWorker(directory, input.worker_nonce, 'failed').catch(() => null);
-    return { skipped: 'worker_error', error, root, directory };
+    return failClosed(error, phase);
   } finally {
     deps.clearTimer(lifetimeTimer);
     mutationMonitor?.close();

@@ -99,6 +99,7 @@ async function harness(overrides = {}) {
     ready_review_key: null,
     final_requested: false,
     final_review_key: null,
+    failure: null,
     updated_at: CONSENTED_AT
   };
   let reviewCalls = 0;
@@ -139,7 +140,7 @@ async function harness(overrides = {}) {
       };
       return { incremented: true, state };
     },
-    finishWorker: async (_directory, nonce, status, readyReviewKey = null) => {
+    finishWorker: async (_directory, nonce, status, readyReviewKey = null, failure = null) => {
       if (state.worker_nonce === nonce) {
         state = {
           ...state,
@@ -147,7 +148,8 @@ async function harness(overrides = {}) {
           worker_state: status,
           active_generation: null,
           active_review_key: null,
-          ready_review_key: status === 'ready' ? readyReviewKey : null
+          ready_review_key: status === 'ready' ? readyReviewKey : null,
+          failure: status === 'failed' ? failure : null
         };
       }
       return state;
@@ -773,4 +775,43 @@ test('runs at most two stable speculative generations', async () => {
   assert.equal(seed.metrics().capabilityIssues, 2);
   assert.equal(seed.metrics().receiptWrites, 2);
   assert.equal(seed.writes.filter(({ file }) => file.includes('pre-review-attempts')).length, 2);
+});
+
+test('mid-capture snapshot churn is a checkpoint miss, not a terminal worker failure', async () => {
+  const seed = await harness({ captures: [], noFinalRequest: false });
+  const values = [
+    Object.assign(new Error('turn snapshot changed during capture; retry'), {
+      failureCode: 'snapshot_changed'
+    }),
+    snapshot(seed.root, '1'),
+    snapshot(seed.root, '1'),
+    snapshot(seed.root, '1')
+  ];
+  let index = 0;
+  seed.options.captureSnapshot = async () => {
+    const next = values[index++];
+    if (next instanceof Error) throw next;
+    return next;
+  };
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
+  assert.equal(seed.state().worker_state, 'ready');
+  assert.equal(seed.state().failure, null);
+  assert.equal(seed.metrics().reviewCalls, 1);
+  assert.equal(seed.metrics().receiptWrites, 1);
+});
+
+test('non-retryable capture errors fail closed with bounded private diagnostics', async () => {
+  const seed = await harness({ captures: [], noFinalRequest: true });
+  seed.options.captureSnapshot = async () => {
+    throw new Error('boom at /Users/paulo/secret-repo/src/x.mjs line 12');
+  };
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.skipped, 'worker_error');
+  assert.equal(seed.state().worker_state, 'failed');
+  assert.equal(seed.state().failure?.phase, 'capturing');
+  assert.equal(seed.state().failure?.code, 'worker_error');
+  assert.match(seed.state().failure?.message ?? '', /boom at <path>/u);
+  assert.equal((seed.state().failure?.message ?? '').includes('/Users/paulo'), false);
+  assert.equal(seed.metrics().reviewCalls, 0);
 });

@@ -25,6 +25,12 @@ const ALL_STATES = new Set([
 const NONCE_PATTERN = /^[0-9a-f]{48}$/u;
 const REVIEW_KEY_PATTERN = /^[0-9a-f]{64}$/u;
 const STATE_LOCK_TIMEOUT_MS = 30_000;
+const MAX_FAILURE_PHASE_CHARS = 64;
+const MAX_FAILURE_CODE_CHARS = 64;
+const MAX_FAILURE_NAME_CHARS = 96;
+const MAX_FAILURE_MESSAGE_CHARS = 240;
+const MAX_FAILURE_STACK_CHARS = 1_200;
+const FAILURE_KEYS = Object.freeze(['phase', 'code', 'name', 'message', 'stack', 'at']);
 
 function initialState() {
   return {
@@ -38,8 +44,85 @@ function initialState() {
     ready_review_key: null,
     final_requested: false,
     final_review_key: null,
+    failure: null,
     updated_at: new Date(0).toISOString()
   };
+}
+
+function plainFailureObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  const keys = Object.keys(value);
+  return keys.length === FAILURE_KEYS.length
+    && FAILURE_KEYS.every((key) => Object.hasOwn(value, key))
+    && keys.every((key) => FAILURE_KEYS.includes(key));
+}
+
+function boundedFailureText(value, limit) {
+  if (typeof value !== 'string') return '';
+  // Keep diagnostics private and path-free: drop absolute paths and C0 controls.
+  const sanitized = value
+    .replace(/[A-Za-z]:\\[^\s"']+/g, '<path>')
+    .replace(/(?:^|[\s("'=])(?:\/|\.\/|\.\.\/)[^\s"']+/g, (match) => {
+      const prefix = match.slice(0, match.search(/[\/.]/));
+      return `${prefix}<path>`;
+    })
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return sanitized.length <= limit ? sanitized : sanitized.slice(0, limit);
+}
+
+export function boundWorkerFailure(error, phase, options = {}) {
+  const safePhase = boundedFailureText(phase, MAX_FAILURE_PHASE_CHARS) || 'unknown';
+  if (!/^[a-z][a-z0-9_]{0,63}$/u.test(safePhase)) {
+    throw new TypeError('Buddy pre-review failure phase must be a lowercase safe identifier');
+  }
+  const codeCandidate = typeof error?.failureCode === 'string'
+    ? error.failureCode
+    : typeof error?.code === 'string'
+      ? error.code
+      : error?.name === 'AbortError'
+        ? 'aborted'
+        : 'worker_error';
+  const code = /^[a-z][a-z0-9_]{0,63}$/u.test(codeCandidate)
+    ? codeCandidate.slice(0, MAX_FAILURE_CODE_CHARS)
+    : 'worker_error';
+  const name = boundedFailureText(error?.name ?? 'Error', MAX_FAILURE_NAME_CHARS) || 'Error';
+  const message = boundedFailureText(error?.message ?? String(error ?? 'unknown error'), MAX_FAILURE_MESSAGE_CHARS)
+    || 'worker_error';
+  const stack = boundedFailureText(error?.stack ?? '', MAX_FAILURE_STACK_CHARS);
+  const at = options.at ?? new Date().toISOString();
+  if (!Number.isFinite(Date.parse(at)) || new Date(Date.parse(at)).toISOString() !== at) {
+    throw new TypeError('Buddy pre-review failure timestamp must be exact UTC ISO-8601');
+  }
+  return Object.freeze({
+    phase: safePhase,
+    code,
+    name,
+    message,
+    stack,
+    at
+  });
+}
+
+function validateFailure(value) {
+  if (value === null) return null;
+  if (!plainFailureObject(value)) {
+    throw new Error('Buddy pre-review failure must be null or one plain diagnostic object');
+  }
+  if (!/^[a-z][a-z0-9_]{0,63}$/u.test(value.phase)
+      || !/^[a-z][a-z0-9_]{0,63}$/u.test(value.code)
+      || typeof value.name !== 'string' || value.name.length < 1 || value.name.length > MAX_FAILURE_NAME_CHARS
+      || typeof value.message !== 'string' || value.message.length < 1
+      || value.message.length > MAX_FAILURE_MESSAGE_CHARS
+      || typeof value.stack !== 'string' || value.stack.length > MAX_FAILURE_STACK_CHARS
+      || !Number.isFinite(Date.parse(value.at))
+      || new Date(Date.parse(value.at)).toISOString() !== value.at) {
+    throw new Error('Buddy pre-review failure diagnostic is invalid');
+  }
+  return value;
 }
 
 function validateState(value) {
@@ -66,6 +149,7 @@ function validateState(value) {
       || !Number.isFinite(Date.parse(value.updated_at))) {
     throw new Error('Buddy pre-review state is invalid');
   }
+  validateFailure(value.failure);
   if (ACTIVE_STATES.has(value.worker_state) !== (value.worker_nonce !== null)) {
     throw new Error('Buddy pre-review worker state has an invalid owner');
   }
@@ -75,6 +159,9 @@ function validateState(value) {
   }
   if (!value.final_requested && value.final_review_key !== null) {
     throw new Error('Buddy pre-review final key requires a final request');
+  }
+  if (value.failure !== null && value.worker_state !== 'failed') {
+    throw new Error('Buddy pre-review failure diagnostics require worker_state failed');
   }
   return value;
 }
@@ -89,7 +176,11 @@ export function preReviewIsActive(state) {
 
 export async function readPreReviewState(directory) {
   const value = await readPrivateJson(preReviewStateFile(directory));
-  return value ? validateState(value) : initialState();
+  if (!value) return initialState();
+  if (value && typeof value === 'object' && !Array.isArray(value) && !Object.hasOwn(value, 'failure')) {
+    return validateState({ ...value, failure: null });
+  }
+  return validateState(value);
 }
 
 async function mutateState(directory, callback) {
@@ -122,13 +213,15 @@ export async function notePreReviewMutation(directory) {
       launched = true;
       next.worker_nonce = randomBytes(24).toString('hex');
       next.worker_state = 'starting';
+      next.failure = null;
     }
     return nowState(next);
   });
   return { state, launched, workerNonce: launched ? state.worker_nonce : null };
 }
 
-export async function markPreReviewLaunchFailed(directory, workerNonce) {
+export async function markPreReviewLaunchFailed(directory, workerNonce, failure = null) {
+  const diagnostic = failure === null ? null : validateFailure(failure);
   return mutateState(directory, (current) => {
     if (current.worker_nonce !== workerNonce || current.worker_state !== 'starting') return current;
     return nowState({
@@ -136,7 +229,8 @@ export async function markPreReviewLaunchFailed(directory, workerNonce) {
       worker_nonce: null,
       worker_state: 'failed',
       active_generation: null,
-      active_review_key: null
+      active_review_key: null,
+      failure: diagnostic
     });
   });
 }
@@ -161,10 +255,20 @@ export async function updatePreReviewWorker(directory, workerNonce, update) {
   return { updated, state };
 }
 
-export async function finishPreReviewWorker(directory, workerNonce, status, readyReviewKey = null) {
+export async function finishPreReviewWorker(
+  directory,
+  workerNonce,
+  status,
+  readyReviewKey = null,
+  failure = null
+) {
   if (!['ready', 'superseded', 'failed', 'disabled', 'expired'].includes(status)) {
     throw new Error('Buddy pre-review worker terminal status is invalid');
   }
+  if (failure !== null && status !== 'failed') {
+    throw new Error('Buddy pre-review failure diagnostics require failed status');
+  }
+  const diagnostic = failure === null ? null : validateFailure(failure);
   return mutateState(directory, (current) => {
     if (current.worker_nonce !== workerNonce) return current;
     return nowState({
@@ -173,7 +277,8 @@ export async function finishPreReviewWorker(directory, workerNonce, status, read
       worker_state: status,
       active_generation: null,
       active_review_key: null,
-      ready_review_key: status === 'ready' ? readyReviewKey : null
+      ready_review_key: status === 'ready' ? readyReviewKey : null,
+      failure: status === 'failed' ? diagnostic : null
     });
   });
 }
