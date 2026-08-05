@@ -4,7 +4,7 @@ This document separates validation evidence into five explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` at the rc.4 candidate base is `065c4704e7c5e37ff979b2a2daea67acf0163a16` (#37 first-enable baseline UX). The immutable published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. Post-rc.3 protected merges closed both #36 defects (PRs #44 and #46), the #38 pet atlas packaging defect (PR #45), first-enable baseline messaging (PR #50), and recorded post-fix host evidence (PR #48). Frozen Layers B–D are unchanged historical publication evidence.
+Current protected `main` at rc.4 publication is `b56224fb8e37ca02e071cda41702af4ef20f1ebb` (rc.4 candidate PR #51). The immutable published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. Post-rc.3 protected merges closed both #36 defects (PRs #44 and #46), the #38 pet atlas packaging defect (PR #45), first-enable baseline messaging (PR #50), and recorded post-fix host evidence (PR #48). Frozen Layers B–D are unchanged historical publication evidence.
 
 ### rc.4 candidate local validation (pre-merge head)
 
@@ -36,8 +36,9 @@ The two prior frozen historical slices were byte-compared before this edit: Laye
 | PR #45, #38 host-compatible pets | (see post-merge validate) | `23784a3a495ab09e60ac9283080b26410e5d744a` | success |
 | PR #46, #36 worker keepalive | `30971047977` after flake job rerun | `866e359c53614ba4fa1c9a4bd0d4e1c32fb4ecdb` | success after flake protocol |
 | PR #48, post-fix host evidence | `30992257722` | `9896aa3ebee7f99b239266ae764d98ae37637764` | success |
-| PR #50, #37 first-enable baseline UX | `31007708098` | `065c4704e7c5e37ff979b2a2daea67acf0163a16` | pending at candidate write; re-verify after merge |
-| PR (this), rc.4 candidate | (post-merge) | (candidate merge SHA) | pending |
+| PR #50, #37 first-enable baseline UX | `31007708098` (flake family; later green on same family) | `065c4704e7c5e37ff979b2a2daea67acf0163a16` | success after authorized flake handling on sibling heads |
+| PR #51, rc.4 candidate | `31011169822` attempt 2 | `b56224fb8e37ca02e071cda41702af4ef20f1ebb` | success |
+| Frozen rc.4 evidence (this PR) | (post-merge) | (merge SHA) | pending |
 
 ### Post-rc.3 host and supersession evidence
 
@@ -260,7 +261,56 @@ Both checksum sidecars passed `shasum -a 256 -c`. Independently computed hashes 
 
 The external scratch clone, downloaded assets, extracted artifact, bundle checkout, and generated attestation JSON were removed after the evidence was recorded.
 
-## Layer E - unresolved gates
+## Layer E - frozen `v0.5.0-rc.4` publication evidence, historical
+
+This layer freezes the rc.4 publication identity and the independent post-publication verification performed on `2026-08-05`. These values describe the published artifact and must not be replaced with later `main` state.
+
+### Published RC identity
+
+- source commit: `b56224fb8e37ca02e071cda41702af4ef20f1ebb`
+- release run: `31013433126` (attempt 2 success after attempt-1 publish race; attestations bound to attempt 1)
+- published at: `2026-08-05T14:25:20Z`
+- annotated tag object: `b5d8fbc47515b6ae0ab96491b4125cc6ea8f9149`
+- parentless distribution commit: `ac9f870f455645613c9f3dc8de4196fdc8a25d6d` (`0` parents)
+- distribution tree: `62d851d5afadbc92fdf12bad4afa1163a6521af1`
+- release manifest SHA-256: `6975bfa5becb5363aea1024ae42638626b88670fd742128cd51bdaa8f77341d1`
+- artifact content SHA-256: `a38c05cba02dd11d09f6fa36e3c7547555ef80be815f8b4354d3ee74ad86235b`
+- file count: `131`
+
+An anonymous credential-disabled clone of tag `v0.5.0-rc.4` resolved to the parentless distribution commit above. The rc.4 ref is an annotated tag object; its annotation embeds the exact `Source-Commit`, release-manifest digest, artifact-content digest, and distribution tree; its peeled target is the zero-parent distribution commit. The downloaded distribution JSON independently reported the same tag object, commit, tree, source commit, and digests. `git bundle verify` accepted the distribution bundle as complete history containing the annotated tag object. The extracted 131-file tarball tree was byte-exact with the detached tag checkout after excluding only `.git`.
+
+### Dispatch and protected-environment attribution
+
+GitHub attributed the dispatch actor and triggering actor to `pnascimento9596`, account ID `198005926`, at exact protected-main source `b56224fb8e37ca02e071cda41702af4ef20f1ebb`. Every reusable validation lane passed before artifact construction. The protected `public-release` environment required that same owner account and presented separate approvals for build, attestation, and publication (attempt 1), plus a publish-job rerun approval on attempt 2 after a post-tag-push remote-lookup race (`Published tag object does not match the verified distribution receipt` despite the remote tag object already equaling receipt `tag_object` `b5d8fbc…`). No Release existed until attempt 2 completed. This proves the configured account path, not which person, browser session, token, or delegated process exercised the account.
+
+### Release assets and hashes
+
+Both checksum sidecars passed `shasum -a 256 -c`. Independently computed hashes and sizes matched GitHub's asset metadata for all five downloaded assets:
+
+| Release asset | Bytes | SHA-256 | Provenance subject |
+|---|---:|---|---|
+| `codex-buddy-reviewer-0.5.0-rc.4.tar.gz` | `11184186` | `2ba45154d1e5c5218900b295412744ea9cfa1fe3a452085f9f77693651453df7` | yes |
+| `codex-buddy-reviewer-0.5.0-rc.4.tar.gz.sha256` | `105` | `367241c5ed494f5e17b122dfe6299e9f473b790090465ccdd47152e312b96430` | no; checksum metadata asset |
+| `codex-buddy-reviewer-0.5.0-rc.4-distribution.bundle` | `11225469` | `80e579b05d2567949d38514141eb751a444c8444aa84b011d3ecf6aa90b44492` | yes |
+| `codex-buddy-reviewer-0.5.0-rc.4-distribution.bundle.sha256` | `118` | `061f25349ff111607a56c32ee8949979d9cc057b6e0551c75156eb521288b5e0` | no; checksum metadata asset |
+| `codex-buddy-reviewer-0.5.0-rc.4-distribution.json` | `592` | `3ba76a8b1780395fa8ad49c59af48f0c828d254aeff74970949b01a6fd9d26b0` | yes |
+
+### Policy-bound attestation verification
+
+`gh attestation verify` succeeded independently for the tarball, distribution bundle, and distribution JSON while enforcing repository `pnascimento9596/codex-buddy-reviewer`, source digest `b56224fb8e37ca02e071cda41702af4ef20f1ebb`, source ref `refs/heads/main`, signer workflow `pnascimento9596/codex-buddy-reviewer/.github/workflows/release.yml`, and denial of self-hosted runners. Certificate-backed fields were identical for all three subjects:
+
+- subject alternative name: `https://github.com/pnascimento9596/codex-buddy-reviewer/.github/workflows/release.yml@refs/heads/main`
+- trigger: `workflow_dispatch`
+- source and workflow digest: `b56224fb8e37ca02e071cda41702af4ef20f1ebb`
+- source ref: `refs/heads/main`
+- runner environment: `github-hosted`
+- invocation: `https://github.com/pnascimento9596/codex-buddy-reviewer/actions/runs/31013433126/attempts/1`
+
+Attestation certificates bind to attempt 1 (when the attest job completed). Publication completed on attempt 2 after the tag already matched the receipt.
+
+The external scratch clone, downloaded assets, extracted artifact, and generated attestation JSON were removed after the evidence was recorded.
+
+## Layer F - unresolved gates
 
 The following gates remain unresolved for stable promotion or stronger current-head assurance after the post-rc.3 fix lane and rc.4 candidate:
 
