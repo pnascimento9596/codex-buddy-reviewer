@@ -232,6 +232,8 @@ test('human mode summary surfaces secondary reviewer and continuous-review state
   });
   assert.match(singleFinal, /Reviewer: claude\/claude-opus-4-8 · advisory · workspace-scoped · final-only/);
   assert.doesNotMatch(singleFinal, /continuous-review ON/);
+  assert.match(singleFinal, /next Codex turn captures a private start snapshot/);
+  assert.match(singleFinal, /Enabling mid-turn does not invent a missing baseline/);
 
   const dualContinuous = formatModeHumanSummary({
     schema_version: '1',
@@ -258,4 +260,28 @@ test('human mode summary surfaces secondary reviewer and continuous-review state
     dualContinuous,
     /Reviewer: claude\/claude-opus-4-8 \+ grok\/grok-4\.5 · advisory · workspace-scoped · continuous-review ON/
   );
+  assert.match(dualContinuous, /next Codex turn captures a private start snapshot/);
+
+  const disabled = formatModeHumanSummary({
+    schema_version: '1',
+    policy_version: '4',
+    config_revision: 0,
+    workspace_root: '/tmp/buddy-mode-summary',
+    enabled: false,
+    scope: 'workspace',
+    provider: 'claude',
+    model: 'claude-opus-4-8',
+    effort: 'high',
+    secondary_provider: null,
+    secondary_model: null,
+    secondary_effort: null,
+    min_confidence: 0.75,
+    max_patch_bytes: 262144,
+    timeout_ms: 1800000,
+    continuous_review_enabled: false,
+    continuous_review_consented_at: null,
+    consented_at: null,
+    updated_at: '2026-08-04T00:00:00.000Z'
+  });
+  assert.doesNotMatch(disabled, /next Codex turn captures a private start snapshot/);
 });

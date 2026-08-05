@@ -167,7 +167,7 @@ The implemented adapter IDs are exactly `claude`, `grok`, `ollama`, and `opencod
 | continuous consent missing or invalid | background worker does not contact a provider |
 | summary guard enabled | background worker skips; exact Stop review handles the summary packet |
 | background launch or watcher unavailable | final Stop path remains available |
-| missing baseline | abstain, no whole-tree fallback |
+| missing baseline | abstain with an explicit message that enable does not capture a baseline and the next full turn establishes one at prompt submit; no whole-tree fallback |
 | unstable capture or exceeded capture budget | fail closed for egress |
 | newer checkpoint appears during review | cancel the superseded provider process domain; do not publish its findings |
 | two speculative generations already launched | stop speculative work; exact final fallback remains available |

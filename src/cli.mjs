@@ -400,9 +400,15 @@ export function formatModeHumanSummary(mode) {
   const continuous = mode.continuous_review_enabled
     ? 'continuous-review ON'
     : 'final-only';
-  return `Buddy automatic review is ${mode.enabled ? 'ON' : 'OFF'} for ${mode.workspace_root}\n`
+  let summary = `Buddy automatic review is ${mode.enabled ? 'ON' : 'OFF'} for ${mode.workspace_root}\n`
     + `Reviewer: ${reviewers} · advisory · workspace-scoped · ${continuous}\n`
     + 'Use /pet in Codex to wake or tuck away the host pet.\n';
+  if (mode.enabled) {
+    summary += 'The next Codex turn captures a private start snapshot at prompt submit; '
+      + 'review covers only changes observed after that baseline. '
+      + 'Enabling mid-turn does not invent a missing baseline.\n';
+  }
+  return summary;
 }
 
 export async function main(argv) {
