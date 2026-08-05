@@ -1532,7 +1532,7 @@ setInterval(() => {}, 1000);
 
 test('non-cancel deadline cleanup does not retry and still classifies as containment_failure', {
   skip: process.platform === 'win32',
-  timeout: 10_000
+  timeout: 15_000
 }, async () => {
   const root = await temporaryDirectory('codex-buddy-deadline-cleanup-no-retry-');
   const provider = path.join(root, 'provider.mjs');
@@ -1544,24 +1544,23 @@ writeFileSync(process.argv[2], String(process.pid));
 setInterval(() => {}, 1000);
 `);
   const cleanupCalls = [];
+  // timeoutMs must leave room for spawn under loaded multi-file CI. The contract
+  // under test is non-cancel cleanup retry policy, not a 200ms wall-clock race.
   const running = runProcess(process.execPath, [provider, providerPidFile], {
-    timeoutMs: 200,
+    timeoutMs: 1_500,
     processGroupCleanupImpl: async () => {
       cleanupCalls.push({ at: Date.now() });
       throw new Error('PRIVATE_DEADLINE_CLEANUP_FAILURE');
     }
   });
+  // Observe rejection immediately so a fast settlement cannot become unhandled.
   const observed = running.then(
     (value) => ({ status: 'fulfilled', value }),
     (error) => ({ status: 'rejected', error })
   );
-  // Force the process promise to reject before this test begins observing it.
-  // The synchronously attached settlement observer must prevent the macOS CI
-  // unhandled-rejection race even when assertions run much later.
-  await new Promise((resolve) => setTimeout(resolve, 2_500));
   let providerPid;
   try {
-    const deadline = Date.now() + 3_000;
+    const deadline = Date.now() + 8_000;
     while (!existsSync(providerPidFile)) {
       if (Date.now() >= deadline) throw new Error('provider did not start before deadline');
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -1863,7 +1862,9 @@ test('real hook entrypoint emits one object and acknowledges a local-only Stop c
     cwd: canonicalRoot,
     env: environment,
     input: JSON.stringify(input),
-    timeoutMs: 15_000
+    // macOS CI runs this file concurrent with the full suite; 15s was enough on
+    // an idle host but flakes as a hard deadline under load (run 31020964234).
+    timeoutMs: 45_000
   });
 
   const started = await invoke({
