@@ -1,0 +1,48 @@
+{
+  "schema_version": "1",
+  "id": "abstain-patch-budget-truncation",
+  "category": "abstain",
+  "description": "Global patch-budget truncation omits the only selected patch, leaving no complete transmitted path and forcing abstention rather than partial assurance.",
+  "live_eligible": true,
+  "egress_expected": true,
+  "evidence": {
+    "schema_version": "1",
+    "review_id": "eval-abstain-patch-budget-truncation",
+    "captured_at": "2026-08-03T00:00:00.000Z",
+    "repository_root": "eval-fixture",
+    "head": "1111111111111111111111111111111111111111",
+    "scope": "turn",
+    "base": "0000000000000000000000000000000000000000",
+    "changed_paths": ["src/omitted-policy.js"],
+    "excluded_paths": [],
+    "sensitive_change_count": 0,
+    "ignored_change_count": 0,
+    "path_evidence": [
+      {
+        "path": "src/omitted-policy.js",
+        "disposition": "patch_truncated",
+        "patch_bytes": 218,
+        "transmitted": false,
+        "hunk_ranges": []
+      }
+    ],
+    "incomplete_paths": ["src/omitted-policy.js"],
+    "hunk_ranges": {
+      "src/omitted-policy.js": []
+    },
+    "status": "changed",
+    "patch": "",
+    "patch_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "patch_bytes": 0,
+    "truncated": true,
+    "line_counts": { "src/omitted-policy.js": 8 },
+    "old_line_counts": { "src/omitted-policy.js": 8 }
+  },
+  "expected": {
+    "allowed_statuses": ["abstain"],
+    "min_findings": 0,
+    "max_findings": 0,
+    "provider_call": "required",
+    "required_anchors": []
+  }
+}
