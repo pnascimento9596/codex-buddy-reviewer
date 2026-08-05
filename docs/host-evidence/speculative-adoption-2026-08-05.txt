@@ -7,11 +7,12 @@ workspace: disposable scratch git repo (path redacted)
 timeline (turn 7455d7ed…):
 - worker PIDs alive throughout
 - state path: debouncing -> capturing -> reviewing (launch 1) -> capturing -> reviewing (launch 2)
-- ready identity observed (prefix): 5a646cf08ad7
+- ready identity (full SHA-256, from private turn state / automatic-review identity):
+  5a646cf08ad7402bf40ba41ccce08faa7efb73b356953406b4dfce8265cfd489
 - workspace fingerprint stable while ready
 - Stop completed identity (full SHA-256):
   5a646cf08ad7402bf40ba41ccce08faa7efb73b356953406b4dfce8265cfd489
-  exact match to the ready identity above
+  exact byte match to the ready identity above
 - automatic-review result created: 2026-08-05T02:52:08.345Z (speculative)
 - turn completed: 2026-08-05T02:53:01.371Z
 - outcome: findings
@@ -31,3 +32,7 @@ NO review_started after turn_finished => Stop adopted the exact matching
 speculative result without a second provider execution.
 
 visible host: Buddy review paragraph appended once after the worker summary (findings).
+
+note: live sampling logs abbreviated identities to 12 hex for console width; the
+private state machine only stores full 64-hex identities, and the durable
+automatic-review object for this turn is that same full identity.
