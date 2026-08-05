@@ -28,7 +28,7 @@ function gitInit(root) {
   run(['commit', '--quiet', '-m', 'baseline']);
 }
 
-test('working-tree capture degrades when git check-attr --source is unsupported', async () => {
+test('working-tree capture fails closed with a named error when git check-attr --source is unsupported', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'codex-buddy-git-source-'));
   temporaryPaths.push(root);
   gitInit(root);
@@ -52,10 +52,12 @@ exec ${JSON.stringify(realGit)} "$@"
   const previousPath = process.env.PATH;
   process.env.PATH = `${wrap}${path.delimiter}${previousPath}`;
   try {
-    const inventory = await filterSafeWorkingInventory(root);
-    assert.equal(inventory.allPaths.includes('tracked.txt'), true);
-    // Worktree/index attribute sources still classify the active clean filter.
-    assert.equal(inventory.activeCleanFilters.has('tracked.txt'), true);
+    await assert.rejects(
+      filterSafeWorkingInventory(root),
+      (error) => error?.failureCode === 'git_version_unsupported'
+        && /Git 2\.40\+/.test(error.message)
+        && /check-attr --source/.test(error.message)
+    );
   } finally {
     process.env.PATH = previousPath;
   }
