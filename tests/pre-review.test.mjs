@@ -815,3 +815,66 @@ test('non-retryable capture errors fail closed with bounded private diagnostics'
   assert.equal((seed.state().failure?.message ?? '').includes('/var/tmp/'), false);
   assert.equal(seed.metrics().reviewCalls, 0);
 });
+
+test('mutation monitor wait keeps a detached worker process alive', async () => {
+  const { spawn } = await import('node:child_process');
+  const { pathToFileURL } = await import('node:url');
+  const preReviewUrl = pathToFileURL(path.resolve('src/pre-review.mjs')).href;
+  const child = spawn(process.execPath, ['--input-type=module'], {
+    cwd: process.cwd(),
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env }
+  });
+  const stdout = [];
+  const stderr = [];
+  child.stdout.on('data', (chunk) => stdout.push(chunk));
+  child.stderr.on('data', (chunk) => stderr.push(chunk));
+  child.stdin.end(`
+    import { mkdtemp } from 'node:fs/promises';
+    import os from 'node:os';
+    import path from 'node:path';
+    import { createRepositoryMutationMonitor } from ${JSON.stringify(preReviewUrl)};
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'buddy-monitor-live-'));
+    const monitor = createRepositoryMutationMonitor(dir);
+    if (!monitor) {
+      console.log('no-monitor');
+      process.exit(2);
+    }
+    process.stdout.write('started\\n');
+    // Remain in monitor-only waits long enough for the parent to observe liveness.
+    // A non-persistent watcher plus an unref'd timer lets Node exit under await.
+    const deadline = Date.now() + 600;
+    while (Date.now() < deadline) {
+      await monitor.wait(monitor.revision, 100);
+    }
+    process.stdout.write('finished\\n');
+    monitor.close();
+  `);
+
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('child did not start')), 2_000);
+    child.stdout.once('data', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`child exited early code=${code} stderr=${Buffer.concat(stderr).toString('utf8')}`));
+    });
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal(child.exitCode, null, `worker drained the event loop early: ${Buffer.concat(stderr).toString('utf8')}`);
+  assert.doesNotThrow(() => process.kill(child.pid, 0));
+
+  const exit = await new Promise((resolve) => {
+    child.once('exit', (code, signal) => resolve({ code, signal }));
+    setTimeout(() => {
+      try { process.kill(child.pid, 'SIGTERM'); } catch { /* already gone */ }
+    }, 2_000);
+  });
+  const out = Buffer.concat(stdout).toString('utf8');
+  assert.match(out, /started/);
+  // finished may or may not appear if we SIGTERM after proving liveness
+  assert.equal(exit.signal === 'SIGTERM' || exit.code === 0 || out.includes('finished'), true);
+});
