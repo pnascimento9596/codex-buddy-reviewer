@@ -71,14 +71,16 @@ node scripts/buddy-review.mjs presentation set \
 
 Available personalities are `precise`, `warm`, and `wry`. Mood is deterministically derived from `idle`, `working`, `reviewing`, `success`, `findings`, `abstain`, or `error`. Utterances are static bounded strings selected from personality/state/review-key, not model-generated text. Each unique durable completed review earns exactly 10 XP whether it returns findings, no findings, or a defensible abstention. Replays are deduplicated by review key, and failures earn no completion XP. These cosmetics never alter review mode, findings, confidence, severity, or provider egress.
 
-## Current V2 sprite contract
+## Current host sprite contract (Codex CLI 0.146.0)
 
-For the updated desktop runtime inspected on 2026-07-17, a V2 custom pet uses:
+For the inspected Codex 0.146.0 host, a custom pet uses the same base atlas as
+built-in and working legacy pets:
 
-- an 8-column × 11-row sprite sheet;
-- exact dimensions 1536 × 1872;
-- PNG or WebP;
-- `spriteVersionNumber: 1` in `pet.json`;
+- an 8-column × 9-row sprite sheet;
+- exact dimensions 1536 × 1872 (192 × 208 cells);
+- WebP (transparent, lossless);
+- a host-shaped `pet.json` with only `id`, `displayName`, `description`, and
+  `spritesheetPath` (no `spriteVersionNumber`);
 - a sprite path that remains within the pet directory.
 
 Rows map to fixed host states:
@@ -94,13 +96,17 @@ Rows map to fixed host states:
 | 6 | waiting | 0–5 |
 | 7 | running | 0–5 |
 | 8 | review/ready | 0–5 |
-| 9–10 | 16 pointer-facing directions | 8 each |
 
-The app-bundled V2 `hatch-pet` contract is authoritative for this desktop build; the older user-installed hatch skill may still describe V1.
+The extended 8×11 atlas (rows 9–10, 16 pointer-facing directions) is produced
+by the hatch-pet V2 pipeline but is not selectable by Codex 0.146.0 custom pets.
+Buddy packages the base 8×9 sheet; the catalog labels that host-compatible shape
+`spriteVersionNumber: 1` internally, and installed manifests omit the field
+entirely. The app-bundled `hatch-pet` contract is authoritative for the desktop
+build; the older user-installed hatch skill may still describe V1.
 
 ## Artwork and QA
 
-Byte, Mochi, and Orbit are original AI-assisted artwork produced for this project rather than copies of the former Claude Code pet. Bella and Lupo preserve their original companion identities while adding the required V2 look rows. All five are cleared for public redistribution under the repository license.
+Byte, Mochi, and Orbit are original AI-assisted artwork produced for this project rather than copies of the former Claude Code pet. Bella and Lupo preserve their original companion identities. All five are cleared for public redistribution under the repository license.
 
 Every checked-in sheet is a lossless transparent WebP with the exact V2 dimensions, validated state occupancy, no transparent RGB residue, and a catalog SHA-256. Direction rows also receive focused continuity and blind-read review. CI validates RIFF/chunk structure, exactly one non-animated VP8/VP8L image bitstream, optional VP8X agreement, exact canvas/grid/cell geometry, and catalog hashes. That structural gate reports `full_pixel_decode: false`; the app-bundled hatch validator and human `/pet` inspection remain the semantic/visual release gates.
 
