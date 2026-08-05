@@ -60,12 +60,17 @@ test('failed workers persist bounded path-free diagnostics and clear them on rel
   const noted = await notePreReviewMutation(directory);
   await claimPreReviewWorker(directory, noted.workerNonce);
   const diagnostic = boundWorkerFailure(
-    new Error('turn snapshot failed under /tmp/scratch-repo/file.mjs'),
+    Object.assign(new Error('turn snapshot failed under /tmp/scratch-repo/file.mjs'), {
+      stack: 'Error: turn snapshot failed under /tmp/scratch-repo/file.mjs\n    at run (file:///workspace/src/pre-review.mjs:10:5)'
+    }),
     'capturing',
     { at: '2026-08-04T12:00:00.000Z' }
   );
   assert.match(diagnostic.message, /<path>/u);
   assert.equal(diagnostic.message.includes('/tmp/'), false);
+  assert.match(diagnostic.stack, /at run \(<path>\)/u);
+  assert.equal(diagnostic.stack.includes('file://'), false);
+  assert.equal(diagnostic.stack.includes('/workspace/'), false);
   await finishPreReviewWorker(directory, noted.workerNonce, 'failed', null, diagnostic);
   const failed = await readPreReviewState(directory);
   assert.equal(failed.worker_state, 'failed');
