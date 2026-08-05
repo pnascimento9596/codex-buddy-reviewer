@@ -63,10 +63,10 @@ function boundedFailureText(value, limit) {
   if (typeof value !== 'string') return '';
   // Keep diagnostics private and path-free: drop absolute paths, file URLs, and C0 controls.
   const sanitized = value
-    .replace(/file:\/\/\/[^\s"']+/gi, '<path>')
-    .replace(/file:\/\/[^\s"']+/gi, '<path>')
-    .replace(/[A-Za-z]:\\[^\s"']+/g, '<path>')
-    .replace(/(?:^|[\s("'=])(?:\/|\.\/|\.\.\/)[^\s"']+/g, (match) => {
+    .replace(/file:\/\/\/[^\s"'()]+/gi, '<path>')
+    .replace(/file:\/\/[^\s"'()]+/gi, '<path>')
+    .replace(/[A-Za-z]:\\[^\s"'()]+/g, '<path>')
+    .replace(/(?:^|[\s("'=])(?:\/|\.\/|\.\.\/)[^\s"'()]+/g, (match) => {
       const prefix = match.slice(0, match.search(/[\/.]/));
       return `${prefix}<path>`;
     })
