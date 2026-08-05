@@ -76,9 +76,9 @@ Available personalities are `precise`, `warm`, and `wry`. Mood is deterministica
 For the updated desktop runtime inspected on 2026-07-17, a V2 custom pet uses:
 
 - an 8-column × 11-row sprite sheet;
-- exact dimensions 1536 × 2288;
+- exact dimensions 1536 × 1872;
 - PNG or WebP;
-- `spriteVersionNumber: 2` in `pet.json`;
+- `spriteVersionNumber: 1` in `pet.json`;
 - a sprite path that remains within the pet directory.
 
 Rows map to fixed host states:

@@ -6,7 +6,7 @@
   "redistribution": "cleared",
   "binary_asset_present": true,
   "source_type": "AI-assisted V2 sprite package derived from user-authorized source artwork",
-  "validation": "V2 8x11 atlas; 1536x2288; transparent WebP; deterministic atlas validation passed with no errors or warnings",
+  "validation": "Host-compatible 8x9 atlas; 1536x1872; transparent WebP; derived from hatch base sheet or crop of extended rows 0-8 (look-direction rows omitted for Codex 0.146.0)",
   "rights": {
     "basis": "source-asset-owner-attestation",
     "rights_holder_role": "project-owner-and-source-asset-owner",
@@ -30,7 +30,7 @@
       "sha256_status": "not-recorded"
     },
     "transformation": {
-      "method": "AI-assisted V2 sprite package creation from source artwork",
+      "method": "V2 extended atlas cropped to host-compatible 8x9 base rows for Codex 0.146.0",
       "tool": null,
       "tool_status": "not-recorded",
       "date": null,
@@ -39,7 +39,7 @@
     },
     "derived_asset": {
       "path": "spritesheet.webp",
-      "sha256": "3454b0b4b05a1c36fcc74840a835498e7b6f4fd092af7b532bb94e7d3ce6ef0f"
+      "sha256": "64e484a08f0ab52341260c5b82a1c2896727f0e13c3cec659bc3fec81ca6caa6"
     }
   },
   "notes": "The project owner attests to owning the source asset and grants public redistribution under Apache-2.0. No personal identity or source filesystem path is retained."

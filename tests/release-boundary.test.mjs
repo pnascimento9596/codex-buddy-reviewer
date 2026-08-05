@@ -418,7 +418,6 @@ test('private and non-cleared catalog fixture can never be promoted by the publi
     id: privateId,
     displayName: 'Private Fixture',
     description: 'A deliberately non-cleared release boundary fixture.',
-    spriteVersionNumber: 2,
     spritesheetPath: 'spritesheet.webp'
   };
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
@@ -442,7 +441,7 @@ test('private and non-cleared catalog fixture can never be promoted by the publi
     displayName: manifest.displayName,
     description: manifest.description,
     scope: 'private',
-    spriteVersionNumber: 2,
+    spriteVersionNumber: 1,
     available: true,
     notReadyReason: null,
     manifestPath: `./${privateId}/pet.json`,

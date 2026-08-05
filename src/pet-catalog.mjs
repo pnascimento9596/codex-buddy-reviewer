@@ -36,9 +36,9 @@ const MANIFEST_KEYS = Object.freeze([
   'description',
   'displayName',
   'id',
-  'spriteVersionNumber',
   'spritesheetPath'
 ]);
+const HOST_SPRITE_VERSION = 1;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const BACKUP_ID_PATTERN = /^[0-9]+-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -179,7 +179,6 @@ function validateManifest(manifest, entry) {
   if (manifest.id !== entry.id) fail(`${entry.id} manifest id does not match the catalog`);
   if (manifest.displayName !== entry.displayName) fail(`${entry.id} manifest displayName does not match the catalog`);
   if (manifest.description !== entry.description) fail(`${entry.id} manifest description does not match the catalog`);
-  if (manifest.spriteVersionNumber !== 2) fail(`${entry.id} manifest must use spriteVersionNumber 2`);
   if (manifest.spritesheetPath !== 'spritesheet.webp') {
     fail(`${entry.id} manifest spritesheetPath must be spritesheet.webp`);
   }
@@ -313,7 +312,9 @@ async function validateEntry(entry, root, seen, options = {}) {
   assertNonEmptyString(entry.displayName, `${entry.id} displayName`);
   assertNonEmptyString(entry.description, `${entry.id} description`);
   if (!PET_SCOPES.has(entry.scope)) fail(`${entry.id} scope must be public or private`);
-  if (entry.spriteVersionNumber !== 2) fail(`${entry.id} must use spriteVersionNumber 2`);
+  if (entry.spriteVersionNumber !== HOST_SPRITE_VERSION) {
+    fail(`${entry.id} must use spriteVersionNumber ${HOST_SPRITE_VERSION} (Codex host-compatible 8x9 base atlas)`);
+  }
   if (typeof entry.available !== 'boolean') fail(`${entry.id} available must be boolean`);
 
   const manifestFile = resolveInside(root, entry.manifestPath, `${entry.id} manifestPath`);

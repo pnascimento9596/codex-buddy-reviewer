@@ -6,7 +6,7 @@
   "redistribution": "cleared",
   "binary_asset_present": true,
   "source_type": "original AI-assisted artwork generated for this project",
-  "validation": "V2 8x11 atlas; 1536x2288; transparent WebP; deterministic atlas validation passed with no errors or warnings",
+  "validation": "Host-compatible 8x9 atlas; 1536x1872; transparent WebP; derived from hatch base sheet or crop of extended rows 0-8 (look-direction rows omitted for Codex 0.146.0)",
   "rights": {
     "basis": "original-project-asset",
     "rights_holder_role": "project-owner",
@@ -30,7 +30,7 @@
       "sha256_status": "not-recorded"
     },
     "transformation": {
-      "method": "AI-assisted original sprite generation and V2 atlas assembly",
+      "method": "Hatch-pet base 8x9 atlas selected for Codex 0.146.0 host compatibility",
       "tool": null,
       "tool_status": "not-recorded",
       "date": null,
@@ -39,7 +39,7 @@
     },
     "derived_asset": {
       "path": "spritesheet.webp",
-      "sha256": "0a6310229b6dbe12294314abf2bceef88e34aee8c5ca5f12eb9ac09a762f38b5"
+      "sha256": "b5036d0c08c1133611530a7a24e3f519ab7c4f1371b373945dbd4bb0f3fbba3e"
     }
   },
   "notes": "Original Byte artwork created for Codex Buddy Reviewer. It is distributed with this repository under the repository license."

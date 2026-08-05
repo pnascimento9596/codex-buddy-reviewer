@@ -2,6 +2,5 @@
   "id": "buddy-orbit",
   "displayName": "Orbit",
   "description": "A small floating alien designed for readable pointer-facing movement.",
-  "spriteVersionNumber": 2,
   "spritesheetPath": "spritesheet.webp"
 }

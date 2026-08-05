@@ -129,7 +129,6 @@ async function fixtureCatalog() {
       id,
       displayName,
       description,
-      spriteVersionNumber: 2,
       spritesheetPath: 'spritesheet.webp'
     };
     const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
@@ -149,7 +148,7 @@ async function fixtureCatalog() {
       displayName,
       description,
       scope,
-      spriteVersionNumber: 2,
+      spriteVersionNumber: 1,
       available,
       notReadyReason: available ? null : 'Fixture unavailable.',
       manifestPath: `./${id}/pet.json`,
