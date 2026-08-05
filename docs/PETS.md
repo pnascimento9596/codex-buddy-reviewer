@@ -108,7 +108,7 @@ build; the older user-installed hatch skill may still describe V1.
 
 Byte, Mochi, and Orbit are original AI-assisted artwork produced for this project rather than copies of the former Claude Code pet. Bella and Lupo preserve their original companion identities. All five are cleared for public redistribution under the repository license.
 
-Every checked-in sheet is a lossless transparent WebP with the exact V2 dimensions, validated state occupancy, no transparent RGB residue, and a catalog SHA-256. Direction rows also receive focused continuity and blind-read review. CI validates RIFF/chunk structure, exactly one non-animated VP8/VP8L image bitstream, optional VP8X agreement, exact canvas/grid/cell geometry, and catalog hashes. That structural gate reports `full_pixel_decode: false`; the app-bundled hatch validator and human `/pet` inspection remain the semantic/visual release gates.
+Every checked-in sheet is a lossless transparent WebP with the exact host-compatible 8×9 dimensions, validated state occupancy, no transparent RGB residue, and a catalog SHA-256. Direction rows also receive focused continuity and blind-read review. CI validates RIFF/chunk structure, exactly one non-animated VP8/VP8L image bitstream, optional VP8X agreement, exact canvas/grid/cell geometry, and catalog hashes. That structural gate reports `full_pixel_decode: false`; the app-bundled hatch validator and human `/pet` inspection remain the semantic/visual release gates.
 
 ## Richer renderer decision
 
