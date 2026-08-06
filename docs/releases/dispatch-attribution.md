@@ -1,23 +1,45 @@
 # Release dispatch attribution (out-of-artifact)
 
-This file records pre-dispatch attribution statements for protected release
-workflow runs. It lives under `docs/releases/`, which is **not** part of the
-published public artifact path set (see `release/public-files.json` and the
-built inventory). Writing here does not change public artifact bytes.
+This file records release-workflow dispatch attribution. It lives under
+`docs/releases/`, which is **not** part of the published public artifact path
+set (see `release/public-files.json` and the built inventory). Writing here does
+not change public artifact bytes.
 
 Historical attribution text that already shipped inside `docs/VALIDATION.md`
 (Layer A) remains frozen there. New dispatches append here instead of editing
 the in-artifact validation record.
 
-## How to use
+## How to use (no self-referential SHA)
 
-Immediately before a protected `workflow_dispatch` of
-`.github/workflows/release.yml`, append a dated section naming:
+The release workflow requires the dispatched event SHA to equal the current
+protected default-branch HEAD. A git commit cannot name its own future SHA as
+the dispatch source. Therefore this log uses a two-phase rule:
 
-- the exact protected-main source SHA that will be dispatched;
+### Phase A — pre-dispatch (authority; does not invent a future SHA)
+
+Before `workflow_dispatch`, record (here **or** in an external owner/lane
+record that is later copied here):
+
+- the **already-existing** protected-main HEAD that will be dispatched (call it
+  `H`); do not create further commits on `main` after `H` before dispatch;
 - the exact `version` and `publish` inputs;
 - the GitHub account that will perform the dispatch;
 - the owner instruction or lane authority that authorized the dispatch.
+
+If this Phase A text is committed to `main`, that commit becomes a new HEAD and
+**must not** be the dispatch source unless the entry explicitly names that new
+commit only after it exists (Phase B). Preferred: keep Phase A external, or
+commit Phase A only on a non-default branch, then dispatch `H` from protected
+`main` without an intervening attribution commit.
+
+### Phase B — post-dispatch (durable run identity)
+
+After the run finishes (success, failure, or cancel), append or complete the
+entry with:
+
+- the actual `source_sha` / event SHA from the run;
+- the run ID(s) and conclusion(s);
+- any attempt numbers relevant to attestation binding.
 
 GitHub can establish account, workflow, source, and approval attribution. It
 cannot establish which person or delegated local session operated an authorized

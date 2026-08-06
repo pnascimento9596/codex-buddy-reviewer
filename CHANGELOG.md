@@ -19,7 +19,7 @@ Codex CLI **0.146.0** is known to clamp **SessionEnd** hook timeouts (observed c
 
 ### Changed
 
-- Security-scan gate wording: dispatch attribution for new releases is recorded under `docs/releases/dispatch-attribution.md` (out of the public artifact). Pure version-identity bumps after a sealed scan require an explicit ledger disposition; scan-surface edits still re-open the gate. See `docs/releases/v0.5.0-stable-readiness.md`.
+- Security-scan gate wording: dispatch attribution for new releases is recorded under `docs/releases/dispatch-attribution.md` (out of the public artifact) with a two-phase pre/post-dispatch protocol that does not invent a future SHA. The stable-readiness gate ledger remains on the scan surface. Pure version-identity bumps after a sealed scan require an explicit ledger disposition; scan-surface edits still re-open the gate. See `docs/releases/v0.5.0-stable-readiness.md`.
 
 ## 0.5.0-rc.4 - 2026-08-05
 
