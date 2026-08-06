@@ -12,3 +12,4 @@ Doctor --provider-check (budget 2):
 - primary ollama/glm-5.2:cloud: pass
 - secondary claude/claude-opus-4-8: fail binary_missing
 Root cause: claude binary at ~/.local/bin/claude (2.1.223) absent from doctor/kitty PATH inherited from Hermes (no ~/.local/bin). Not a product defect. PATH fixed for subsequent live turns; no second doctor spend.
+
