@@ -3,11 +3,11 @@
 # Host: Codex TUI 0.146.1 in kitty 0.48.2
 # Scratch workspace path redacted.
 
-Review key: 194254b73a73a9089f0780630173fb24fd9fc792cc4c588588c6630ee4d6bea9
-Terminal status: findings
-Providers: ollama/glm-5.2:cloud succeeded; claude/claude-opus-4-8 succeeded
-Visible paragraph (254 chars):
+Terminal status: findings (dual-review aggregate)
+Providers (configured order): ollama/glm-5.2:cloud succeeded; claude/claude-opus-4-8 succeeded
+Visible paragraph (254 chars, ceiling 700):
 
 Buddy review found 2 validated issues; highest priority is high severity: indexInBounds accepts out-of-bounds index equal to array length at src/bounds.mjs:13. Recommended action: Change the upper-bound comparison to strict: return i >= 0 && i < length;.
 
 Local reproduction (machine): indexInBounds(3,3)===true on planted i <= length body at src/bounds.mjs:16.
+Planted defect was detected at the correct path with a current line range covering the bad comparison.

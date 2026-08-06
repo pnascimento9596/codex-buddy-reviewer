@@ -15,7 +15,7 @@ Collected 2026-08-06 from the immutable `v0.5.0-rc.5` published artifact.
 | Artifact-content SHA-256 | `7c90bea1598f473c52b697bd39b30f40405f9a5568106bf11678eaaac9068b40` |
 | Codex | `codex-cli 0.146.0` install; live turns after host update `0.146.1` |
 | Install path | marketplace `codex plugin marketplace add … --ref v0.5.0-rc.5` then plugin add |
-| Marketplace HEAD | `c9f9c9b88f431abe006105f7a984f8f266b72d55` exact-match tag `v0.5.0-rc.5` |
+| Marketplace HEAD | distribution commit above; exact-match tag `v0.5.0-rc.5` |
 | Kitty | `0.48.2` remote control |
 | Host surface | Codex TUI in kitty; no GUI app required |
 | Scratch workspace | disposable Git repo under external evidence dir (paths redacted here) |
@@ -24,7 +24,7 @@ Collected 2026-08-06 from the immutable `v0.5.0-rc.5` published artifact.
 
 Payload byte comparison (skip root `.git` only): extracted tarball == marketplace clone == plugin cache for all 130 manifest paths (0 content mismatches). First published-artifact exercise of marketplace install with PR #55 `.git` collector skip.
 
-**Finding:** marketplace clone also contains `.codex-marketplace-install.json` (not in tarball). `verify-host-e2e collect --installed-snapshot <marketplace-clone>` fails `installed_snapshot_mismatch` (file_count 132 vs artifact 131). Clean extract as `--installed-snapshot` yields machine_complete. See issue filed from this lane.
+**Finding:** marketplace clone also contains `.codex-marketplace-install.json` (not in tarball). `verify-host-e2e collect --installed-snapshot <marketplace-clone>` fails `installed_snapshot_mismatch` (file_count 132 vs artifact 131). Clean extract as `--installed-snapshot` yields machine_complete. See issue #65.
 
 ## Machine host-e2e collect (turn1 dual findings)
 
@@ -57,7 +57,7 @@ Manual host/visual gates left **pending** (machine-captured only; not promoted t
 
 Codex implementer turns: 5 (turn3,1,2,4,4b) + pet/setup non-review interaction.
 
-## Per-turn anchors
+## Per-turn summaries (no private receipt dumps)
 
 See:
 
@@ -68,25 +68,25 @@ See:
 
 ### glm-5.2:cloud attribution defect check
 
-On every ollama lane receipt in this lane, attributed `provider/model` remained `ollama` / `glm-5.2:cloud`. **No Claude identity self-report observed** in machine receipts this lane.
+On every ollama lane result in this lane, attributed provider/model remained ollama / glm-5.2:cloud. **No Claude identity self-report observed** in machine receipts this lane.
 
 ### Data lifecycle
 
 Mode disabled; `data purge --confirm-purge` removed legacy-path rejected_responses/outbox entries reported by `data status`. Provider CLI auth hashes unchanged.
 
-**Finding:** runtime receipts/outbox/turns for this install live under `~/.codex/plugins/data/codex-buddy-reviewer-codex-buddy-reviewer/` and remained after purge while `data status` primarily inventories `~/.codex/codex-buddy-reviewer/`. Dual-root accounting gap — issue filed.
+**Finding:** runtime receipts/outbox/turns for this install live under the plugins/data plugin identity root and remained after purge while `data status` primarily inventories the legacy codex-buddy-reviewer home. Dual-root accounting gap — issue #66.
 
 ## Unresolved / residue
 
 1. Speculative receipt adoption at Stop — not observed (exact-final only).
 2. Affirmative Stop-path duration >600s — not observed (fast provider return/fail).
 3. Full five-pet visual manual bundle — out of scope per rc.4 disposition; machine pet install + selector text only.
-4. Marketplace snapshot mismatch unless collector skips install metadata or operators use clean extract.
-5. data status/purge vs plugins/data runtime root split.
+4. Marketplace snapshot mismatch unless collector skips install metadata or operators use clean extract (#65).
+5. data status/purge vs plugins/data runtime root split (#66).
 
 ## Closing
 
-rc.5 published bytes install, bind, dual-review findings on a planted defect, no-change zero-egress, and machine collect of a successful dual turn are established. Adoption and >600s Stop survival remain open. Next owner decision should disposition the two new host-path findings before treating host-e2e as sealed for stable.
+rc.5 published bytes install, bind, dual-review findings on a planted defect, no-change zero-egress, and machine collect of a successful dual turn are established. Adoption and >600s Stop survival remain open. Disposition #65/#66 before treating host-e2e as sealed for stable.
 
 ---
 
