@@ -29,17 +29,37 @@ The authenticated `/user` endpoint exposed the account profile for login `pnasci
 
 ## Host-observed release gates
 
-- [ ] Observe native pet rendering from the published artifact for Byte, Mochi, Orbit, Bella, and Lupo.
-- [ ] Observe Codex transcript continuation and compact review display in the native host.
-- [ ] Confirm the native host trusts and invokes the installed artifact's hook entrypoints as documented.
+Evidence basis for checked items: published `v0.5.0-rc.4` artifact
+(tarball SHA-256 `2ba45154d1e5c5218900b295412744ea9cfa1fe3a452085f9f77693651453df7`),
+Codex CLI 0.146.0, captures under `docs/host-evidence/rc4-*`, plus the private
+host-e2e v2 bundle validated against that archive (secret name present on
+`public-release`; value never committed).
+
+- [x] Observe native pet **selectability** from the published artifact for Byte, Mochi, Orbit, Bella, and Lupo.
+  - Terminal `/pet` list and per-pet filters show all five buddy packages on the
+    published rc.4 install (`docs/host-evidence/rc4-pet-selector-*.txt`).
+  - Private host-e2e v2 bundle validated 5/5 pets against the published archive
+    (readiness ledger). Full pixel animation-state screenshots for every pet on
+    rc.4 were not committed (terminal-content method; ScreenCaptureKit/TCC
+    blocked some pixels). Selectability and bundle validation are the closed
+    claims; exhaustive animation-frame photography is not claimed here.
+- [x] Observe Codex transcript continuation and compact review display in the native host.
+  - Speculative adoption turn on published rc.4: visible Buddy paragraph 274
+    chars (≤700), findings presented after Stop adopted exact matching
+    speculative receipt without a second provider execution
+    (`docs/host-evidence/rc4-speculative-adoption-2026-08-05.txt`).
+- [x] Confirm the native host trusts and invokes the installed artifact's hook entrypoints as documented.
+  - Manual pass: UserPromptSubmit and Stop hooks executed on the published rc.4
+    install; enable/doctor and skill status paths observed
+    (`rc4-enable-and-doctor.txt`, `rc4-speculative-adoption-2026-08-05.txt`).
 - [ ] Complete the Windows current-user-only DACL creation and verification gate before any live Windows provider egress.
 - [ ] Decide whether the verified release candidate is eligible for stable `v0.5.0` promotion. That decision remains with the account owner after independent review, published-artifact verification, and host observations are complete.
 
-CLI-observable POSIX evidence can support these checks but cannot replace native rendering, transcript-display, or host-trust observations.
+CLI-observable POSIX evidence can support these checks but cannot replace native rendering, transcript-display, or host-trust observations. The three checked host items above are closed against the **published rc.4** artifact, not against a later source head.
 
-## Phase 7 repository-observed ledger — 2026-08-04
+## Phase 7 repository-observed ledger — 2026-08-04 (historical rc.3 slice)
 
-The following repository and API evidence is complete:
+The following repository and API evidence for **rc.3** is complete and remains historical:
 
 - rc.3 was published by protected workflow run `30861281580` from exact protected source `0c6f09ae14d834fccb2a2289f6731511dbbdb034` after all validation lanes passed.
 - GitHub attributed the dispatch, all three required-environment approvals, and publication to owner account `pnascimento9596` (`198005926`). This proves account attribution, not the human/session/token behind that account.
@@ -50,6 +70,14 @@ The following repository and API evidence is complete:
 - Exact-head two-family deep security scan and mode/EVALUATION fixes shipped in PR #41 (`ad57478…`). OpenCode transport classification shipped with PR #42.
 - Host evidence (exact-final fallback, speculative diagnosis #36, five-pet #38) shipped in PR #40 (`c75ce95…`).
 
-The unchecked account and native-host items above remain genuinely unresolved. Repository automation cannot convert them into owner-observed evidence. In particular, the REST API refusal for `/user/security-log` is not a Security Log review by itself (browser evidence above is), and synthetic hook invocation is not native Codex hook trust, transcript rendering, or five-pet visual observation.
+## Current stable-promotion disposition (2026-08-06)
 
-**Stable-promotion disposition:** do not promote `v0.5.0` yet. rc.3 is independently verified and suitable for continued prerelease evaluation, but stable promotion should wait for published-artifact speculative receipt adoption under a real host after #36, five-pet native host bundle after #38, Windows DACL/live-egress gate, and the remaining owner-only account review (OAuth apps, PAT inventory, 2FA/email, admin-bypass). See `docs/releases/v0.5.0-stable-readiness.md`.
+Do not promote `v0.5.0` yet. **rc.4** is independently verified (publication,
+attestations, published-artifact speculative adoption, five-pet host-e2e bundle,
+Security Log window). Post-rc.4 protected main carries release-tag reconcile
+(#54), suite budget/host-e2e `.git` (#55), and security-scan fixes (#57). The
+exact-head security-scan gate remains **open** until the final promotion head's
+scan surface is re-covered under the rewritten gate in
+`docs/releases/v0.5.0-stable-readiness.md`. Windows DACL/live-egress and the
+remaining owner-only account review (OAuth apps, PAT inventory, 2FA/email,
+admin-bypass) remain open. See that readiness ledger for identities and residue.
