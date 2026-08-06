@@ -2,8 +2,8 @@
 # Class: machine-captured, human-unreviewed
 
 ## Speculative adoption
-Turn2 (dual): speculative review activity occurred before Stop, but the Stop-presented result was produced on the exact-final path (second provider execution after turn finish) rather than adoption of a pre-Stop ready receipt.
-Turn4b (ollama-only): same exact-final pattern.
+Turn2 (dual): speculative review activity occurred before Stop, but the Stop-presented result was produced on the exact-final path (provider work after turn finish) rather than adoption of a pre-Stop ready receipt. Live budget still charges this as **one** Buddy-enabled Codex turn (see index budget unit), not as two independent live units.
+Turn4b (ollama-only): same exact-final pattern; still one live turn unit.
 Adoption of an exact matching speculative receipt at Stop: NOT OBSERVED on rc.5 in this lane.
 
 ## Stop-path duration / PR #57 1890s ceiling

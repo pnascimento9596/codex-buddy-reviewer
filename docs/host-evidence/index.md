@@ -44,18 +44,26 @@ Manual host/visual gates left **pending** (machine-captured only; not promoted t
 
 ## Provider budget ledger
 
+**Live unit (this lane):** one Buddy-enabled Codex turn that contacts a configured
+reviewer at least once. Dual-lane work and any speculative activity inside that
+same turn are **inside** the unit, not additional units. A turn is free only when
+provider is `none` / zero-change local path with no reviewer subprocess.
+Counting each provider subprocess separately was **not** the pre-authorized unit.
+
 | Event | Doctor | Live | Notes |
 |---|---:|---:|---|
-| Ceiling | 2 | 4 | pre-authorized 2026-08-06 |
+| Ceiling | 2 | 4 | pre-authorized 2026-08-06 (Codex turns, not subprocesses) |
 | doctor --provider-check dual | 2 | 0 | ollama pass; claude binary_missing (PATH) |
 | turn3 no-change | 0 | 0 | provider none; free |
 | turn1 planted off-by-one | 0 | 1 | dual findings; glm attribution match |
-| turn2 multi-file helpers | 0 | 1 | exact-final; claude transport_exit partial |
+| turn2 multi-file helpers | 0 | 1 | one turn; speculative then exact-final inside unit; claude transport_exit partial |
 | turn4 large dual ceiling | 0 | 1 | both failed ~17.5s stop |
-| turn4b ollama-only ceiling | 0 | 1 | success ~8.0s stop |
-| **Used** | **2** | **4** | no overrun |
+| turn4b ollama-only ceiling | 0 | 1 | success ~8.0s stop; speculative then exact-final inside unit |
+| **Used** | **2** | **4** | no overrun under the pre-authorized turn unit |
 
 Codex implementer turns: 5 (turn3,1,2,4,4b) + pet/setup non-review interaction.
+If live were redefined as each provider subprocess, turn2/turn4b exact-final
+retries would raise the count above 4 — that is a different unit than authorized.
 
 ## Per-turn summaries (no private receipt dumps)
 
