@@ -1,0 +1,6 @@
+interface:
+  display_name: "Buddy Review"
+  short_description: "Independent Grok or GLM review of local changes"
+  default_prompt: "Use $review to independently review my current changes with Grok."
+policy:
+  allow_implicit_invocation: false
