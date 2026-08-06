@@ -12,3 +12,27 @@ regexTarget = "match"
 regexes = [
   '''(?m)key:\s+ce50eb16000bfdbc5ec90f39eaee9f3c995d3a301b82531e266e7aedec4f2290''',
 ]
+
+[[allowlists]]
+description = "PR #67 intermediate host-evidence commit misclassified SHA-256 review identities as generic-api-key; tip commit scrubbed the key-like wording."
+condition = "AND"
+commits = ["774e2a802ff3032617e4e6a1fb4bf6fbd7caa2c5"]
+paths = [
+  '''^docs/host-evidence/rc5-turn1-visible-review\.txt$''',
+]
+regexTarget = "match"
+regexes = [
+  '''(?m)key:\s+194254b73a73a9089f0780630173fb24fd9fc792cc4c588588c6630ee4d6bea9''',
+]
+
+[[allowlists]]
+description = "PR #67 intermediate host-evidence commit misclassified SHA-256 review identities as generic-api-key; tip commit scrubbed the key-like wording."
+condition = "AND"
+commits = ["774e2a802ff3032617e4e6a1fb4bf6fbd7caa2c5"]
+paths = [
+  '''^docs/host-evidence/rc5-turn3-no-change-egress\.txt$''',
+]
+regexTarget = "match"
+regexes = [
+  '''(?m)key:\s+075741291ac888c72afaad8c9c8ad861ff85a71a14dcb3255c12fe6df813b446''',
+]
