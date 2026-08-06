@@ -1,3 +1,95 @@
+# rc.5 Codex host evidence (lane-c2a)
+
+Collected 2026-08-06 from the immutable `v0.5.0-rc.5` published artifact.
+**Evidence class: machine-captured, human-unreviewed.** No owner eyeball attestation is claimed.
+
+## Artifact and host identity
+
+| Item | Value |
+|---|---|
+| Release | `v0.5.0-rc.5` prerelease |
+| Tag object | `df9d02d6687333a7925d17f018591c3c8881ef8c` |
+| Distribution commit | `c9f9c9b88f431abe006105f7a984f8f266b72d55` |
+| Source commit | `5c99b9da910bfd916600a3f51d1aa9133d39a079` |
+| Tarball SHA-256 | `ba9d537a4b45a9cf31d02a7b0d680fe8916c5ef71098a26ba65c18009917a543` |
+| Artifact-content SHA-256 | `7c90bea1598f473c52b697bd39b30f40405f9a5568106bf11678eaaac9068b40` |
+| Codex | `codex-cli 0.146.0` install; live turns after host update `0.146.1` |
+| Install path | marketplace `codex plugin marketplace add … --ref v0.5.0-rc.5` then plugin add |
+| Marketplace HEAD | distribution commit above; exact-match tag `v0.5.0-rc.5` |
+| Kitty | `0.48.2` remote control |
+| Host surface | Codex TUI in kitty; no GUI app required |
+| Scratch workspace | disposable Git repo under external evidence dir (paths redacted here) |
+
+## Marketplace install + .git-skip bind
+
+Payload byte comparison (skip root `.git` only): extracted tarball == marketplace clone == plugin cache for all 130 manifest paths (0 content mismatches). First published-artifact exercise of marketplace install with PR #55 `.git` collector skip.
+
+**Finding:** marketplace clone also contains `.codex-marketplace-install.json` (not in tarball). `verify-host-e2e collect --installed-snapshot <marketplace-clone>` fails `installed_snapshot_mismatch` (file_count 132 vs artifact 131). Clean extract as `--installed-snapshot` yields machine_complete. See issue #65.
+
+## Machine host-e2e collect (turn1 dual findings)
+
+`verify-host-e2e collect` against clean artifact snapshot + plugin runtime data dir:
+
+| Machine check | Status |
+|---|---|
+| release_artifact | pass |
+| installed_snapshot | pass (clean extract snapshot) |
+| workspace_identity | pass |
+| installed_pet (buddy-byte) | pass |
+| continuation_observed | pass |
+| turn_receipt | pass |
+| review_completed_outbox | pass |
+
+Manual host/visual gates left **pending** (machine-captured only; not promoted to manual_pass).
+
+## Provider budget ledger
+
+| Event | Doctor | Live | Notes |
+|---|---:|---:|---|
+| Ceiling | 2 | 4 | pre-authorized 2026-08-06 |
+| doctor --provider-check dual | 2 | 0 | ollama pass; claude binary_missing (PATH) |
+| turn3 no-change | 0 | 0 | provider none; free |
+| turn1 planted off-by-one | 0 | 1 | dual findings; glm attribution match |
+| turn2 multi-file helpers | 0 | 1 | exact-final; claude transport_exit partial |
+| turn4 large dual ceiling | 0 | 1 | both failed ~17.5s stop |
+| turn4b ollama-only ceiling | 0 | 1 | success ~8.0s stop |
+| **Used** | **2** | **4** | no overrun |
+
+Codex implementer turns: 5 (turn3,1,2,4,4b) + pet/setup non-review interaction.
+
+## Per-turn summaries (no private receipt dumps)
+
+See:
+
+- [`rc5-doctor-and-hooks.txt`](rc5-doctor-and-hooks.txt)
+- [`rc5-turn3-no-change-egress.txt`](rc5-turn3-no-change-egress.txt)
+- [`rc5-turn1-visible-review.txt`](rc5-turn1-visible-review.txt)
+- [`rc5-stop-ceiling-and-adoption.txt`](rc5-stop-ceiling-and-adoption.txt)
+
+### glm-5.2:cloud attribution defect check
+
+On every ollama lane result in this lane, attributed provider/model remained ollama / glm-5.2:cloud. **No Claude identity self-report observed** in machine receipts this lane.
+
+### Data lifecycle
+
+Mode disabled; `data purge --confirm-purge` removed legacy-path rejected_responses/outbox entries reported by `data status`. Provider CLI auth hashes unchanged.
+
+**Finding:** runtime receipts/outbox/turns for this install live under the plugins/data plugin identity root and remained after purge while `data status` primarily inventories the legacy codex-buddy-reviewer home. Dual-root accounting gap — issue #66.
+
+## Unresolved / residue
+
+1. Speculative receipt adoption at Stop — not observed (exact-final only).
+2. Affirmative Stop-path duration >600s — not observed (fast provider return/fail).
+3. Full five-pet visual manual bundle — out of scope per rc.4 disposition; machine pet install + selector text only.
+4. Marketplace snapshot mismatch unless collector skips install metadata or operators use clean extract (#65).
+5. data status/purge vs plugins/data runtime root split (#66).
+
+## Closing
+
+rc.5 published bytes install, bind, dual-review findings on a planted defect, no-change zero-egress, and machine collect of a successful dual turn are established. Adoption and >600s Stop survival remain open. Disposition #65/#66 before treating host-e2e as sealed for stable.
+
+---
+
 # rc.3 Codex host evidence
 
 Collected on 2026-08-04 from the immutable `v0.5.0-rc.3` release artifact. This ledger separates automated state, visible host observations, and unresolved gates; a rendered legacy pet or an exact-final fallback is not relabeled as evidence for a different claim.

@@ -1,0 +1,14 @@
+# rc.5 stop-ceiling + speculative adoption (machine-captured)
+# Class: machine-captured, human-unreviewed
+
+## Speculative adoption
+Turn2 (dual): speculative review activity occurred before Stop, but the Stop-presented result was produced on the exact-final path (second provider execution after turn finish) rather than adoption of a pre-Stop ready receipt.
+Turn4b (ollama-only): same exact-final pattern.
+Adoption of an exact matching speculative receipt at Stop: NOT OBSERVED on rc.5 in this lane.
+
+## Stop-path duration / PR #57 1890s ceiling
+Configured reviewer deadline on mode: 1800 seconds.
+Large dual-diff Stop attempt: completed in ~17.5 seconds after both lanes failed closed (schema rejection + open circuit).
+Large ollama-only Stop attempt: completed in ~8.0 seconds with no_findings.
+No Buddy Stop clamp language observed in the Codex TUI (only an unrelated openai-codex SessionEnd clamp to 3s).
+Verdict: >600s Stop survival NOT proven (providers returned or failed fast). Product deadline configuration admits 1800s; host did not emit a 600s clamp warning in these runs, but that is weaker than affirmative multi-minute survival.
