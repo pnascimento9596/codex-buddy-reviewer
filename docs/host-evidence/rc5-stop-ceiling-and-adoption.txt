@@ -1,0 +1,16 @@
+# rc.5 stop-ceiling + speculative adoption (machine-captured)
+# Class: machine-captured, human-unreviewed
+
+## Speculative adoption
+Turn2 (dual): speculative review_started keys before turn_finished, but completed key started AFTER turn_finished → EXACT-FINAL fallback, not adoption.
+Turn4b (ollama-only): same pattern → EXACT-FINAL.
+Adoption of exact matching speculative receipt at Stop: NOT OBSERVED on rc.5 in this lane.
+
+## Stop-path duration / PR #57 1890s ceiling
+Configured timeout_ms: 1800000 (30m) on mode.
+Turn4 dual large diff Stop path: review_started 15:26:04.506Z → review_degraded 15:26:22.024Z ≈ 17.5s
+  - ollama: invalid_review_schema (no_findings missing findings array) in 17403ms
+  - claude: circuit_open (prior transport_exit failures)
+Turn4b ollama-only large diff Stop path: 15:50:33.150Z → 15:50:41.185Z ≈ 8.0s
+No Buddy Stop clamp language observed (only unrelated openai-codex SessionEnd clamp to 3s).
+Verdict: >600s Stop survival NOT proven (providers returned/failed fast). Product deadline fields show 1800s budget; host did not clamp at 600s in these runs, but that is weaker than affirmative >600s survival.

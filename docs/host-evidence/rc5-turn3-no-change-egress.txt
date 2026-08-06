@@ -1,0 +1,13 @@
+# rc.5 turn3 no-change egress probe (machine-captured)
+# Class: machine-captured, human-unreviewed
+
+Review key: 075741291ac888c72afaad8c9c8ad861ff85a71a14dcb3255c12fe6df813b446
+Receipt provider/model: none/none
+changed_path_count: 0
+patch_hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 (empty)
+reviewer_runs: []
+egress_capability: null
+terminal_status: no_findings
+Visible paragraph: "Buddy review found no actionable correctness defect above the configured confidence threshold." (94 chars)
+
+Verdict: ZERO reviewer provider contact on a no-change turn. Local no_findings path only. Does not consume live-review budget.
