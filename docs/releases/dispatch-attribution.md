@@ -84,3 +84,15 @@ attribution out-of-artifact.
   - `31042484160` — success; validate+build green; attest/publish skipped;
     tags unchanged
 - Authority: post-rc.4 mechanics lane exercising the release-tag reconcile fix
+
+### 2026-08-06 — v0.5.0-rc.5 publish
+
+- **Phase A (external pre-dispatch):** H-prime `5c99b9da910bfd916600a3f51d1aa9133d39a079`; inputs `version=0.5.0-rc.5`, `publish=true`; actor `pnascimento9596` (`198005926`); authority owner 2026-08-06 delegated lane instruction scoped to exactly one rc.5 publish from that H-prime (external Phase A retains the full authority text); UTC pre-dispatch `2026-08-06T05:38:08Z`.
+- **Phase B (this entry):**
+  - Actual source SHA / event SHA: `5c99b9da910bfd916600a3f51d1aa9133d39a079` (equals H-prime)
+  - Release run: `31074730294` — attempt **1** success (authorize, validate matrix, build, attest, publish all success)
+  - public-release environment approvals (integer env id `18411507164`): build deployment `5774382291`, attest `5774390007`, publish `5774396977`
+  - Tag reconcile (`ensure-release-tag.mjs` JSON): `{"ok":true,"tag":"v0.5.0-rc.5","tag_ref":"refs/tags/v0.5.0-rc.5","expected_tag_object":"df9d02d6687333a7925d17f018591c3c8881ef8c","outcome":"pushed","remoteSha":"df9d02d6687333a7925d17f018591c3c8881ef8c","pushed":true}` — clean first-publish path
+  - Identities: tag object `df9d02d6687333a7925d17f018591c3c8881ef8c`; distribution commit `c9f9c9b88f431abe006105f7a984f8f266b72d55` (parent count 0); tree `f767c1d0a72b022ee005cd0d8415f97b7be6ec23`; artifact-content SHA-256 `7c90bea1598f473c52b697bd39b30f40405f9a5568106bf11678eaaac9068b40`; tarball SHA-256 `ba9d537a4b45a9cf31d02a7b0d680fe8916c5ef71098a26ba65c18009917a543`
+  - Attestation binding: SLSA provenance certificates bind run `31074730294` **attempt 1** (`…/attempts/1`); signer workflow `…/release.yml@refs/heads/main`; source digest H-prime; source ref `refs/heads/main`; `workflow_dispatch`; `github-hosted` (self-hosted denied). First publish under `actions/attest` v4.2.1; rc.4 control re-verify under same client flags also green (no v4.2.1 disposition regression observed).
+  - Exactly one release dispatch this lane; zero provider inference calls.
