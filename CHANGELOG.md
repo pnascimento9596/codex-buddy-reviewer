@@ -2,7 +2,7 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
-## Unreleased (protected main after rc.4)
+## 0.5.0-rc.5 - 2026-08-06
 
 ### Fixed
 
@@ -20,6 +20,11 @@ Codex CLI **0.146.0** is known to clamp **SessionEnd** hook timeouts (observed c
 ### Changed
 
 - Security-scan gate wording: dispatch attribution for new releases is recorded under `docs/releases/dispatch-attribution.md` (out of the public artifact) with a two-phase pre/post-dispatch protocol that does not invent a future SHA. The stable-readiness gate ledger remains on the scan surface. Pure version-identity bumps after a sealed scan require an explicit ledger disposition; scan-surface edits still re-open the gate. See `docs/releases/v0.5.0-stable-readiness.md`.
+- `actions/attest` pin advanced to v4.2.1 via PR #27 (`19c8e89`) so the next release mints attestations from a CI-verified current action.
+
+### Release status
+
+- This remains an RC. It is prepared for publication only from the exact protected `main` head through the guarded release workflow with `version: 0.5.0-rc.5`. Do not treat this changelog entry as dispatch authorization. Exact-head security re-scan of the final promotion head remains open under the rewritten gate. Windows DACL and owner governance residue are unchanged.
 
 ## 0.5.0-rc.4 - 2026-08-05
 

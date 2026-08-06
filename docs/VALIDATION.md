@@ -4,7 +4,12 @@ This document separates validation evidence into five explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` after rc.4 freeze is advanced by host-e2e evidence PRs; immutable rc.4 source remains `b56224fb8e37ca02e071cda41702af4ef20f1ebb`. The immutable published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`. Post-rc.3 protected merges closed both #36 defects (PRs #44 and #46), the #38 pet atlas packaging defect (PR #45), first-enable baseline messaging (PR #50), and recorded post-fix host evidence (PR #48). Frozen Layers B–D are unchanged historical publication evidence.
+Current protected `main` after rc.4 publication includes post-rc.4 mechanics
+(PRs #54, #55, #57), attest pin #27, and scan-gate rewrite #59. Immutable rc.4
+source remains `b56224fb8e37ca02e071cda41702af4ef20f1ebb`. The immutable
+published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`.
+Package/plugin version on this candidate is `0.5.0-rc.5`. Frozen Layers B–E are
+unchanged historical publication evidence.
 
 ### rc.4 candidate local validation (pre-merge head)
 
