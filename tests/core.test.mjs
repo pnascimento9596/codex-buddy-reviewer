@@ -43,6 +43,15 @@ async function temporaryDirectory(prefix) {
 }
 
 async function assertProcessTerminated(pid, message) {
+  // pid 0 is never a real subject process. On POSIX, process.kill(0, 0) signals
+  // the caller's process group and does not throw ESRCH, so a zero pid skips
+  // the early return and surfaces as a confusing `ps -o stat= -p 0` failure
+  // (CI signature: run 31062783427 attempt 1, macOS Node 22).
+  assert.ok(
+    Number.isInteger(pid) && pid > 0,
+    `${message}; assertProcessTerminated requires a positive integer pid (received ${String(pid)})`
+  );
+
   try {
     process.kill(pid, 0);
   } catch (error) {
