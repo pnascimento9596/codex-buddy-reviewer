@@ -45,6 +45,15 @@ GitHub can establish account, workflow, source, and approval attribution. It
 cannot establish which person or delegated local session operated an authorized
 account token.
 
+## Post-scan disposition entries
+
+When the security-scan post-scan allowlist is used, record each disposition
+**here** (path + diff digest + reviewer sign-off) before dispatch. Do not write
+those entries into `docs/releases/v0.5.0-stable-readiness.md` — that file defines
+the gate/scan surface, so a disposition written there re-opens the gate it
+claims to close. Prefer the intended order: version-prep merges, seal and scan
+that head, dispatch the same head with Phase A/B attribution out-of-artifact.
+
 ## Entries
 
 ### 2026-08-05 — v0.5.0-rc.4 publish (historical; also recorded in VALIDATION.md)
