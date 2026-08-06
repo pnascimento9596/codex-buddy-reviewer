@@ -1,0 +1,15 @@
+# rc.5 doctor offline + provider-check + hooks (machine-captured)
+# Class: machine-captured, human-unreviewed
+
+Plugin version after marketplace install --ref v0.5.0-rc.5: 0.5.0-rc.5
+Distribution commit: c9f9c9b88f431abe006105f7a984f8f266b72d55
+Source commit: 5c99b9da910bfd916600a3f51d1aa9133d39a079
+hooks.json timeouts: UserPromptSubmit=210, Stop=1890 (PR #57 values confirmed on installed payload)
+
+Doctor offline: provider status unknown (not contacted); manual host checks unknown; no network.
+
+Doctor --provider-check (budget 2):
+- primary ollama/glm-5.2:cloud: pass
+- secondary claude/claude-opus-4-8: fail binary_missing
+Root cause: claude binary at $HOME/.local/bin/claude (2.1.223) absent from doctor/kitty PATH inherited from Hermes (no $HOME/.local/bin). Not a product defect. PATH fixed for subsequent live turns; no second doctor spend.
+# CI freeze tip: 2026-08-06T23:02:37Z

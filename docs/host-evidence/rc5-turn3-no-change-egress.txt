@@ -1,0 +1,9 @@
+# rc.5 turn3 no-change egress probe (machine-captured)
+# Class: machine-captured, human-unreviewed
+
+Outcome: no_findings via local zero-change path
+Provider contact: none (no configured reviewer subprocess)
+Changed paths observed during turn: 0
+Visible paragraph: "Buddy review found no actionable correctness defect above the configured confidence threshold." (94 chars)
+
+Verdict: ZERO reviewer provider contact on a no-change turn. Does not consume live-review budget.
