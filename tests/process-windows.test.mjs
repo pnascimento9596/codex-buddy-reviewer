@@ -336,12 +336,26 @@ test('terminal records resolve only after the helper closes with its matching pr
   const providerSuccess = parseWindowsJobControlLine('CBJ 1 EXIT 0');
   const providerFailure = parseWindowsJobControlLine('CBJ 1 EXIT 7');
   const helperError = parseWindowsJobControlLine('CBJ 1 ERROR create_process 2');
+  const terminateError = parseWindowsJobControlLine('CBJ 1 ERROR terminate_job 5');
+  const cleanupError = parseWindowsJobControlLine('CBJ 1 ERROR cleanup_job 258');
   const terminated = parseWindowsJobControlLine('CBJ 1 TERMINATED timeout');
 
   assert.doesNotThrow(() => validateWindowsJobHelperClose(providerSuccess, 0, null));
   assert.doesNotThrow(() => validateWindowsJobHelperClose(providerFailure, 7, null));
   assert.doesNotThrow(() => validateWindowsJobHelperClose(helperError, 125, null));
+  assert.doesNotThrow(() => validateWindowsJobHelperClose(terminateError, 125, null));
+  assert.doesNotThrow(() => validateWindowsJobHelperClose(cleanupError, 125, null));
   assert.doesNotThrow(() => validateWindowsJobHelperClose(terminated, 124, null));
+  // Terminate-path ERROR must not pair with exit 124 (TERMINATED); that mismatch
+  // previously discarded stage/Win32 forensics as a control_protocol failure.
+  assert.throws(
+    () => validateWindowsJobHelperClose(terminateError, 124, null),
+    /close did not match/
+  );
+  assert.throws(
+    () => validateWindowsJobHelperClose(cleanupError, 124, null),
+    /close did not match/
+  );
   assert.throws(
     () => validateWindowsJobHelperClose(providerSuccess, 125, null),
     /close did not match/
@@ -366,6 +380,17 @@ test('native source pins suspended pre-assignment launch, restricted inheritance
   const assign = source.indexOf('AssignProcessToJobObject(');
   const resume = source.indexOf('ResumeThread(');
   assert.ok(create !== -1 && assign > create && resume > assign);
+  // Terminate-path ERROR must exit 125 (not 124) so Node keeps stage/Win32 forensics.
+  const terminate = source.indexOf('terminate:');
+  const terminateSlice = source.slice(terminate, terminate + 900);
+  assert.match(terminateSlice, /cbj_write_error/);
+  assert.match(terminateSlice, /result_code = 125/);
+  assert.match(terminateSlice, /result_code = 124/);
+  // The unconditional post-branch assignment of 124 must not remain.
+  assert.doesNotMatch(
+    terminateSlice,
+    /cbj_write_terminated[\s\S]*terminal_written = TRUE;\s*result_code = 124;/
+  );
 });
 
 async function windowsExecutableResolutionFixture() {
