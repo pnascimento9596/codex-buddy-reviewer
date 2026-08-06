@@ -87,7 +87,7 @@ attribution out-of-artifact.
 
 ### 2026-08-06 — v0.5.0-rc.5 publish
 
-- **Phase A (external pre-dispatch):** H-prime `5c99b9da910bfd916600a3f51d1aa9133d39a079`; inputs `version=0.5.0-rc.5`, `publish=true`; actor `pnascimento9596` (`198005926`); authority owner 2026-08-06 delegated lane ("Yes provide the lane, you have my full authorization") scoped to exactly one rc.5 publish from that H-prime; UTC pre-dispatch `2026-08-06T05:38:08Z`.
+- **Phase A (external pre-dispatch):** H-prime `5c99b9da910bfd916600a3f51d1aa9133d39a079`; inputs `version=0.5.0-rc.5`, `publish=true`; actor `pnascimento9596` (`198005926`); authority owner 2026-08-06 delegated lane instruction scoped to exactly one rc.5 publish from that H-prime (external Phase A retains the full authority text); UTC pre-dispatch `2026-08-06T05:38:08Z`.
 - **Phase B (this entry):**
   - Actual source SHA / event SHA: `5c99b9da910bfd916600a3f51d1aa9133d39a079` (equals H-prime)
   - Release run: `31074730294` — attempt **1** success (authorize, validate matrix, build, attest, publish all success)
