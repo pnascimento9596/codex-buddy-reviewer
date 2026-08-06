@@ -51,6 +51,16 @@ const MAX_SECRET_GZIP_BYTES = 36 * 1024;
 // ref and leave a `.git` directory; that metadata is not part of the published
 // plugin payload and must not participate in artifact byte-identity.
 const INSTALLED_SNAPSHOT_SKIP_DIRECTORIES = new Set(['.git']);
+// Exact root-level marketplace install manifest written by Codex. Tolerated only
+// at the snapshot root, only under this exact name, and only when schema-valid.
+const MARKETPLACE_INSTALL_MANIFEST_NAME = '.codex-marketplace-install.json';
+const MARKETPLACE_INSTALL_MANIFEST_KEYS = Object.freeze([
+  'source_type',
+  'source',
+  'ref_name',
+  'sparse_paths',
+  'revision'
+]);
 const BUNDLE_SCHEMA_VERSION = '1';
 const SUCCESSFUL_REVIEW_STATUSES = new Set(['findings', 'no_findings', 'abstain']);
 const REVIEW_PROVIDERS = new Set(['claude', 'grok', 'ollama', 'opencode']);
@@ -58,7 +68,7 @@ const REVIEWER_RUN_STATUSES = new Set(['succeeded', 'failed', 'circuit_open']);
 
 const MACHINE_EVIDENCE_KEYS = Object.freeze({
   release_artifact: ['artifact_sha256', 'file_count', 'release_manifest_sha256'],
-  installed_snapshot: ['file_count', 'snapshot_sha256'],
+  installed_snapshot: ['file_count', 'snapshot_sha256', 'marketplace_install_present'],
   workspace_identity: ['workspace_key'],
   installed_pet: ['manifest_sha256', 'pet_id', 'spritesheet_sha256'],
   turn_receipt: [
@@ -447,28 +457,101 @@ async function verifyReleaseArtifact(root) {
   });
 }
 
+function validateMarketplaceInstallManifest(bytes) {
+  let value;
+  try {
+    value = parseJson(bytes, 'marketplace_install_manifest');
+  } catch {
+    fail(
+      'installed_snapshot_marketplace_manifest',
+      'marketplace install manifest is not valid JSON'
+    );
+  }
+  try {
+    exactKeys(value, MARKETPLACE_INSTALL_MANIFEST_KEYS, 'marketplace install manifest');
+  } catch {
+    fail(
+      'installed_snapshot_marketplace_manifest',
+      'marketplace install manifest contains unsupported or missing fields'
+    );
+  }
+  if (value.source_type !== 'git') {
+    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest source_type must be git');
+  }
+  if (typeof value.source !== 'string' || !value.source.trim() || value.source.length > 2048
+      || hasUnsafeTerminalControls(value.source)) {
+    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest source is invalid');
+  }
+  if (!(value.ref_name === null
+      || (typeof value.ref_name === 'string' && value.ref_name.length > 0 && value.ref_name.length <= 256
+        && !hasUnsafeTerminalControls(value.ref_name)))) {
+    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest ref_name is invalid');
+  }
+  if (!Array.isArray(value.sparse_paths) || value.sparse_paths.length > 64
+      || value.sparse_paths.some((entry) => typeof entry !== 'string' || !entry || entry.length > 512
+        || entry.includes('\\') || path.posix.isAbsolute(entry) || entry.split('/').some((part) => !part || part === '.' || part === '..')
+        || hasUnsafeTerminalControls(entry))) {
+    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest sparse_paths is invalid');
+  }
+  if (typeof value.revision !== 'string' || !COMMIT_PATTERN.test(value.revision)) {
+    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest revision must be a 40-hex commit');
+  }
+  return Object.freeze({
+    source_type: value.source_type,
+    source: value.source,
+    ref_name: value.ref_name,
+    sparse_paths: Object.freeze([...value.sparse_paths]),
+    revision: value.revision
+  });
+}
+
 async function inspectInstalledSnapshot(root, artifact) {
   const files = await collectTree(root, '', [], {
     skipDirectories: INSTALLED_SNAPSHOT_SKIP_DIRECTORIES
   });
   files.sort((left, right) => left.path.localeCompare(right.path));
-  const byPath = new Map(files.map((entry) => [entry.path, entry]));
+  const marketplaceEntries = files.filter((entry) => entry.path === MARKETPLACE_INSTALL_MANIFEST_NAME);
+  const payloadFiles = files.filter((entry) => entry.path !== MARKETPLACE_INSTALL_MANIFEST_NAME);
+  let marketplaceInstall = null;
+  if (marketplaceEntries.length > 1) {
+    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest path is not unique');
+  }
+  if (marketplaceEntries.length === 1) {
+    const bytes = await regularBytes(
+      path.join(root, MARKETPLACE_INSTALL_MANIFEST_NAME),
+      'marketplace_install_manifest',
+      MAX_REPORT_BYTES
+    );
+    if (bytes.length !== marketplaceEntries[0].bytes || sha256(bytes) !== marketplaceEntries[0].sha256) {
+      fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest bytes changed during inspection');
+    }
+    marketplaceInstall = validateMarketplaceInstallManifest(bytes);
+  }
+  const byPath = new Map(payloadFiles.map((entry) => [entry.path, entry]));
   const plugin = byPath.get('.codex-plugin/plugin.json') ?? null;
   const hooks = byPath.get('hooks/hooks.json') ?? null;
   const identity = Object.freeze({
-    snapshot_sha256: treeSha256(files),
-    file_count: files.length,
+    snapshot_sha256: treeSha256(payloadFiles),
+    file_count: payloadFiles.length,
     plugin_manifest_sha256: plugin?.sha256 ?? null,
-    hooks_sha256: hooks?.sha256 ?? null
+    hooks_sha256: hooks?.sha256 ?? null,
+    marketplace_install: marketplaceInstall
   });
   const expectedByPath = new Map(artifact.files.map((entry) => [entry.path, entry]));
-  if (files.length !== artifact.files.length || files.some((entry) => {
+  if (payloadFiles.length !== artifact.files.length || payloadFiles.some((entry) => {
     const expected = expectedByPath.get(entry.path);
     return !expected || expected.bytes !== entry.bytes || expected.sha256 !== entry.sha256;
   })) {
     fail('installed_snapshot_mismatch', 'installed snapshot path set or bytes differ from the release artifact');
   }
-  return { identity, evidence: { file_count: files.length, snapshot_sha256: identity.snapshot_sha256 } };
+  return {
+    identity,
+    evidence: {
+      file_count: payloadFiles.length,
+      snapshot_sha256: identity.snapshot_sha256,
+      marketplace_install_present: marketplaceInstall !== null
+    }
+  };
 }
 
 async function inspectInstalledPet(codexHome, pet) {
@@ -768,7 +851,8 @@ export async function collectHostEvidenceV2(options) {
     snapshot_sha256: null,
     file_count: null,
     plugin_manifest_sha256: null,
-    hooks_sha256: null
+    hooks_sha256: null,
+    marketplace_install: null
   };
   const machineChecks = {};
   machineChecks.release_artifact = machineCheckSuccess({
@@ -787,12 +871,14 @@ export async function collectHostEvidenceV2(options) {
     }).catch(() => null);
     if (files) {
       files.sort((left, right) => left.path.localeCompare(right.path));
-      const byPath = new Map(files.map((entry) => [entry.path, entry]));
+      const payloadFiles = files.filter((entry) => entry.path !== MARKETPLACE_INSTALL_MANIFEST_NAME);
+      const byPath = new Map(payloadFiles.map((entry) => [entry.path, entry]));
       installedIdentity = {
-        snapshot_sha256: treeSha256(files),
-        file_count: files.length,
+        snapshot_sha256: treeSha256(payloadFiles),
+        file_count: payloadFiles.length,
         plugin_manifest_sha256: byPath.get('.codex-plugin/plugin.json')?.sha256 ?? null,
-        hooks_sha256: byPath.get('hooks/hooks.json')?.sha256 ?? null
+        hooks_sha256: byPath.get('hooks/hooks.json')?.sha256 ?? null,
+        marketplace_install: null
       };
     }
   }
@@ -937,7 +1023,8 @@ function validateMachineCheck(check, id, report) {
   } else if (id === 'installed_snapshot') {
     if (evidence.snapshot_sha256 !== report.installed_snapshot.snapshot_sha256
         || evidence.snapshot_sha256 !== report.release.artifact_sha256
-        || evidence.file_count !== report.installed_snapshot.file_count) {
+        || evidence.file_count !== report.installed_snapshot.file_count
+        || evidence.marketplace_install_present !== (report.installed_snapshot.marketplace_install !== null)) {
       throw new Error('installed snapshot machine evidence is not byte-identical to the release artifact');
     }
   } else if (id === 'workspace_identity') {
@@ -1039,7 +1126,7 @@ export function validateHostE2eReport(report) {
   }
 
   exactKeys(report.installed_snapshot, [
-    'snapshot_sha256', 'file_count', 'plugin_manifest_sha256', 'hooks_sha256'
+    'snapshot_sha256', 'file_count', 'plugin_manifest_sha256', 'hooks_sha256', 'marketplace_install'
   ], 'host evidence installed snapshot');
   for (const field of ['snapshot_sha256', 'plugin_manifest_sha256', 'hooks_sha256']) {
     if (report.installed_snapshot[field] !== null && !SHA256_PATTERN.test(report.installed_snapshot[field])) {
@@ -1049,6 +1136,22 @@ export function validateHostE2eReport(report) {
   if (report.installed_snapshot.file_count !== null
       && (!Number.isSafeInteger(report.installed_snapshot.file_count) || report.installed_snapshot.file_count < 1)) {
     throw new Error('host evidence installed_snapshot.file_count is invalid');
+  }
+  if (report.installed_snapshot.marketplace_install !== null) {
+    exactKeys(
+      report.installed_snapshot.marketplace_install,
+      MARKETPLACE_INSTALL_MANIFEST_KEYS,
+      'host evidence installed snapshot marketplace_install'
+    );
+    const manifest = report.installed_snapshot.marketplace_install;
+    if (manifest.source_type !== 'git'
+        || typeof manifest.source !== 'string'
+        || !(manifest.ref_name === null || typeof manifest.ref_name === 'string')
+        || !Array.isArray(manifest.sparse_paths)
+        || typeof manifest.revision !== 'string'
+        || !COMMIT_PATTERN.test(manifest.revision)) {
+      throw new Error('host evidence installed_snapshot.marketplace_install is invalid');
+    }
   }
   if (report.installed_snapshot.snapshot_sha256 === report.release.artifact_sha256
       && (report.installed_snapshot.plugin_manifest_sha256 !== report.release.plugin_manifest_sha256
