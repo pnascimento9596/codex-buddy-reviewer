@@ -2,6 +2,25 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
+## Unreleased (protected main after rc.4)
+
+### Fixed
+
+- **PR #54 (`bd98446`).** Release publication no longer fails closed on a post-push REST race: after a successful annotated-tag push, `ensure-release-tag` verifies the remote tag object with bounded backoff and treats an already-matching remote tag as success. Genuine tag mismatches still fail closed. Root cause was run `31013433126` attempt 1 (~322 ms after push); attempt 2 published without rewriting attempt-1 attestations.
+- **PR #55 (`0df21e8`).** Full-suite test runner budget raised from 900 s to 1200 s after macOS CI cancelled `tests/automatic.test.mjs` at aggregate ~897.6 s (`fail 0 / cancelled 1`, not a single hung test). Deadline-cleanup waits for the child PID before asserting; hook invoke test budget raised. Host-e2e marketplace installs may carry a root `.git` (clone); verification binds plugin payload bytes and skips only that install-method metadata.
+- **PR #57 (`5d5c34f`).** Security-scan reproduced defects:
+  - Git `check-attr --source` on unsupported Git versions fails closed with named `git_version_unsupported` instead of opaque batch failure or silent omission of historical attribute checks.
+  - Windows job-supervisor ERROR path exits 125 (Node contract) instead of always 124.
+  - **Configured** host hook timeouts in `hooks/hooks.json`: `UserPromptSubmit` 60→**210** s and `Stop` 600→**1890** s so the declared values sit above the product capture ceiling (180 s) and default provider ceiling (1800 s).
+
+### Hook timeout host enforcement (UNVERIFIED)
+
+Codex CLI **0.146.0** is known to clamp **SessionEnd** hook timeouts (observed clamp warning to 3 s on the official `openai-codex` plugin). No installed-schema or binary string evidence was found that SessionEnd-style clamps also apply to `UserPromptSubmit` 210 or `Stop` 1890. The official `openai-codex` plugin ships `Stop: 900` without a documented Stop clamp. **Whether the host honors Buddy's 210 / 1890 values end-to-end is unverified without a host session observation.** Until that check lands, treat the PR #57 hook change as a correct configuration relative to product ceilings, not as proven host behavior. Owner-observable check: install the candidate, run a continuous-mode turn whose provider work approaches the configured ceiling, and confirm Codex does not emit a clamp warning or SIGKILL the hook before the product deadline.
+
+### Changed
+
+- Security-scan gate wording: dispatch attribution for new releases is recorded under `docs/releases/dispatch-attribution.md` (out of the public artifact). Pure version-identity bumps after a sealed scan require an explicit ledger disposition; scan-surface edits still re-open the gate. See `docs/releases/v0.5.0-stable-readiness.md`.
+
 ## 0.5.0-rc.4 - 2026-08-05
 
 ### Fixed

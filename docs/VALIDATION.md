@@ -51,11 +51,17 @@ The two prior frozen historical slices were byte-compared before this edit: Laye
 
 Historical (unchanged): PR #23 → `c703b776…` / run `30773941325`; PR #24 → `58d8abaf…` / run `30776339242`. Issue #25 and related timing flakes were later closed through PR #42 deterministic-timing work; residual process-family flakes may still appear under load and follow the authorized flake ladder.
 
-### rc.4 pre-dispatch attribution
+### rc.4 pre-dispatch attribution (historical; frozen in-artifact)
 
 release dispatch to be executed by delegated agent session under owner instruction of 2026-08-05.
 
 The dispatch is authorized only after this candidate merges through normal protection and its exact protected-main source SHA passes protected CI. The delegated session authenticates to GitHub as owner account `pnascimento9596` (account ID `198005926`) and will invoke `.github/workflows/release.yml` from unchanged protected `main` with `version: 0.5.0-rc.4` and `publish: true`. GitHub can establish account, workflow, source, and approval attribution; it cannot establish which person or delegated local session operated an authorized account token.
+
+**Home for new dispatch attribution:** subsequent release dispatches record
+attribution under `docs/releases/dispatch-attribution.md`, which is outside the
+published public artifact path set. Do not add new pre-dispatch statements to
+this in-artifact Layer A section; keep the rc.4 text above as frozen history.
+See the rewritten security-scan gate in `docs/releases/v0.5.0-stable-readiness.md`.
 
 ### Phase 7 pre-stable engineering work item
 
