@@ -48,11 +48,18 @@ account token.
 ## Post-scan disposition entries
 
 When the security-scan post-scan allowlist is used, record each disposition
-**here** (path + diff digest + reviewer sign-off) before dispatch. Do not write
-those entries into `docs/releases/v0.5.0-stable-readiness.md` — that file defines
-the gate/scan surface, so a disposition written there re-opens the gate it
-claims to close. Prefer the intended order: version-prep merges, seal and scan
-that head, dispatch the same head with Phase A/B attribution out-of-artifact.
+**here** before dispatch. For every allowlisted path that changed after the
+sealed scan **other than this file**, record path + diff digest + reviewer
+sign-off. Do **not** require a digest line for `docs/releases/dispatch-attribution.md`
+itself: the entry that writes the disposition changes this file, so a final
+self-digest is self-referential and unsatisfiable. This log is the disposition
+surface, not a subject of its own disposition.
+
+Do not write disposition entries into `docs/releases/v0.5.0-stable-readiness.md`
+— that file defines the gate/scan surface, so a disposition written there
+re-opens the gate it claims to close. Prefer the intended order: version-prep
+merges, seal and scan that head, dispatch the same head with Phase A/B
+attribution out-of-artifact.
 
 ## Entries
 
