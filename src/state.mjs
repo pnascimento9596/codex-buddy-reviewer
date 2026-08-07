@@ -4,14 +4,89 @@ import { chmod, link, lstat, mkdir, open, readdir, realpath, rename, rm, stat } 
 import os from 'node:os';
 import path from 'node:path';
 
-export function resolveDataDir(explicit) {
+export const BUDDY_PLUGIN_PACKAGE_NAME = 'codex-buddy-reviewer';
+
+export function resolveDataDir(explicit, env = process.env, home = os.homedir()) {
   return explicit
-    ?? process.env.CODEX_BUDDY_DATA_DIR
-    ?? path.join(os.homedir(), '.codex', 'codex-buddy-reviewer');
+    ?? env.CODEX_BUDDY_DATA_DIR
+    ?? path.join(home, '.codex', BUDDY_PLUGIN_PACKAGE_NAME);
 }
 
-export function resolveRuntimeDataDir(explicit) {
-  return explicit ?? process.env.PLUGIN_DATA ?? resolveDataDir();
+export function resolveRuntimeDataDir(explicit, env = process.env, home = os.homedir()) {
+  return explicit ?? env.PLUGIN_DATA ?? resolveDataDir(undefined, env, home);
+}
+
+export function resolveBuddyCodexHome(explicit, env = process.env, home = os.homedir()) {
+  return path.resolve(explicit ?? env.CODEX_HOME ?? path.join(home, '.codex'));
+}
+
+export function isBuddyPluginDataDirName(name, pluginName = BUDDY_PLUGIN_PACKAGE_NAME) {
+  return typeof name === 'string'
+    && (name === pluginName || name.startsWith(`${pluginName}-`));
+}
+
+/**
+ * Every runtime root this plugin identity may have written on the host.
+ *
+ * Order is stable and intentional:
+ * 1. explicit --runtime-data-dir / caller override
+ * 2. host-exported PLUGIN_DATA / CLAUDE_PLUGIN_DATA
+ * 3. discovered buddy-owned directories under <CODEX_HOME>/plugins/data/
+ * 4. the durable data-dir fallback (legacy home path)
+ *
+ * Status and purge must account for all of these. Write paths (hooks) still use
+ * a single active root via resolveRuntimeDataDir / host-runtime.
+ */
+export async function enumerateRuntimeDataDirs({
+  dataDir,
+  runtimeDataDir,
+  codexHome,
+  env = process.env,
+  home = os.homedir(),
+  pluginName = BUDDY_PLUGIN_PACKAGE_NAME,
+  readdirImpl = readdir,
+  lstatImpl = lstat
+} = {}) {
+  const roots = [];
+  const seen = new Set();
+  const add = (candidate) => {
+    if (typeof candidate !== 'string' || !candidate.trim()) return;
+    const resolved = path.resolve(candidate.trim());
+    if (seen.has(resolved)) return;
+    seen.add(resolved);
+    roots.push(resolved);
+  };
+
+  add(runtimeDataDir);
+  for (const key of ['PLUGIN_DATA', 'CLAUDE_PLUGIN_DATA']) {
+    const value = env[key];
+    if (typeof value === 'string' && value.trim()) add(value);
+  }
+
+  const pluginsDataRoot = path.join(resolveBuddyCodexHome(codexHome, env, home), 'plugins', 'data');
+  try {
+    const entries = await readdirImpl(pluginsDataRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!isBuddyPluginDataDirName(entry.name, pluginName)) continue;
+      const candidate = path.join(pluginsDataRoot, entry.name);
+      let details;
+      try {
+        details = await lstatImpl(candidate);
+      } catch (error) {
+        if (error.code === 'ENOENT') continue;
+        throw error;
+      }
+      // Discovery never follows a swapped root. Symlinked plugin-data entries are
+      // ignored so status/purge cannot be pointed at an arbitrary filesystem tree.
+      if (details.isSymbolicLink() || !details.isDirectory()) continue;
+      add(candidate);
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
+  add(resolveDataDir(dataDir, env, home));
+  return Object.freeze([...roots]);
 }
 
 async function resolvePhysicalCandidate(candidate) {

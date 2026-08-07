@@ -738,6 +738,95 @@ test('host evidence v2 installed snapshot skips marketplace .git substrate and s
     report.machine_checks.installed_snapshot.evidence.file_count
   );
   assert.ok(report.installed_snapshot.file_count >= 1);
+  assert.equal(report.installed_snapshot.marketplace_install, null);
+  assert.equal(report.machine_checks.installed_snapshot.evidence.marketplace_install_present, false);
+});
+
+test('host evidence v2 tolerates root marketplace install manifest and rejects adversarial extras', async () => {
+  const goodManifest = `${JSON.stringify({
+    source_type: 'git',
+    source: 'https://github.com/pnascimento9596/codex-buddy-reviewer.git',
+    ref_name: 'v0.5.0-rc.5',
+    sparse_paths: [],
+    revision: 'c9f9c9b88f431abe006105f7a984f8f266b72d55'
+  }, null, 2)}\n`;
+
+  const passFixture = await hostEvidenceFixture();
+  await writeFile(
+    path.join(passFixture.installedSnapshotRoot, '.codex-marketplace-install.json'),
+    goodManifest
+  );
+  const passReport = await collectHostEvidenceV2(passFixture.collectOptions);
+  assert.equal(passReport.machine_checks.installed_snapshot.status, 'pass');
+  assert.equal(passReport.installed_snapshot.snapshot_sha256, passReport.release.artifact_sha256);
+  assert.equal(passReport.machine_checks.installed_snapshot.evidence.marketplace_install_present, true);
+  assert.equal(passReport.installed_snapshot.marketplace_install.revision, 'c9f9c9b88f431abe006105f7a984f8f266b72d55');
+  assert.equal(validateHostE2eReport(passReport).machine_complete, true);
+
+  const nestedFixture = await hostEvidenceFixture();
+  await mkdir(path.join(nestedFixture.installedSnapshotRoot, 'nested'), { recursive: true });
+  await writeFile(
+    path.join(nestedFixture.installedSnapshotRoot, 'nested', '.codex-marketplace-install.json'),
+    goodManifest
+  );
+  const nestedReport = await collectHostEvidenceV2(nestedFixture.collectOptions);
+  assert.equal(nestedReport.machine_checks.installed_snapshot.status, 'fail');
+  assert.equal(nestedReport.machine_checks.installed_snapshot.failure_code, 'installed_snapshot_mismatch');
+
+  const extraFixture = await hostEvidenceFixture();
+  await writeFile(path.join(extraFixture.installedSnapshotRoot, '.extra-host-file'), 'nope\n');
+  const extraReport = await collectHostEvidenceV2(extraFixture.collectOptions);
+  assert.equal(extraReport.machine_checks.installed_snapshot.status, 'fail');
+  assert.equal(extraReport.machine_checks.installed_snapshot.failure_code, 'installed_snapshot_mismatch');
+
+  const badSchemaFixture = await hostEvidenceFixture();
+  await writeFile(
+    path.join(badSchemaFixture.installedSnapshotRoot, '.codex-marketplace-install.json'),
+    `${JSON.stringify({
+      source_type: 'git',
+      source: 'https://github.com/pnascimento9596/codex-buddy-reviewer.git',
+      ref_name: 'v0.5.0-rc.5',
+      sparse_paths: [],
+      revision: 'c9f9c9b88f431abe006105f7a984f8f266b72d55',
+      secret: 'not-allowed'
+    }, null, 2)}\n`
+  );
+  const badSchemaReport = await collectHostEvidenceV2(badSchemaFixture.collectOptions);
+  assert.equal(badSchemaReport.machine_checks.installed_snapshot.status, 'fail');
+  assert.equal(
+    badSchemaReport.machine_checks.installed_snapshot.failure_code,
+    'installed_snapshot_marketplace_manifest'
+  );
+});
+
+test('host evidence report validation reuses strict marketplace install rules', async () => {
+  const fixture = await hostEvidenceFixture();
+  await writeFile(
+    path.join(fixture.installedSnapshotRoot, '.codex-marketplace-install.json'),
+    `${JSON.stringify({
+      source_type: 'git',
+      source: 'https://github.com/pnascimento9596/codex-buddy-reviewer.git',
+      ref_name: 'v0.5.0-rc.5',
+      sparse_paths: [],
+      revision: 'c9f9c9b88f431abe006105f7a984f8f266b72d55'
+    }, null, 2)}\n`
+  );
+  const report = await collectHostEvidenceV2(fixture.collectOptions);
+  assert.equal(validateHostE2eReport(report).machine_complete, true);
+
+  const poisoned = structuredClone(report);
+  poisoned.installed_snapshot.marketplace_install.source = 'https://example.com/\u0007evil';
+  assert.throws(
+    () => validateHostE2eReport(poisoned),
+    /marketplace_install is invalid/
+  );
+
+  const unsafeSparse = structuredClone(report);
+  unsafeSparse.installed_snapshot.marketplace_install.sparse_paths = ['../escape'];
+  assert.throws(
+    () => validateHostE2eReport(unsafeSparse),
+    /marketplace_install is invalid/
+  );
 });
 
 async function completeReportsForFixture(fixture, petIds) {

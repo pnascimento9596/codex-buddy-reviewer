@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
   symlink,
   truncate,
@@ -549,4 +550,197 @@ test('durable data entry and byte limits are explicit and refuse purge before mu
     /data inventory is incomplete: byte_limit/
   );
   assert.equal(await readFile(safeReceipt, 'utf8'), '{"must":"survive both refusals"}\n');
+});
+
+function retentionIsolation(extra = {}) {
+  return {
+    env: {},
+    home: extra.home,
+    codexHome: extra.codexHome,
+    ...extra
+  };
+}
+
+test('operator data status/purge account for plugin-data runtime root without PLUGIN_DATA env', async () => {
+  const home = await temporaryDirectory('buddy-retention-dual-home-');
+  const codexHome = path.join(home, '.codex');
+  const dataDir = path.join(codexHome, 'codex-buddy-reviewer');
+  const pluginRuntime = path.join(
+    codexHome,
+    'plugins',
+    'data',
+    'codex-buddy-reviewer-codex-buddy-reviewer'
+  );
+  const providerTempBase = await temporaryDirectory('buddy-retention-dual-provider-');
+  const root = path.resolve('/private/test/retention-dual-root-repository');
+  const workspace = workspaceKey(root);
+  const reviewKey = 'a'.repeat(64);
+  const legacyRejected = path.join(dataDir, 'rejected-responses', workspace, 'legacy-review', 'response-fixture.json');
+  const pluginReceipt = path.join(pluginRuntime, 'automatic-reviews', workspace, `${reviewKey}.json`);
+  const pluginTurn = path.join(
+    pluginRuntime,
+    'turns',
+    workspace,
+    opaqueKey('dual-session'),
+    opaqueKey('dual-turn')
+  );
+  const unrelatedPlugin = path.join(codexHome, 'plugins', 'data', 'other-plugin', 'automatic-reviews', workspace, 'x.json');
+  await Promise.all([
+    mkdir(path.dirname(legacyRejected), { recursive: true }),
+    mkdir(path.dirname(pluginReceipt), { recursive: true }),
+    mkdir(pluginTurn, { recursive: true }),
+    mkdir(path.dirname(unrelatedPlugin), { recursive: true })
+  ]);
+  await Promise.all([
+    writeFile(legacyRejected, '{"raw":"LEGACY_REJECTED"}\n'),
+    writeFile(pluginReceipt, '{"result":"PLUGIN_AUTOMATIC"}\n'),
+    writeFile(path.join(pluginTurn, 'baseline.json'), `${JSON.stringify({
+      snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+    })}\n`),
+    writeFile(path.join(pluginTurn, 'attempt.json'), `${JSON.stringify({ review_key: reviewKey })}\n`),
+    writeFile(unrelatedPlugin, '{"must":"remain"}\n')
+  ]);
+  const pluginOutbox = await appendOutboxEvent({
+    repositoryRoot: root,
+    runtimeDataDir: pluginRuntime,
+    sessionId: 'dual-session',
+    turnId: 'dual-turn',
+    type: 'turn_started',
+    state: 'working',
+    headline: 'Plugin runtime event',
+    occurredAt: '2020-01-01T00:00:00.000Z'
+  });
+
+  // Bare operator conditions: no --runtime-data-dir, no PLUGIN_DATA.
+  const status = await workspaceDataStatus(retentionIsolation({
+    root,
+    dataDir,
+    home,
+    codexHome,
+    providerTempBase
+  }));
+  assert.equal(status.complete, true);
+  assert.ok(status.runtime_roots.includes(path.resolve(pluginRuntime)));
+  assert.ok(status.runtime_roots.includes(path.resolve(dataDir)));
+  assert.equal(status.content.find((item) => item.id === 'rejected_responses')?.files, 1);
+  assert.ok(status.totals.content_files >= 3);
+
+  const result = await purgeWorkspaceData(retentionIsolation({
+    root,
+    dataDir,
+    home,
+    codexHome,
+    providerTempBase,
+    includeSettings: false,
+    now: Date.parse('2020-01-03T00:00:00.000Z')
+  }));
+  assert.equal(result.remaining_content_files, result.retained_turn_tombstones);
+  await assert.rejects(lstat(legacyRejected));
+  await assert.rejects(lstat(pluginReceipt));
+  await assert.rejects(lstat(pluginOutbox.file));
+  await assert.rejects(lstat(path.join(pluginTurn, 'baseline.json')));
+  await assert.rejects(lstat(path.join(pluginTurn, 'attempt.json')));
+  const completed = JSON.parse(await readFile(path.join(pluginTurn, 'completed.json'), 'utf8'));
+  assert.equal(completed.terminal_status, 'prior_attempt_incomplete');
+  assert.equal(completed.review_key, reviewKey);
+  assert.equal(await readFile(unrelatedPlugin, 'utf8'), '{"must":"remain"}\n');
+
+  // Filesystem-level assertion across every runtime root used by the identity.
+  for (const runtimeRoot of result.runtime_roots) {
+    for (const area of ['automatic-reviews', 'outbox', 'renderers']) {
+      const target = path.join(runtimeRoot, area, workspace);
+      const listing = await readdir(target).catch((error) => {
+        if (error.code === 'ENOENT') return [];
+        throw error;
+      });
+      assert.deepEqual(listing, [], `${runtimeRoot}/${area} must be empty after purge`);
+    }
+  }
+});
+
+test('purge clears content under both legacy and plugin runtime roots and preserves tombstones', async () => {
+  const home = await temporaryDirectory('buddy-retention-both-home-');
+  const codexHome = path.join(home, '.codex');
+  const dataDir = path.join(codexHome, 'codex-buddy-reviewer');
+  const pluginRuntime = path.join(codexHome, 'plugins', 'data', 'codex-buddy-reviewer');
+  const providerTempBase = await temporaryDirectory('buddy-retention-both-provider-');
+  const root = path.resolve('/private/test/retention-both-roots-repository');
+  const workspace = workspaceKey(root);
+  const legacyAuto = path.join(dataDir, 'automatic-reviews', workspace, `${'b'.repeat(64)}.json`);
+  const pluginAuto = path.join(pluginRuntime, 'automatic-reviews', workspace, `${'c'.repeat(64)}.json`);
+  const legacyTurn = path.join(dataDir, 'turns', workspace, opaqueKey('legacy-session'), opaqueKey('legacy-turn'));
+  const pluginTurn = path.join(pluginRuntime, 'turns', workspace, opaqueKey('plugin-session'), opaqueKey('plugin-turn'));
+  await Promise.all([
+    mkdir(path.dirname(legacyAuto), { recursive: true }),
+    mkdir(path.dirname(pluginAuto), { recursive: true }),
+    mkdir(legacyTurn, { recursive: true }),
+    mkdir(pluginTurn, { recursive: true })
+  ]);
+  await Promise.all([
+    writeFile(legacyAuto, '{"legacy":true}\n'),
+    writeFile(pluginAuto, '{"plugin":true}\n'),
+    writeFile(path.join(legacyTurn, 'baseline.json'), `${JSON.stringify({
+      snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+    })}\n`),
+    writeFile(path.join(legacyTurn, 'attempt.json'), `${JSON.stringify({ review_key: 'b'.repeat(64) })}\n`),
+    writeFile(path.join(pluginTurn, 'baseline.json'), `${JSON.stringify({
+      snapshot: { captured_at: '2020-01-01T00:00:00.000Z' }
+    })}\n`),
+    writeFile(path.join(pluginTurn, 'attempt.json'), `${JSON.stringify({ review_key: 'c'.repeat(64) })}\n`)
+  ]);
+
+  const result = await purgeWorkspaceData(retentionIsolation({
+    root,
+    dataDir,
+    home,
+    codexHome,
+    providerTempBase,
+    includeSettings: false,
+    now: Date.parse('2020-01-03T00:00:00.000Z')
+  }));
+  await assert.rejects(lstat(legacyAuto));
+  await assert.rejects(lstat(pluginAuto));
+  assert.ok(result.retained_turn_tombstones >= 2);
+  await lstat(path.join(legacyTurn, 'completed.json'));
+  await lstat(path.join(pluginTurn, 'completed.json'));
+});
+
+test('symlinked plugin-data root is ignored by discovery and cannot widen purge', async () => {
+  const home = await temporaryDirectory('buddy-retention-symlink-home-');
+  const codexHome = path.join(home, '.codex');
+  const dataDir = path.join(codexHome, 'codex-buddy-reviewer');
+  const outside = await temporaryDirectory('buddy-retention-symlink-outside-');
+  const providerTempBase = await temporaryDirectory('buddy-retention-symlink-provider-');
+  const root = path.resolve('/private/test/retention-symlink-discovery-repository');
+  const workspace = workspaceKey(root);
+  const pluginsData = path.join(codexHome, 'plugins', 'data');
+  const sentinel = path.join(outside, 'automatic-reviews', workspace, 'sentinel.json');
+  await mkdir(path.dirname(sentinel), { recursive: true });
+  await writeFile(sentinel, 'outside must remain\n');
+  await mkdir(pluginsData, { recursive: true });
+  await symlink(outside, path.join(pluginsData, 'codex-buddy-reviewer-swapped'));
+  const receipt = path.join(dataDir, 'reviews', workspace, 'manual.json');
+  await mkdir(path.dirname(receipt), { recursive: true });
+  await writeFile(receipt, '{"private":"content"}\n');
+
+  const status = await workspaceDataStatus(retentionIsolation({
+    root,
+    dataDir,
+    home,
+    codexHome,
+    providerTempBase
+  }));
+  assert.equal(
+    status.runtime_roots.some((item) => item.includes('codex-buddy-reviewer-swapped')),
+    false
+  );
+  await purgeWorkspaceData(retentionIsolation({
+    root,
+    dataDir,
+    home,
+    codexHome,
+    providerTempBase,
+    includeSettings: false
+  }));
+  assert.equal(await readFile(sentinel, 'utf8'), 'outside must remain\n');
 });

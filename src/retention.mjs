@@ -7,7 +7,7 @@ import {
 } from './providers/temp-state.mjs';
 import { pruneWorkspaceTurns } from './runtime-pruner.mjs';
 import { pruneSetupPlansForWorkspace } from './setup.mjs';
-import { resolveDataDir, resolveRuntimeDataDir, workspaceKey } from './state.mjs';
+import { resolveDataDir, enumerateRuntimeDataDirs, workspaceKey } from './state.mjs';
 
 export const DATA_INVENTORY_ENTRY_LIMIT = 20_000;
 export const DATA_INVENTORY_DEPTH_LIMIT = 64;
@@ -45,29 +45,108 @@ function assertInventoryBudget(budget, depth) {
   if (reason) throw new DataInventoryIncomplete(reason);
 }
 
-function exactWorkspaceTargets({ root, dataDir, runtimeDataDir }) {
-  const dataRoot = path.resolve(resolveDataDir(dataDir));
-  const runtimeRoot = path.resolve(resolveRuntimeDataDir(runtimeDataDir));
-  const workspace = workspaceKey(path.resolve(root));
+function targetId(base, index, total) {
+  return total === 1 || index === 0 ? base : `${base}#${index}`;
+}
+
+function runtimeAreaTargets(runtimeRoot, workspace, index, total) {
+  return {
+    content: [
+      {
+        id: targetId('automatic_reviews', index, total),
+        family: 'automatic_reviews',
+        root: runtimeRoot,
+        target: path.join(runtimeRoot, 'automatic-reviews', workspace)
+      },
+      {
+        id: targetId('renderer_outbox', index, total),
+        family: 'renderer_outbox',
+        root: runtimeRoot,
+        target: path.join(runtimeRoot, 'outbox', workspace)
+      },
+      {
+        id: targetId('renderer_cursors', index, total),
+        family: 'renderer_cursors',
+        root: runtimeRoot,
+        target: path.join(runtimeRoot, 'renderers', workspace)
+      }
+    ],
+    turns: {
+      id: targetId('turn_state', index, total),
+      family: 'turn_state',
+      root: runtimeRoot,
+      target: path.join(runtimeRoot, 'turns', workspace)
+    },
+    settings: [
+      {
+        id: targetId('reviewer_circuits', index, total),
+        family: 'reviewer_circuits',
+        root: runtimeRoot,
+        target: path.join(runtimeRoot, 'circuits', workspace)
+      }
+    ]
+  };
+}
+
+async function exactWorkspaceTargets(options) {
+  const dataRoot = path.resolve(resolveDataDir(options.dataDir, options.env, options.home));
+  const runtimeRoots = await enumerateRuntimeDataDirs({
+    dataDir: options.dataDir,
+    runtimeDataDir: options.runtimeDataDir,
+    codexHome: options.codexHome,
+    env: options.env,
+    home: options.home,
+    pluginName: options.pluginName,
+    readdirImpl: options.readdirImpl,
+    lstatImpl: options.lstatImpl
+  });
+  const workspace = workspaceKey(path.resolve(options.root));
+  const content = [
+    { id: 'manual_reviews', family: 'manual_reviews', root: dataRoot, target: path.join(dataRoot, 'reviews', workspace) },
+    {
+      id: 'rejected_responses',
+      family: 'rejected_responses',
+      root: dataRoot,
+      target: path.join(dataRoot, 'rejected-responses', workspace)
+    }
+  ];
+  const turns = [];
+  const settings = [
+    { id: 'mode', family: 'mode', root: dataRoot, target: path.join(dataRoot, 'mode', `${workspace}.json`) },
+    {
+      id: 'summary_guard',
+      family: 'summary_guard',
+      root: dataRoot,
+      target: path.join(dataRoot, 'summary-claim-guard', `${workspace}.json`)
+    },
+    {
+      id: 'presentation',
+      family: 'presentation',
+      root: dataRoot,
+      target: path.join(dataRoot, 'presentation', workspace)
+    },
+    {
+      id: 'egress_registry',
+      family: 'egress_registry',
+      root: dataRoot,
+      target: path.join(dataRoot, 'egress', workspace)
+    }
+  ];
+
+  for (const [index, runtimeRoot] of runtimeRoots.entries()) {
+    const areas = runtimeAreaTargets(runtimeRoot, workspace, index, runtimeRoots.length);
+    content.push(...areas.content);
+    turns.push(areas.turns);
+    settings.push(...areas.settings);
+  }
+
   return {
     workspace,
     dataRoot,
-    runtimeRoot,
-    content: [
-      { id: 'manual_reviews', root: dataRoot, target: path.join(dataRoot, 'reviews', workspace) },
-      { id: 'rejected_responses', root: dataRoot, target: path.join(dataRoot, 'rejected-responses', workspace) },
-      { id: 'automatic_reviews', root: runtimeRoot, target: path.join(runtimeRoot, 'automatic-reviews', workspace) },
-      { id: 'renderer_outbox', root: runtimeRoot, target: path.join(runtimeRoot, 'outbox', workspace) },
-      { id: 'renderer_cursors', root: runtimeRoot, target: path.join(runtimeRoot, 'renderers', workspace) }
-    ],
-    turns: { id: 'turn_state', root: runtimeRoot, target: path.join(runtimeRoot, 'turns', workspace) },
-    settings: [
-      { id: 'mode', root: dataRoot, target: path.join(dataRoot, 'mode', `${workspace}.json`) },
-      { id: 'summary_guard', root: dataRoot, target: path.join(dataRoot, 'summary-claim-guard', `${workspace}.json`) },
-      { id: 'presentation', root: dataRoot, target: path.join(dataRoot, 'presentation', workspace) },
-      { id: 'reviewer_circuits', root: runtimeRoot, target: path.join(runtimeRoot, 'circuits', workspace) },
-      { id: 'egress_registry', root: dataRoot, target: path.join(dataRoot, 'egress', workspace) }
-    ],
+    runtimeRoots,
+    content,
+    turns,
+    settings,
     outsideScope: [
       {
         id: 'setup_plans_and_journals',
@@ -82,7 +161,7 @@ function exactWorkspaceTargets({ root, dataDir, runtimeDataDir }) {
         root: dataRoot,
         target: path.join(dataRoot, 'pets'),
         reason: 'Pet ownership and rollback records are shared installation state, not review content.'
-      },
+      }
     ]
   };
 }
@@ -230,9 +309,9 @@ async function removeTarget(target) {
 }
 
 export async function workspaceDataStatus(options) {
-  const targets = exactWorkspaceTargets(options);
+  const targets = await exactWorkspaceTargets(options);
   const budget = newInventoryBudget(options.dataInventoryMonotonicNowImpl);
-  const content = await collectStatuses([...targets.content, targets.turns], budget);
+  const content = await collectStatuses([...targets.content, ...targets.turns], budget);
   const settings = await collectStatuses(targets.settings, budget);
   const outsideScope = await collectStatuses(targets.outsideScope, budget, outsideScopeStatus);
   const providerTemporary = await workspaceProviderTempStatus({
@@ -252,6 +331,7 @@ export async function workspaceDataStatus(options) {
     schema_version: '1',
     workspace_key: targets.workspace,
     workspace_root: path.resolve(options.root),
+    runtime_roots: Object.freeze([...targets.runtimeRoots]),
     complete: incompleteReasons.length === 0,
     incomplete_reasons: Object.freeze([...new Set(incompleteReasons)]),
     content: Object.freeze(content),
@@ -271,11 +351,53 @@ export async function workspaceDataStatus(options) {
   });
 }
 
+async function workspaceRuntimePresent(runtimeRoot, workspace) {
+  for (const relative of [
+    path.join('turns', workspace),
+    path.join('automatic-reviews', workspace),
+    path.join('outbox', workspace),
+    path.join('renderers', workspace),
+    path.join('circuits', workspace)
+  ]) {
+    const details = await detailsOrMissing(path.join(runtimeRoot, relative));
+    if (details) return true;
+  }
+  return false;
+}
+
+async function quiesceRuntimeRoots(options, runtimeRoots, workspace) {
+  let acquired = true;
+  let live = 0;
+  let ambiguous = 0;
+  let limited = false;
+  let retainedTurnTombstones = 0;
+  for (const runtimeRoot of runtimeRoots) {
+    if (!(await workspaceRuntimePresent(runtimeRoot, workspace))) continue;
+    const turnResult = await pruneWorkspaceTurns({
+      root: options.root,
+      runtimeDataDir: runtimeRoot,
+      modeDataDir: options.dataDir,
+      now: options.now ?? Date.now(),
+      ttlMs: 0,
+      contentTtlMs: 0,
+      terminalizeIncomplete: true,
+      maxEntries: DATA_INVENTORY_ENTRY_LIMIT,
+      deadlineMs: options.deadlineMs ?? 60_000,
+      leaseStaleMs: options.leaseStaleMs
+    });
+    acquired &&= turnResult.acquired;
+    live += turnResult.live;
+    ambiguous += turnResult.ambiguous;
+    limited ||= turnResult.limited;
+  }
+  return { acquired, live, ambiguous, limited, retainedTurnTombstones };
+}
+
 export async function purgeWorkspaceData(options) {
-  const targets = exactWorkspaceTargets(options);
+  const targets = await exactWorkspaceTargets(options);
   const allTargets = [
     ...targets.content,
-    targets.turns,
+    ...targets.turns,
     ...targets.settings
   ];
   // Fully inventory every target before the first mutation. This recursively
@@ -304,18 +426,7 @@ export async function purgeWorkspaceData(options) {
     throw new Error('Buddy data purge refused because provider temporary ownership cannot be proven');
   }
 
-  const turnResult = await pruneWorkspaceTurns({
-    root: options.root,
-    runtimeDataDir: options.runtimeDataDir,
-    modeDataDir: options.dataDir,
-    now: options.now ?? Date.now(),
-    ttlMs: 0,
-    contentTtlMs: 0,
-    terminalizeIncomplete: true,
-    maxEntries: DATA_INVENTORY_ENTRY_LIMIT,
-    deadlineMs: options.deadlineMs ?? 60_000,
-    leaseStaleMs: options.leaseStaleMs
-  });
+  const turnResult = await quiesceRuntimeRoots(options, targets.runtimeRoots, targets.workspace);
   if (!turnResult.acquired || turnResult.live > 0 || turnResult.ambiguous > 0 || turnResult.limited) {
     throw new Error(
       `Buddy data purge could not safely quiesce turn state: acquired=${turnResult.acquired}, `
@@ -334,13 +445,13 @@ export async function purgeWorkspaceData(options) {
         nowMs: options.now ?? Date.now()
       })
     : Object.freeze({
-        scanned: 0,
-        removed: 0,
-        preserved: setupStatus?.files ?? 0,
-        refused: 0,
-        limited: false,
-        cleanup_available: !setupStatus?.exists
-      });
+      scanned: 0,
+      removed: 0,
+      preserved: setupStatus?.files ?? 0,
+      refused: 0,
+      limited: false,
+      cleanup_available: !setupStatus?.exists
+    });
 
   const removed = [];
   for (const target of targets.content) {
@@ -369,13 +480,17 @@ export async function purgeWorkspaceData(options) {
     monotonicNowImpl: options.providerInventoryMonotonicNowImpl
   });
   const after = await workspaceDataStatus(options);
+  const retainedTurnTombstones = after.content
+    .filter((item) => item.id === 'turn_state' || item.id.startsWith('turn_state#'))
+    .reduce((total, item) => total + item.files, 0);
   return Object.freeze({
     schema_version: '1',
     workspace_key: targets.workspace,
     workspace_root: path.resolve(options.root),
+    runtime_roots: Object.freeze([...targets.runtimeRoots]),
     include_settings: options.includeSettings === true,
     removed: Object.freeze(removed),
-    retained_turn_tombstones: after.content.find((item) => item.id === 'turn_state')?.files ?? 0,
+    retained_turn_tombstones: retainedTurnTombstones,
     retained_settings_files: after.totals.settings_files,
     remaining_content_files: after.totals.content_files,
     provider_temporary: providerTemporary,
