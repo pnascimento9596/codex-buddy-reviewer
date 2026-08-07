@@ -166,7 +166,7 @@ test('packaged Windows x64 helper is hash-pinned; ARM64 remains unavailable', as
   assert.match(manifest.build.x64, /cl\.exe .*job-supervisor\.c/);
   assert.equal(manifest.helpers['win32-x64'].status, 'verified');
   assert.equal(manifest.helpers['win32-x64'].protocol_version, WINDOWS_JOB_PROTOCOL_VERSION);
-  assert.equal(manifest.helpers['win32-x64'].path, path.join('bin', 'win32-x64', 'buddy-job-supervisor.exe'));
+  assert.equal(manifest.helpers['win32-x64'].path, 'bin/win32-x64/buddy-job-supervisor.exe');
   assert.match(manifest.helpers['win32-x64'].sha256, /^[0-9a-f]{64}$/u);
   assert.equal(manifest.helpers['win32-arm64'].status, 'unavailable');
   const selected = await resolveVerifiedWindowsJobHelper({
