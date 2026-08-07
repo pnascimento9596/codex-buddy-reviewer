@@ -554,3 +554,25 @@ test('Claude non-auth unsuccessful envelopes remain invalid_transport_envelope',
     }
   );
 });
+
+test('Claude successful envelopes with auth-related review text are not auth_unavailable', () => {
+  const payload = {
+    ...reviewResult(),
+    summary: 'No defect: the login path correctly reports authentication required.',
+    findings: []
+  };
+  const parsed = parseClaudeTransport(JSON.stringify([
+    { type: 'system', subtype: 'init', apiKeySource: 'none' },
+    {
+      type: 'assistant',
+      message: {
+        content: [{ type: 'text', text: 'authentication failed is mentioned only as review prose' }]
+      }
+    },
+    claudeEnvelope({
+      structured_output: payload,
+      result: 'authentication required for protected routes'
+    })
+  ]));
+  assert.deepEqual(parsed.reviewPayload, payload);
+});

@@ -112,11 +112,21 @@ function claudeAuthFailureDetail(envelope, events) {
 
 export function parseClaudeTransport(stdout) {
   const { envelope, events } = decodeClaudeEnvelope(stdout);
-  const authDetail = claudeAuthFailureDetail(envelope, events);
-  if (authDetail) {
-    const error = new Error(`Claude authentication unavailable: ${authDetail}`);
-    error.code = 'auth_unavailable';
-    throw error;
+  // Auth heuristics must not run against successful structured reviews: a
+  // legitimate finding summary can mention "authentication required" without
+  // being a transport/auth failure. Only classify after the envelope is
+  // already unsuccessful (or missing structured output).
+  const unsuccessful = envelope.type !== 'result'
+    || envelope.subtype !== 'success'
+    || envelope.is_error !== false
+    || !Object.hasOwn(envelope, 'structured_output');
+  if (unsuccessful) {
+    const authDetail = claudeAuthFailureDetail(envelope, events);
+    if (authDetail) {
+      const error = new Error(`Claude authentication unavailable: ${authDetail}`);
+      error.code = 'auth_unavailable';
+      throw error;
+    }
   }
   if (envelope.type !== 'result'
       || envelope.subtype !== 'success'
