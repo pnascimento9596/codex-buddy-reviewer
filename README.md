@@ -12,12 +12,12 @@
     <a href="CONTRIBUTING.md">Contributing</a>
   </p>
   <p>
-    <a href="#status"><img alt="Version v0.5.0-rc.6" src="https://img.shields.io/badge/version-v0.5.0--rc.6-7c3aed" /></a>
+    <a href="#status"><img alt="Version v0.5.0" src="https://img.shields.io/badge/version-v0.5.0-7c3aed" /></a>
     <a href="#quick-start"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&amp;logoColor=white" /></a>
     <a href="#connection-support"><img alt="Four reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-4-0891b2" /></a>
     <a href="#pets"><img alt="Five public pets" src="https://img.shields.io/badge/public_pets-5-f59e0b" /></a>
     <a href="#license"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-2563eb" /></a>
-    <a href="#status"><img alt="Release gates pending" src="https://img.shields.io/badge/release_gates-pending-ea580c" /></a>
+    <a href="#status"><img alt="Stable candidate" src="https://img.shields.io/badge/release_gates-stable_candidate-16a34a" /></a>
   </p>
 </div>
 
@@ -37,9 +37,9 @@ Run the first-party `/pet` command once to keep the selected companion open. Inv
 
 ## Status
 
-Release candidate: `v0.5.0-rc.6`, prepared for publication only from the exact protected `main` head through the guarded release workflow.
+Stable release: `v0.5.0`, prepared for publication only from the exact protected `main` head through the guarded release workflow.
 
-This is a release candidate, not a stable release. Provider egress remains experimental until the frozen tree passes the complete security, cross-platform, independent-review, packaging, and Codex host gates below. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
+This is the first stable `0.5.0` line. Provider egress remains experimental in the sense that live Windows provider contact stays blocked until DACL work ships; other documented limitations are listed in the release note and CHANGELOG. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
 
 ## What Buddy does
 
@@ -162,21 +162,21 @@ Prerequisites:
 - At least one supported reviewer CLI installed and authenticated through its own normal login flow
 - Windows v0.5 RC supports nonprovider commands and offline validation, but live reviewer contact is disabled pending current-user-only DACL implementation and real Windows evidence
 
-After protected publication completes, install the published `v0.5.0-rc.6` release through Codex's Git marketplace support:
+After protected publication completes, install the published `v0.5.0` release through Codex's Git marketplace support:
 
 ```bash
-codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.6
+codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0
 codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
 codex plugin list
 ```
 
-`v0.5.0-rc.6` carries post-rc.4 mechanics (release-tag reconcile, suite budget, security-scan fixes) on top of the post-rc.3 native-host fixes: speculative-worker snapshot-retry and event-loop keepalive (#36 / PRs #44 and #46), Codex 0.146 host-compatible 8×9 pet packages (#38 / PR #45), and first-enable baseline messaging (#37 / PR #50), on top of the rc.3 privacy, cleanup, corpus, and checked-JavaScript gates. Install the immutable tag, not the moving `main` branch.
+`v0.5.0` carries post-rc.4 mechanics (release-tag reconcile, suite budget, security-scan fixes) on top of the post-rc.3 native-host fixes: speculative-worker snapshot-retry and event-loop keepalive (#36 / PRs #44 and #46), Codex 0.146 host-compatible 8×9 pet packages (#38 / PR #45), and first-enable baseline messaging (#37 / PR #50), on top of the rc.3 privacy, cleanup, corpus, and checked-JavaScript gates. Install the immutable tag, not the moving `main` branch.
 
-This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0-rc.6`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
+This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
 
 The public default branch remains the contributor-friendly source repository. A release version tag is intended to resolve to a separate parentless distribution commit whose tree contains only the byte-verified positive artifact, including its `release-manifest.json`. It does not point at the full development checkout or inherit its objects and history. Install a pinned release tag, never a moving source branch.
 
-The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0-rc.6` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only release candidate. The stable `v0.5.0` tag remains unavailable until the security, platform, and five-pet Codex host gates close. During private development, use the existing `personal` marketplace flow.
+The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only stable release. During private development, use the existing `personal` marketplace flow.
 
 ```mermaid
 flowchart TD
@@ -493,7 +493,7 @@ npm run release:build -- --output /tmp/codex-buddy-public-rc3
 npm run release:verify -- --input /tmp/codex-buddy-public-rc3
 npm run release:distribution -- \
   --artifact /tmp/codex-buddy-public-rc3 \
-  --output /tmp/codex-buddy-v0.5.0-rc.6-distribution \
+  --output /tmp/codex-buddy-v0.5.0-distribution \
   --policy-root .
 ```
 
