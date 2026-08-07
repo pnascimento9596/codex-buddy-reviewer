@@ -30,7 +30,7 @@ const DENY_BASENAME_PATTERNS = [
   /^(?:credentials?|secrets?)(?:\..+)?$/i,
   /^(?:service[-_]?account|application[-_]?default[-_]?credentials)(?:[-_.].+)?\.json$/i,
   /^local\.settings\.json$/i,
-  /(?:^|[.-])kubeconfig(?:[.-]|$)/i,
+  /(?:^|[._-])kubeconfig(?:[._-]|$)/i,
   /^kubeconfig$/i,
   /\.tfstate(?:\.backup)?$/i,
   /(?:^|[-_.])private[-_.]?key(?:\..+)?$/i,
