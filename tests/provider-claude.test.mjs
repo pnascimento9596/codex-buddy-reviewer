@@ -89,6 +89,7 @@ test('Claude invokes the verified isolated CLI contract with schema-bound stdin'
     assert.equal(options.protectFromParentDeath, true);
     assert.equal(options.timeoutMs > 0 && options.timeoutMs <= 5_000, true);
     assert.equal(options.maxOutputBytes, 4 * 1024 * 1024);
+    assert.deepEqual(options.acceptedExitCodes, [0, 1]);
     assert.deepEqual(options.env, {
       PATH: '/usr/bin:/bin',
       HOME: fixtureHome,
@@ -453,4 +454,125 @@ test('Claude rejects malformed or unsuccessful envelopes', () => {
     })),
     /structured output/
   );
+});
+
+test('Claude classifies OAuth/auth envelopes as auth_unavailable instead of transport_exit', async () => {
+  const authEnvelope = {
+    type: 'result',
+    subtype: 'success',
+    is_error: true,
+    apiKeySource: 'none',
+    terminal_reason: 'api_error',
+    result: 'Failed to authenticate: OAuth session expired and could not be refreshed'
+  };
+  assert.throws(
+    () => parseClaudeTransport(JSON.stringify([
+      {
+        type: 'system',
+        subtype: 'init',
+        apiKeySource: 'none',
+        tools: ['StructuredOutput']
+      },
+      {
+        type: 'assistant',
+        error: 'authentication_failed',
+        message: {
+          content: [{ type: 'text', text: 'Failed to authenticate: OAuth session expired and could not be refreshed' }]
+        }
+      },
+      authEnvelope
+    ])),
+    (error) => {
+      assert.equal(error.code, 'auth_unavailable');
+      assert.match(error.message, /OAuth session expired/);
+      return true;
+    }
+  );
+
+  let isolatedCwd;
+  let acceptedExitCodes;
+  await assert.rejects(
+    reviewWithClaude({
+      root: '/tmp/repository',
+      prompt: 'packet',
+      timeoutMs: 5_000,
+      claudeBin: '/fixture/bin/claude',
+      responseSchema: REVIEW_RESULT_SCHEMA,
+      runProcessImpl: async (_command, _args, options) => {
+        isolatedCwd = options.cwd;
+        acceptedExitCodes = options.acceptedExitCodes;
+        return {
+          code: 1,
+          stdout: JSON.stringify([
+            { type: 'system', subtype: 'init', apiKeySource: 'none' },
+            {
+              type: 'assistant',
+              error: 'authentication_failed',
+              message: {
+                content: [{ type: 'text', text: 'Failed to authenticate: OAuth session expired and could not be refreshed' }]
+              }
+            },
+            authEnvelope
+          ]),
+          stderr: ''
+        };
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof ProviderFailure, true);
+      assert.equal(error.failureCode, 'auth_unavailable');
+      assert.equal(error.run.stage, 'inference');
+      assert.equal(error.message, 'The configured provider authentication is unavailable.');
+      assert.doesNotMatch(error.message, /OAuth|SECRET|fixture/);
+      assert.doesNotMatch(JSON.stringify(error), /OAuth session expired/);
+      return true;
+    }
+  );
+  assert.deepEqual(acceptedExitCodes, [0, 1]);
+  await assert.rejects(access(isolatedCwd));
+});
+
+test('Claude non-auth unsuccessful envelopes remain invalid_transport_envelope', async () => {
+  await assert.rejects(
+    reviewWithClaude({
+      root: '/tmp/repository',
+      prompt: 'packet',
+      timeoutMs: 5_000,
+      claudeBin: '/fixture/bin/claude',
+      responseSchema: REVIEW_RESULT_SCHEMA,
+      runProcessImpl: async () => ({
+        code: 1,
+        stdout: JSON.stringify(claudeEnvelope({ subtype: 'error', is_error: true, result: 'model overloaded' })),
+        stderr: ''
+      })
+    }),
+    (error) => {
+      assert.equal(error instanceof ProviderFailure, true);
+      assert.equal(error.failureCode, 'invalid_transport_envelope');
+      assert.equal(error.run.stage, 'transport');
+      return true;
+    }
+  );
+});
+
+test('Claude successful envelopes with auth-related review text are not auth_unavailable', () => {
+  const payload = {
+    ...reviewResult(),
+    summary: 'No defect: the login path correctly reports authentication required.',
+    findings: []
+  };
+  const parsed = parseClaudeTransport(JSON.stringify([
+    { type: 'system', subtype: 'init', apiKeySource: 'none' },
+    {
+      type: 'assistant',
+      message: {
+        content: [{ type: 'text', text: 'authentication failed is mentioned only as review prose' }]
+      }
+    },
+    claudeEnvelope({
+      structured_output: payload,
+      result: 'authentication required for protected routes'
+    })
+  ]));
+  assert.deepEqual(parsed.reviewPayload, payload);
 });

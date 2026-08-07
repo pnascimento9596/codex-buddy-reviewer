@@ -25,6 +25,10 @@
       "destination": ".claude-plugin/marketplace.json"
     },
     {
+      "source": "bin/win32-x64/buddy-job-supervisor.exe",
+      "destination": "bin/win32-x64/buddy-job-supervisor.exe"
+    },
+    {
       "source": "scripts/buddy-eval.mjs",
       "destination": "scripts/buddy-eval.mjs"
     },
