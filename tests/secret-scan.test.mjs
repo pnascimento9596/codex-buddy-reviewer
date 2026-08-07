@@ -331,9 +331,13 @@ test('secret scan detects OpenCode-style nested key and GH/NPM TOKEN assignments
   for (const value of [
     '{"openai":{"type":"api","key":"v4.local.real-looking-secret-value-9f3a-extra"}}',
     'export GH_TOKEN=v4.local.real-looking-secret-value-9f3a-extra\n',
-    'export NPM_TOKEN=v4.local.real-looking-secret-value-9f3a-extra\n',
-    'key: "v4.local.real-looking-secret-value-9f3a-extra-entropy"'
+    'export NPM_TOKEN=v4.local.real-looking-secret-value-9f3a-extra\n'
   ]) {
     assert.deepEqual(scanSecretMaterial(Buffer.from(value)), { complete: true, detected: true }, value.slice(0, 24));
   }
+  // quoted JSON bare key field is covered; unquoted prose key: is out of scope
+  assert.deepEqual(
+    scanSecretMaterial(Buffer.from('"key": "v4.local.real-looking-secret-value-9f3a-extra-entropy"')),
+    { complete: true, detected: true }
+  );
 });

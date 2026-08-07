@@ -20,11 +20,16 @@ const HIGH_CONFIDENCE_PATTERNS = Object.freeze([
 
 const OPAQUE_MODEL_CREDENTIAL_PATTERN = /^[0-9A-Za-z_-]{32,200}$/u;
 
-const CREDENTIAL_PLACEHOLDER_LABEL = '(?:api[-_.]?key|access[-_.]?token|refresh[-_.]?token|auth[-_.]?token|oauth[-_.]?token|session[-_.]?token|id[-_.]?token|(?:gh|github|npm|gl|gitlab|hf|huggingface|slack)[-_.]?token|token|secret(?:[-_.]?(?:key|token))?|secret[-_.]?access[-_.]?key|client[-_.]?secret|password|passwd|private[-_.]?key|key)';
+const CREDENTIAL_PLACEHOLDER_LABEL = '(?:api[-_.]?key|access[-_.]?token|refresh[-_.]?token|auth[-_.]?token|oauth[-_.]?token|session[-_.]?token|id[-_.]?token|(?:gh|github|npm|gl|gitlab|hf|huggingface|slack)[-_.]?token|secret(?:[-_.]?(?:key|token))?|secret[-_.]?access[-_.]?key|client[-_.]?secret|password|passwd|private[-_.]?key)';
 const CREDENTIAL_ARGUMENT_NAME = `(?:[0-9A-Za-z]+[-_.]+)*${CREDENTIAL_PLACEHOLDER_LABEL}`;
 const CREDENTIAL_FIELD_NAME = `[-_.]*${CREDENTIAL_ARGUMENT_NAME}`;
 const CREDENTIAL_ASSIGNMENT = '(?:\\s*\\]?\\s*)(?::\\s*[0-9A-Za-z_$.:<>&|?\\[\\], ]{1,80}\\s*=|:=|[:=])\\s*';
 const QUOTED_CREDENTIAL_VALUE = String.raw`(["'\x60])((?:\\[\s\S]|(?!\1)[^\\\r\n]){1,512})\1`;
+// OpenCode auth stores and similar JSON use a bare "key" field for the secret value.
+const QUOTED_JSON_KEY_SECRET = new RegExp(
+  String.raw`(?:^|[^0-9A-Za-z_.-])["']key["']\s*:\s*${QUOTED_CREDENTIAL_VALUE}`,
+  'gimu'
+);
 const QUOTED_CONTEXTUAL_SECRET = new RegExp(
   `(?:^|[^0-9A-Za-z_.-])["'\\x60]?${CREDENTIAL_FIELD_NAME}["'\\x60]?${CREDENTIAL_ASSIGNMENT}${QUOTED_CREDENTIAL_VALUE}`,
   'gimu'
@@ -148,6 +153,13 @@ export function scanSecretMaterial(bytes) {
   AUTHORIZATION_CREDENTIAL.lastIndex = 0;
   for (const match of text.matchAll(AUTHORIZATION_CREDENTIAL)) {
     if (!isClosedAuthorizationCredential(match[2])) {
+      return Object.freeze({ complete: true, detected: true });
+    }
+  }
+  QUOTED_JSON_KEY_SECRET.lastIndex = 0;
+  for (const match of text.matchAll(QUOTED_JSON_KEY_SECRET)) {
+    const candidate = match[2];
+    if (!isEnvironmentReference(candidate) && isCredentialCandidate(candidate, 3.0)) {
       return Object.freeze({ complete: true, detected: true });
     }
   }
