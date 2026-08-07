@@ -1,0 +1,6 @@
+interface:
+  display_name: "Buddy Review"
+  short_description: "Toggle independent post-turn code review"
+  default_prompt: "Use $buddy-review to toggle automatic independent review for this workspace."
+policy:
+  allow_implicit_invocation: false

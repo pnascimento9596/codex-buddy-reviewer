@@ -1,0 +1,56 @@
+{
+  "schema_version": "1",
+  "id": "deletion-old-side-citation",
+  "category": "deletion",
+  "description": "A deleted authorization guard must be reported against the transmitted old side, never a nonexistent new line.",
+  "live_eligible": true,
+  "egress_expected": true,
+  "evidence": {
+    "schema_version": "1",
+    "review_id": "eval-deletion-old-side-citation",
+    "captured_at": "2026-08-03T00:00:00.000Z",
+    "repository_root": "eval-fixture",
+    "head": "1111111111111111111111111111111111111111",
+    "scope": "turn",
+    "base": "0000000000000000000000000000000000000000",
+    "changed_paths": ["src/legacy-auth.js"],
+    "excluded_paths": [],
+    "sensitive_change_count": 0,
+    "ignored_change_count": 0,
+    "path_evidence": [
+      {
+        "path": "src/legacy-auth.js",
+        "disposition": "complete",
+        "patch_bytes": 262,
+        "transmitted": true,
+        "hunk_ranges": [
+          { "start": 1, "end": 4, "side": "old" }
+        ],
+        "file_state": "deleted",
+        "old_line_count": 4
+      }
+    ],
+    "incomplete_paths": [],
+    "hunk_ranges": {
+      "src/legacy-auth.js": [
+        { "start": 1, "end": 4, "side": "old" }
+      ]
+    },
+    "status": "changed",
+    "patch": "diff --git a/src/legacy-auth.js b/src/legacy-auth.js\ndeleted file mode 100644\nindex 81d6f90..0000000\n--- a/src/legacy-auth.js\n+++ /dev/null\n@@ -1,4 +0,0 @@\n-export function authorize(user) {\n-  if (!user.isAdmin) throw new Error('forbidden');\n-  return user;\n-}\n",
+    "patch_hash": "b1a72637ddfb2624d3ae2356b47d46a26f28c2ec0c4b8f74c752dedcdd7296ec",
+    "patch_bytes": 262,
+    "truncated": false,
+    "line_counts": { "src/legacy-auth.js": 0 },
+    "old_line_counts": { "src/legacy-auth.js": 4 }
+  },
+  "expected": {
+    "allowed_statuses": ["findings"],
+    "min_findings": 1,
+    "max_findings": 1,
+    "provider_call": "required",
+    "required_anchors": [
+      { "path": "src/legacy-auth.js", "line_side": "old", "start": 2, "end": 2 }
+    ]
+  }
+}

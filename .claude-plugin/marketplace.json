@@ -1,0 +1,17 @@
+{
+  "name": "codex-buddy-reviewer",
+  "metadata": {
+    "description": "Independent post-turn code review for Codex using one or two existing AI provider connections, with five animated companions."
+  },
+  "owner": {
+    "name": "Paulo Nascimento",
+    "url": "https://github.com/pnascimento9596"
+  },
+  "plugins": [
+    {
+      "name": "codex-buddy-reviewer",
+      "source": "./",
+      "description": "Turn existing Claude, Grok, Ollama, and OpenCode connections into one or two attributed review seats after Codex finishes a coding turn."
+    }
+  ]
+}
