@@ -43,6 +43,10 @@ The repository contains five hash-pinned host-compatible packages. The positive 
 
 `public` means the original project artwork is cleared for redistribution in the generated public artifact under the repository's Apache-2.0 distribution. Bella and Lupo received explicit owner authorization for public redistribution on 2026-07-19. The catalog and installer are content-driven rather than hard-coded to these five IDs; scope and redistribution remain enforced as packaging and provenance contracts.
 
+### Dual Bella/Lupo selector entries (host-side)
+
+Buddy package ids are `buddy-bella` and `buddy-lupo` with display names `Bella` and `Lupo`. A host that already has legacy ambient `bella` / `lupo` pets can therefore show **two** selector rows with the same display names: the pre-existing ambient packages and the Buddy packages. That is a host dual-install artifact, not a catalog `displayName` defect. Prefer the Buddy package id (`buddy-bella` / `buddy-lupo`) when selecting the released pet. Do not rename Buddy `displayName` fields to force uniqueness. Optional host-side disambiguation (package-id column) is outside this plugin.
+
 ```bash
 node scripts/buddy-review.mjs pet list
 node scripts/buddy-review.mjs pet status
