@@ -2,6 +2,28 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
+## 0.5.0-rc.6 - 2026-08-07
+
+### Fixed
+
+- **#66 (PR #69).** `data status` and `data purge` now enumerate every runtime root the installed plugin identity may have used: explicit `--runtime-data-dir`, host `PLUGIN_DATA` / `CLAUDE_PLUGIN_DATA`, discovered non-symlink directories under `<CODEX_HOME>/plugins/data/` matching the buddy plugin identity, and the legacy durable data-dir. Status reports and purge clear workspace content under all of those roots. Content-free turn tombstones and capability at-most-once records remain. Symlinked plugin-data discovery entries are ignored so purge cannot be pointed at arbitrary paths.
+
+  **Operator note (rc.5 and earlier):** If you ran `data purge --confirm-purge` while automatic review had written receipts under `~/.codex/plugins/data/...`, that purge could report success while runtime receipts/outbox/turns remained on disk. After installing a build with this fix, disable automatic review and run `data purge --confirm-purge` once more so every root is cleared.
+
+- **#65 (PR #69).** Host-e2e installed-snapshot bind tolerates exactly one root-level `.codex-marketplace-install.json` after schema-checking it as host metadata (`source_type`/`source`/`ref_name`/`sparse_paths`/`revision`; no extra fields). Nested path, other extra files, or invalid schema still fail the bind. Root `.git` skip from PR #55 is unchanged. Runbook updated. Report/bundle validation reuses the same strict marketplace schema as collect.
+
+### Observed on rc.5 host-e2e (lane-c2a; machine-captured, human-unreviewed)
+
+- Marketplace install of published `v0.5.0-rc.5` binds payload bytes (modulo install metadata, fixed in this RC).
+- Dual-review planted off-by-one detected; no-change turn zero egress.
+- Speculative adoption unobserved on rc.5 (accepted residue; re-probe at rc.6 host-e2e). Lifecycle/adoption code is byte-identical to rc.4 source except `src/filter-free-git.mjs`.
+- Stop-path duration >600 s unproven (open; re-probe at rc.6 host-e2e). Hook timeout configuration is the rc.4→rc.5 delta.
+- glm-5.2:cloud attribution matched configured model in observed turns; per-result check remains mandatory.
+
+### Release status
+
+- This remains an RC. It is prepared for publication only from the exact protected `main` head through the guarded release workflow with `version: 0.5.0-rc.6`. Do not treat this changelog entry as dispatch authorization. Exact-head security re-scan remains open on the post-fix promotion head after rc.6 host-e2e. Windows DACL and owner governance residue are unchanged.
+
 ## 0.5.0-rc.5 - 2026-08-06
 
 ### Fixed
