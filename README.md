@@ -59,17 +59,17 @@ This is the first stable `0.5.0` line. Provider egress remains experimental in t
 
 An internal sealed whole-repository Deep Security Scan of the pre-fix RC head found 20 findings: 17 medium and 3 low. They clustered around credential syntax gaps, denied-content fragment and live Git metadata coverage, and lossy handling of invalid UTF-8 Git pathnames. Provider-free reproductions proved that affected bytes could enter a prepared external-review prompt or that review evidence could be reported falsely complete.
 
-The release-candidate source implements structural remediations and regression coverage for those finding families, plus independent Grok and Opus review fixes. This is not yet a closure claim. Promotion to stable remains blocked until all release gates close:
+Those finding families were remediated with regression coverage and independent review fixes through the rc series. For stable `v0.5.0` the remaining public posture is:
 
-1. The exact source head passes the complete local suite, plugin and skill validators, and public-boundary verification.
-2. The frozen source passes final RepoPrompt context review, independent Grok 4.5 and Claude Opus 4.8 high reviews, and a fresh sealed whole-repository Codex Deep Security Scan with every reportable finding fixed and revalidated.
-3. GitHub Actions passes the Ubuntu, macOS, Windows x64, Node 22, and Node 24 matrix at that same protected default-branch head, then deterministically rebuilds, verifies, re-extracts, and installs the exact artifact.
-4. The positive artifact contains a reviewed, hash-pinned Windows x64 Job Object helper whose exact packaged bytes pass real Windows process-tree tests.
-5. Windows live provider egress remains disabled until Buddy can create and verify current-user-only DACLs for durable review state and provider temporary roots, with real Windows evidence.
+1. Exact protected `main` head passes the complete local suite, plugin and skill validators, and public-boundary verification.
+2. Security-scan seal of the final promotion head under the rewritten two-family gate (see `docs/releases/v0.5.0-stable-readiness.md`).
+3. GitHub Actions Ubuntu, macOS, Windows x64, Node 22/24 matrix green at that head; deterministic rebuild, verify, extract, and install of the exact artifact.
+4. Positive artifact contains the reviewed, hash-pinned Windows x64 Job Object helper (packaged under `bin/win32-x64/`).
+5. Windows live provider egress remains **disabled** until Buddy can create and verify current-user-only DACLs for durable review state and provider temporary roots, with real Windows evidence (post-stable epic).
 
-Human artifact-bound host observations for Byte, Mochi, Orbit, Bella, and Lupo are intentionally deferred until real users or pull requests make that adoption-scale process useful. They are not a public RC launch gate. The current protected workflow still reserves them for eventual stable promotion.
+Five-pet host evidence for Byte, Mochi, Orbit, Bella, and Lupo is carried as machine-captured artifact-bound host-e2e bundles (human-unreviewed label) rather than a separate multi-session human pet tour. Speculative adoption is proven on published rc.6 host-e2e. Stop-path multi-minute host enforcement remains a documented limitation.
 
-The automatic path preserves the main agent's result when Buddy cannot review, and manual review reports a failure instead of inventing an all-clear. Privacy policy, authorization, provider isolation, and result validation are designed to fail closed. The current remediations still require exact-final-tree security and platform revalidation before stable release.
+The automatic path preserves the main agent's result when Buddy cannot review, and manual review reports a failure instead of inventing an all-clear. Privacy policy, authorization, provider isolation, and result validation are designed to fail closed.
 
 Bella and Lupo are explicitly cleared for public redistribution with Byte, Mochi, and Orbit. Public source history is intentionally rooted at one reviewed commit with GitHub noreply author metadata. The former private development history has a private local backup and is not reachable from the public branch or release tags. Replacing refs in place does not claim that GitHub immediately purged every unreachable or cached private object.
 
@@ -470,7 +470,7 @@ Purge preserves connection, pet, and mode settings unless `--include-settings` i
 - On Windows, v0.5 RC blocks live reviewer contact before evidence or prompt persistence because durable Buddy state and provider temporary roots do not yet have verified current-user-only DACLs. The native Job Object helper and its host-independent tests remain process-containment work for a later enabled Windows path; they do not override this privacy gate.
 - Capability issuance is atomic for the full reviewer set. Capabilities are short-lived, single-use, exact-bound, and positively settled before a completed configuration revocation returns.
 - Delivery is durably tracked through prepared, claimed, stdout-written, and observed states. Without a host acknowledgment token, a crash after stdout becomes visible but before observation can still make a later replay duplicate the continuation.
-- Credential values never belong in source, fixtures, docs, prompt exports, receipts, logs, Git history, or release artifacts. CI scans complete committed history, and the release candidate is also scanned as a built directory.
+- Credential values never belong in source, fixtures, docs, prompt exports, receipts, logs, Git history, or release artifacts. CI scans complete committed history, and the release artifact is also scanned as a built directory.
 - Default tests and CI never consume a paid model subscription. Live checks are explicit and bounded.
 
 Read [docs/SECURITY.md](docs/SECURITY.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and [docs/AUTOMATIC-MODE.md](docs/AUTOMATIC-MODE.md) for the full contracts.
