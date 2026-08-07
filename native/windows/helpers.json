@@ -5,12 +5,20 @@
   "build": {
     "toolchain": "MSVC from a Visual Studio 2022 Native Tools command prompt",
     "x64": "cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:bin\\win32-x64\\buddy-job-supervisor.exe native\\windows\\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT",
-    "arm64": "cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:bin\\win32-arm64\\buddy-job-supervisor.exe native\\windows\\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT"
+    "arm64": "cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:bin\\win32-arm64\\buddy-job-supervisor.exe native\\windows\\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT",
+    "packaged_from": {
+      "ci_run": "31184670872",
+      "job": "windows-latest / Node 22",
+      "head": "8c8133d2316de088fe5d4fb1aeec926cb41c84d2",
+      "bytes": 144384
+    }
   },
   "helpers": {
     "win32-x64": {
-      "status": "unavailable",
-      "reason": "No reviewed, hash-pinned Windows x64 helper binary is packaged yet."
+      "status": "verified",
+      "protocol_version": "1",
+      "path": "bin/win32-x64/buddy-job-supervisor.exe",
+      "sha256": "d6fce879243a09ebb5fb12e432652a37ff5320acf3f20dee427bb40b73506f15"
     },
     "win32-arm64": {
       "status": "unavailable",

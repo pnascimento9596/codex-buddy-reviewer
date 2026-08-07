@@ -337,6 +337,12 @@ test('final public versions require a packaged verified win32-x64 helper', async
     await verifyFinalWindowsHelper(output, '0.5.0-rc.6'),
     { required: false, verified: false }
   );
+  const verified = await verifyFinalWindowsHelper(output, '0.5.0');
+  assert.equal(verified.required, true);
+  assert.equal(verified.verified, true);
+  assert.match(verified.sha256, /^[0-9a-f]{64}$/u);
+
+  await rm(path.join(output, 'bin', 'win32-x64', 'buddy-job-supervisor.exe'));
   await assert.rejects(
     verifyFinalWindowsHelper(output, '0.5.0'),
     /final releases require a packaged verified win32-x64 helper/
