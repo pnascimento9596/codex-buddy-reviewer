@@ -6,6 +6,7 @@ const DENY_SEGMENTS = new Set([
   '.aws',
   '.gnupg',
   '.kube',
+  '.docker',
   '.azure',
   '.secrets',
   'secret',
@@ -25,9 +26,12 @@ const DENY_BASENAME_PATTERNS = [
   /^\.npmrc$/i,
   /^\.pypirc$/i,
   /^\.netrc$/i,
-  /^auth\.json$/i,
+  /^auth\.json(?:\..+)?$/i,
   /^(?:credentials?|secrets?)(?:\..+)?$/i,
   /^(?:service[-_]?account|application[-_]?default[-_]?credentials)(?:[-_.].+)?\.json$/i,
+  /^local\.settings\.json$/i,
+  /(?:^|[._-])kubeconfig(?:[._-]|$)/i,
+  /^kubeconfig$/i,
   /\.tfstate(?:\.backup)?$/i,
   /(?:^|[-_.])private[-_.]?key(?:\..+)?$/i,
   /\.(?:pem|key|p12|pfx|jks|keystore)$/i,
@@ -39,7 +43,10 @@ export const SENSITIVE_IGNORED_PATHSPECS = [
   ':(icase,glob)**/.env.*', ':(icase,glob)**/.env.*/**',
   ':(icase,glob)**/.envrc', ':(icase,glob)**/.npmrc',
   ':(icase,glob)**/.pypirc', ':(icase,glob)**/.netrc',
-  ':(icase,glob)**/auth.json',
+  ':(icase,glob)**/auth.json', ':(icase,glob)**/auth.json.*',
+  ':(icase,glob)**/.docker', ':(icase,glob)**/.docker/**',
+  ':(icase,glob)**/kubeconfig', ':(icase,glob)**/*kubeconfig*',
+  ':(icase,glob)**/local.settings.json',
   ':(icase,glob)**/credential', ':(icase,glob)**/credential.*',
   ':(icase,glob)**/credential/**',
   ':(icase,glob)**/credentials', ':(icase,glob)**/credentials.*',
@@ -66,6 +73,7 @@ export const SENSITIVE_IGNORED_PATHSPECS = [
   ':(icase,glob)**/.aws', ':(icase,glob)**/.aws/**',
   ':(icase,glob)**/.gnupg', ':(icase,glob)**/.gnupg/**',
   ':(icase,glob)**/.kube', ':(icase,glob)**/.kube/**',
+  ':(icase,glob)**/.docker', ':(icase,glob)**/.docker/**',
   ':(icase,glob)**/.azure', ':(icase,glob)**/.azure/**',
   ':(icase,glob)**/.secrets', ':(icase,glob)**/.secrets/**'
 ];
@@ -89,6 +97,10 @@ export function pathPolicy(repoPath) {
   }
   if (lowerParts.some((part) => DENY_SEGMENTS.has(part) || /^\.env(?:\..+)?$/i.test(part))) {
     return { allowed: false, reason: 'denied directory' };
+  }
+  // Docker client config is commonly stored outside ~/.docker as repo-local docker/config.json.
+  if (lowerParts.includes('docker') && /^config\.json$/i.test(basename)) {
+    return { allowed: false, reason: 'potential secret material' };
   }
   if (DENY_BASENAME_PATTERNS.some((pattern) => pattern.test(basename))) {
     return { allowed: false, reason: 'potential secret material' };

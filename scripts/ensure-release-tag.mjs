@@ -160,11 +160,21 @@ try {
     if (!options.tag) throw new Error('--tag is required');
     if (!options.tagRef) throw new Error('--tag-ref is required');
     if (!options.localRepository) throw new Error('--local-repository is required');
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(options.repository)) {
+      throw new Error('--repository must be owner/name with safe characters only');
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(options.tag) || options.tag.includes('..')) {
+      throw new Error('--tag must be a single safe ref name without path segments');
+    }
     if (!options.tagRef.startsWith('refs/tags/')) {
       throw new Error('--tag-ref must start with refs/tags/');
     }
     if (options.tagRef !== `refs/tags/${options.tag}`) {
       throw new Error('--tag-ref must equal refs/tags/<tag>');
+    }
+    const server = options.githubServerUrl || process.env.GITHUB_SERVER_URL || 'https://github.com';
+    if (!/^https:\/\/[A-Za-z0-9.-]+(?::\d+)?$/u.test(String(server).replace(/\/$/u, ''))) {
+      throw new Error('github server URL must be https without a path');
     }
 
     const expectedTagObject = loadExpectedTagObject(options);

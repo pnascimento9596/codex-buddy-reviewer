@@ -13,6 +13,8 @@ const HIGH_CONFIDENCE_PATTERNS = Object.freeze([
   /\bxox[baprs]-[0-9A-Za-z-]{20,255}\b/u,
   /\bAIza[0-9A-Za-z_-]{35}\b/u,
   /\bsk-[0-9A-Za-z_-]{20,255}\b/u,
+  /\bsk_(?:live|test)_[0-9A-Za-z]{16,255}\b/u,
+  /\brk_(?:live|test)_[0-9A-Za-z]{16,255}\b/u,
   /\b(?:gsk_|hf_|npm_|pplx-)[0-9A-Za-z_-]{20,255}\b/u,
   /\bxai-[0-9A-Za-z_-]{20,255}\b/u,
   /\beyJ[0-9A-Za-z_-]{5,}\.[0-9A-Za-z_-]{5,}\.[0-9A-Za-z_-]{8,}\b/u
@@ -28,6 +30,11 @@ const QUOTED_CREDENTIAL_VALUE = String.raw`(["'\x60])((?:\\[\s\S]|(?!\1)[^\\\r\n
 // OpenCode auth stores and similar JSON use a bare "key" field for the secret value.
 const QUOTED_JSON_KEY_SECRET = new RegExp(
   String.raw`(?:^|[^0-9A-Za-z_.-])["']key["']\s*:\s*${QUOTED_CREDENTIAL_VALUE}`,
+  'gimu'
+);
+// Docker registry config stores base64(user:secret) under "auth".
+const QUOTED_DOCKER_AUTH_SECRET = new RegExp(
+  String.raw`(?:^|[^0-9A-Za-z_.-])["']auth["']\s*:\s*${QUOTED_CREDENTIAL_VALUE}`,
   'gimu'
 );
 const QUOTED_CONTEXTUAL_SECRET = new RegExp(
@@ -160,6 +167,28 @@ export function scanSecretMaterial(bytes) {
   for (const match of text.matchAll(QUOTED_JSON_KEY_SECRET)) {
     const candidate = match[2];
     if (!isEnvironmentReference(candidate) && isCredentialCandidate(candidate, 3.0)) {
+      return Object.freeze({ complete: true, detected: true });
+    }
+  }
+  QUOTED_DOCKER_AUTH_SECRET.lastIndex = 0;
+  for (const match of text.matchAll(QUOTED_DOCKER_AUTH_SECRET)) {
+    const encoded = match[2];
+    if (isEnvironmentReference(encoded) || encoded.length < 8 || encoded.length > 4096) continue;
+    let decoded;
+    try {
+      decoded = Buffer.from(encoded, 'base64').toString('utf8');
+    } catch {
+      continue;
+    }
+    // Only treat well-formed base64 that round-trips and contains userinfo.
+    if (Buffer.from(decoded, 'utf8').toString('base64').replace(/=+$/u, '')
+        !== encoded.replace(/=+$/u, '')) {
+      continue;
+    }
+    if (decoded.includes(':') && !isClosedConnectionPassword(decoded.split(':').slice(1).join(':'))) {
+      return Object.freeze({ complete: true, detected: true });
+    }
+    if (HIGH_CONFIDENCE_PATTERNS.some((pattern) => pattern.test(decoded))) {
       return Object.freeze({ complete: true, detected: true });
     }
   }
