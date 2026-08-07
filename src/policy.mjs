@@ -21,9 +21,11 @@ const DENY_SEGMENTS = new Set([
 
 const DENY_BASENAME_PATTERNS = [
   /^\.env(?:\..+)?$/i,
+  /^\.envrc$/i,
   /^\.npmrc$/i,
   /^\.pypirc$/i,
   /^\.netrc$/i,
+  /^auth\.json$/i,
   /^(?:credentials?|secrets?)(?:\..+)?$/i,
   /^(?:service[-_]?account|application[-_]?default[-_]?credentials)(?:[-_.].+)?\.json$/i,
   /\.tfstate(?:\.backup)?$/i,
@@ -34,8 +36,10 @@ const DENY_BASENAME_PATTERNS = [
 
 export const SENSITIVE_IGNORED_PATHSPECS = [
   ':(icase,glob)**/.env', ':(icase,glob)**/.env/**',
-  ':(icase,glob)**/.env.*', ':(icase,glob)**/.env.*/**', ':(icase,glob)**/.npmrc',
+  ':(icase,glob)**/.env.*', ':(icase,glob)**/.env.*/**',
+  ':(icase,glob)**/.envrc', ':(icase,glob)**/.npmrc',
   ':(icase,glob)**/.pypirc', ':(icase,glob)**/.netrc',
+  ':(icase,glob)**/auth.json',
   ':(icase,glob)**/credential', ':(icase,glob)**/credential.*',
   ':(icase,glob)**/credential/**',
   ':(icase,glob)**/credentials', ':(icase,glob)**/credentials.*',

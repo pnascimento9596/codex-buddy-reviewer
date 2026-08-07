@@ -20,7 +20,7 @@ const HIGH_CONFIDENCE_PATTERNS = Object.freeze([
 
 const OPAQUE_MODEL_CREDENTIAL_PATTERN = /^[0-9A-Za-z_-]{32,200}$/u;
 
-const CREDENTIAL_PLACEHOLDER_LABEL = '(?:api[-_.]?key|access[-_.]?token|refresh[-_.]?token|auth[-_.]?token|oauth[-_.]?token|session[-_.]?token|id[-_.]?token|secret(?:[-_.]?(?:key|token))?|secret[-_.]?access[-_.]?key|client[-_.]?secret|password|passwd|private[-_.]?key)';
+const CREDENTIAL_PLACEHOLDER_LABEL = '(?:api[-_.]?key|access[-_.]?token|refresh[-_.]?token|auth[-_.]?token|oauth[-_.]?token|session[-_.]?token|id[-_.]?token|(?:gh|github|npm|gl|gitlab|hf|huggingface|slack)[-_.]?token|token|secret(?:[-_.]?(?:key|token))?|secret[-_.]?access[-_.]?key|client[-_.]?secret|password|passwd|private[-_.]?key|key)';
 const CREDENTIAL_ARGUMENT_NAME = `(?:[0-9A-Za-z]+[-_.]+)*${CREDENTIAL_PLACEHOLDER_LABEL}`;
 const CREDENTIAL_FIELD_NAME = `[-_.]*${CREDENTIAL_ARGUMENT_NAME}`;
 const CREDENTIAL_ASSIGNMENT = '(?:\\s*\\]?\\s*)(?::\\s*[0-9A-Za-z_$.:<>&|?\\[\\], ]{1,80}\\s*=|:=|[:=])\\s*';

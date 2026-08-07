@@ -326,3 +326,14 @@ test('secret scan remains bounded on maximum-size unterminated escaped literals'
   assert.deepEqual(scanSecretMaterial(input), { complete: true, detected: false });
   assert.equal(performance.now() - started < 2_000, true);
 });
+
+test('secret scan detects OpenCode-style nested key and GH/NPM TOKEN assignments', () => {
+  for (const value of [
+    '{"openai":{"type":"api","key":"v4.local.real-looking-secret-value-9f3a-extra"}}',
+    'export GH_TOKEN=v4.local.real-looking-secret-value-9f3a-extra\n',
+    'export NPM_TOKEN=v4.local.real-looking-secret-value-9f3a-extra\n',
+    'key: "v4.local.real-looking-secret-value-9f3a-extra-entropy"'
+  ]) {
+    assert.deepEqual(scanSecretMaterial(Buffer.from(value)), { complete: true, detected: true }, value.slice(0, 24));
+  }
+});
