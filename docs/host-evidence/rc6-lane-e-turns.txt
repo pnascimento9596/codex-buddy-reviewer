@@ -1,0 +1,35 @@
+# rc.6 lane-e — turn summaries (machine-captured, human-unreviewed)
+
+## Doctor
+
+- Dual config: primary ollama/glm-5.2:cloud high; secondary claude/claude-opus-4-8 high; continuous consented.
+- Offline doctor: overall unknown (provider not contacted).
+- Provider-check: **1/2** — ollama pass; claude fail `transport_exit`.
+- Hooks installed: 210 / 1890 confirmed on published artifact and marketplace install.
+
+## Turn 1 adoption re-probe
+
+- Design: phase1 edit+commit, sleep 45s, phase2 edit+commit, stop.
+- Speculative started (~19s after turn start).
+- Classification: exact-final (final key ≠ speculative key).
+- Visible paragraph (176 chars): partial no_findings (claude incomplete).
+
+## Turn 2 stop-duration
+
+- 40 new modules; ~677KB raw patch before commit.
+- Stop-path ~12.4s to `invalid_pre_review_receipt` / review_degraded.
+- No >600s survival observed.
+- No clamp warnings in exec log.
+
+## Turn 3 adoption redesign
+
+- Design: single edit+commit, sleep 50s, no further edits.
+- Speculative receipt ready ~40s before Stop.
+- Classification: **ADOPTION** — completed key matches speculative; zero `review_started` after `turn_finished`.
+- Visible paragraph (433 chars): findings on mod() zero divisor; partial (claude circuit_open).
+
+## Purge
+
+- Multi-root status saw live content under plugins/data identity root.
+- Purge cleared automatic-reviews + outbox for workspace key.
+- Retained: 3 turn completed markers; circuit state; mode/presentation settings.
