@@ -410,11 +410,16 @@ test('summary issuance releases its lock when an issuance callback fails', async
     }, async () => {
       throw new Error('provider timeout');
     }), /provider timeout/);
+    // Product path: withFileLock try/finally releases before the issuance
+    // rejection surfaces. The 1 s ceiling previously used here was a
+    // test-only timing trap on loaded Windows Node 24 runners (CI signature
+    // `consent lock was not released` on run 31067674207 a1); widen the
+    // observation window without changing product lock timeouts.
     let timeout;
     const disabled = await Promise.race([
       changeSummaryClaimGuardConsent({ root, dataDir, action: 'disable' }),
       new Promise((_, reject) => {
-        timeout = setTimeout(() => reject(new Error('consent lock was not released')), 1_000);
+        timeout = setTimeout(() => reject(new Error('consent lock was not released')), 10_000);
       })
     ]).finally(() => clearTimeout(timeout));
     assert.equal(disabled.enabled, false);

@@ -58,12 +58,13 @@ function normalizeClaudeUsage(value) {
   return Object.values(usage).some((item) => item !== null) ? Object.freeze(usage) : null;
 }
 
-export function parseClaudeTransport(stdout) {
+function decodeClaudeEnvelope(stdout) {
   if (typeof stdout !== 'string' || !stdout.trim()) {
     throw new Error('Claude transport did not contain a JSON envelope');
   }
   const decoded = JSON.parse(stdout.trim());
   let envelope = decoded;
+  let events = null;
   if (Array.isArray(decoded)) {
     if (decoded.length === 0 || decoded.some((item) => !plainObject(item))) {
       throw new Error('Claude transport event array is malformed');
@@ -73,8 +74,50 @@ export function parseClaudeTransport(stdout) {
       throw new Error('Claude transport event array must end with exactly one result');
     }
     envelope = resultEvents[0];
+    events = decoded;
   }
   if (!plainObject(envelope)) throw new Error('Claude transport must be one JSON object');
+  return { envelope, events };
+}
+
+function claudeAuthFailureDetail(envelope, events) {
+  const candidates = [];
+  if (typeof envelope?.result === 'string') candidates.push(envelope.result);
+  if (typeof envelope?.error === 'string') candidates.push(envelope.error);
+  if (typeof envelope?.terminal_reason === 'string') candidates.push(envelope.terminal_reason);
+  for (const event of events ?? []) {
+    if (!plainObject(event)) continue;
+    if (typeof event.error === 'string') candidates.push(event.error);
+    if (typeof event.result === 'string') candidates.push(event.result);
+    const message = plainObject(event.message) ? event.message : null;
+    if (typeof message?.error === 'string') candidates.push(message.error);
+    const content = Array.isArray(message?.content) ? message.content : [];
+    for (const block of content) {
+      if (plainObject(block) && typeof block.text === 'string') candidates.push(block.text);
+    }
+  }
+  for (const text of candidates) {
+    if (/authentication[_\s-]?failed|failed to authenticate|oauth session expired|not logged in|auth(?:entication)? (?:is )?(?:unavailable|required|missing)/i.test(text)) {
+      return text.slice(0, 180);
+    }
+  }
+  if (envelope?.is_error === true
+      && (envelope.apiKeySource === 'none' || envelope.terminal_reason === 'api_error')
+      && typeof envelope.result === 'string'
+      && /auth|oauth|login|credential|api.?key/i.test(envelope.result)) {
+    return envelope.result.slice(0, 180);
+  }
+  return null;
+}
+
+export function parseClaudeTransport(stdout) {
+  const { envelope, events } = decodeClaudeEnvelope(stdout);
+  const authDetail = claudeAuthFailureDetail(envelope, events);
+  if (authDetail) {
+    const error = new Error(`Claude authentication unavailable: ${authDetail}`);
+    error.code = 'auth_unavailable';
+    throw error;
+  }
   if (envelope.type !== 'result'
       || envelope.subtype !== 'success'
       || envelope.is_error !== false) {
@@ -218,6 +261,12 @@ export async function reviewWithClaude({
         env: buildClaudeProviderEnvironment(ambientEnvironment, platform),
         input: prompt,
         protectFromParentDeath: true,
+        // Claude Code reports auth/API failures as JSON envelopes (often with
+        // is_error:true) and a non-zero process exit. Accept 0/1 so the transport
+        // parser can classify those envelopes instead of collapsing them into a
+        // generic transport_exit before stdout is inspected (same lesson as the
+        // OpenCode adapter).
+        acceptedExitCodes: [0, 1],
         timeoutMs: remaining,
         maxOutputBytes: MAX_OUTPUT_BYTES,
         signal
@@ -235,9 +284,18 @@ export async function reviewWithClaude({
     try {
       transport = parseClaudeTransport(result.stdout);
     } catch (error) {
+      const authUnavailable = error?.code === 'auth_unavailable'
+        || (typeof error?.message === 'string' && error.message.startsWith('Claude authentication unavailable:'));
       const failure = providerFailure({
-        provider: 'claude', model, stage: 'transport',
-        failureCode: 'invalid_transport_envelope', durationMs: elapsed(), cause: error
+        provider: 'claude',
+        model,
+        stage: authUnavailable ? 'inference' : 'transport',
+        failureCode: authUnavailable ? 'auth_unavailable' : 'invalid_transport_envelope',
+        durationMs: elapsed(),
+        cause: error,
+        safeMessage: authUnavailable
+          ? 'The configured provider authentication is unavailable.'
+          : undefined
       });
       // No-loss contract: the malformed transport must survive for private
       // preservation instead of vanishing with the rejection. Non-enumerable
