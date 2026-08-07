@@ -295,11 +295,13 @@ function assertNoDeniedPath(relative) {
 export async function verifyFinalWindowsHelper(root, version) {
   if (!FINAL_VERSION_PATTERN.test(version)) return Object.freeze({ required: false, verified: false });
   try {
+    // helperRoot must match runtime DEFAULT_HELPER_ROOT (plugin/artifact root).
+    // Manifest paths are relative to that root (e.g. bin/win32-x64/...).
     const selected = await resolveVerifiedWindowsJobHelper({
       platform: 'win32',
       arch: 'x64',
       manifestFile: path.join(root, 'native', 'windows', 'helpers.json'),
-      helperRoot: path.join(root, 'native', 'windows')
+      helperRoot: root
     });
     return Object.freeze({ required: true, verified: true, sha256: selected.sha256 });
   } catch (error) {
