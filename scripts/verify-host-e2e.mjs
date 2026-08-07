@@ -457,6 +457,49 @@ async function verifyReleaseArtifact(root) {
   });
 }
 
+function assertMarketplaceInstallValue(value, {
+  failCode = 'installed_snapshot_marketplace_manifest',
+  throwError = null
+} = {}) {
+  const reject = (message) => {
+    if (typeof throwError === 'function') throwError(message);
+    fail(failCode, message);
+  };
+  try {
+    exactKeys(value, MARKETPLACE_INSTALL_MANIFEST_KEYS, 'marketplace install manifest');
+  } catch {
+    reject('marketplace install manifest contains unsupported or missing fields');
+  }
+  if (value.source_type !== 'git') {
+    reject('marketplace install manifest source_type must be git');
+  }
+  if (typeof value.source !== 'string' || !value.source.trim() || value.source.length > 2048
+      || hasUnsafeTerminalControls(value.source)) {
+    reject('marketplace install manifest source is invalid');
+  }
+  if (!(value.ref_name === null
+      || (typeof value.ref_name === 'string' && value.ref_name.length > 0 && value.ref_name.length <= 256
+        && !hasUnsafeTerminalControls(value.ref_name)))) {
+    reject('marketplace install manifest ref_name is invalid');
+  }
+  if (!Array.isArray(value.sparse_paths) || value.sparse_paths.length > 64
+      || value.sparse_paths.some((entry) => typeof entry !== 'string' || !entry || entry.length > 512
+        || entry.includes('\\') || path.posix.isAbsolute(entry) || entry.split('/').some((part) => !part || part === '.' || part === '..')
+        || hasUnsafeTerminalControls(entry))) {
+    reject('marketplace install manifest sparse_paths is invalid');
+  }
+  if (typeof value.revision !== 'string' || !COMMIT_PATTERN.test(value.revision)) {
+    reject('marketplace install manifest revision must be a 40-hex commit');
+  }
+  return Object.freeze({
+    source_type: value.source_type,
+    source: value.source,
+    ref_name: value.ref_name,
+    sparse_paths: Object.freeze([...value.sparse_paths]),
+    revision: value.revision
+  });
+}
+
 function validateMarketplaceInstallManifest(bytes) {
   let value;
   try {
@@ -467,42 +510,7 @@ function validateMarketplaceInstallManifest(bytes) {
       'marketplace install manifest is not valid JSON'
     );
   }
-  try {
-    exactKeys(value, MARKETPLACE_INSTALL_MANIFEST_KEYS, 'marketplace install manifest');
-  } catch {
-    fail(
-      'installed_snapshot_marketplace_manifest',
-      'marketplace install manifest contains unsupported or missing fields'
-    );
-  }
-  if (value.source_type !== 'git') {
-    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest source_type must be git');
-  }
-  if (typeof value.source !== 'string' || !value.source.trim() || value.source.length > 2048
-      || hasUnsafeTerminalControls(value.source)) {
-    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest source is invalid');
-  }
-  if (!(value.ref_name === null
-      || (typeof value.ref_name === 'string' && value.ref_name.length > 0 && value.ref_name.length <= 256
-        && !hasUnsafeTerminalControls(value.ref_name)))) {
-    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest ref_name is invalid');
-  }
-  if (!Array.isArray(value.sparse_paths) || value.sparse_paths.length > 64
-      || value.sparse_paths.some((entry) => typeof entry !== 'string' || !entry || entry.length > 512
-        || entry.includes('\\') || path.posix.isAbsolute(entry) || entry.split('/').some((part) => !part || part === '.' || part === '..')
-        || hasUnsafeTerminalControls(entry))) {
-    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest sparse_paths is invalid');
-  }
-  if (typeof value.revision !== 'string' || !COMMIT_PATTERN.test(value.revision)) {
-    fail('installed_snapshot_marketplace_manifest', 'marketplace install manifest revision must be a 40-hex commit');
-  }
-  return Object.freeze({
-    source_type: value.source_type,
-    source: value.source,
-    ref_name: value.ref_name,
-    sparse_paths: Object.freeze([...value.sparse_paths]),
-    revision: value.revision
-  });
+  return assertMarketplaceInstallValue(value);
 }
 
 async function inspectInstalledSnapshot(root, artifact) {
@@ -1138,20 +1146,11 @@ export function validateHostE2eReport(report) {
     throw new Error('host evidence installed_snapshot.file_count is invalid');
   }
   if (report.installed_snapshot.marketplace_install !== null) {
-    exactKeys(
-      report.installed_snapshot.marketplace_install,
-      MARKETPLACE_INSTALL_MANIFEST_KEYS,
-      'host evidence installed snapshot marketplace_install'
-    );
-    const manifest = report.installed_snapshot.marketplace_install;
-    if (manifest.source_type !== 'git'
-        || typeof manifest.source !== 'string'
-        || !(manifest.ref_name === null || typeof manifest.ref_name === 'string')
-        || !Array.isArray(manifest.sparse_paths)
-        || typeof manifest.revision !== 'string'
-        || !COMMIT_PATTERN.test(manifest.revision)) {
-      throw new Error('host evidence installed_snapshot.marketplace_install is invalid');
-    }
+    assertMarketplaceInstallValue(report.installed_snapshot.marketplace_install, {
+      throwError: (message) => {
+        throw new Error(`host evidence installed_snapshot.marketplace_install is invalid: ${message}`);
+      }
+    });
   }
   if (report.installed_snapshot.snapshot_sha256 === report.release.artifact_sha256
       && (report.installed_snapshot.plugin_manifest_sha256 !== report.release.plugin_manifest_sha256
