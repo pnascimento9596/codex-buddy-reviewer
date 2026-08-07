@@ -96,3 +96,17 @@ attribution out-of-artifact.
   - Identities: tag object `df9d02d6687333a7925d17f018591c3c8881ef8c`; distribution commit `c9f9c9b88f431abe006105f7a984f8f266b72d55` (parent count 0); tree `f767c1d0a72b022ee005cd0d8415f97b7be6ec23`; artifact-content SHA-256 `7c90bea1598f473c52b697bd39b30f40405f9a5568106bf11678eaaac9068b40`; tarball SHA-256 `ba9d537a4b45a9cf31d02a7b0d680fe8916c5ef71098a26ba65c18009917a543`
   - Attestation binding: SLSA provenance certificates bind run `31074730294` **attempt 1** (`…/attempts/1`); signer workflow `…/release.yml@refs/heads/main`; source digest H-prime; source ref `refs/heads/main`; `workflow_dispatch`; `github-hosted` (self-hosted denied). First publish under `actions/attest` v4.2.1; rc.4 control re-verify under same client flags also green (no v4.2.1 disposition regression observed).
   - Exactly one release dispatch this lane; zero provider inference calls.
+
+### 2026-08-07 — v0.5.0-rc.6 publish
+
+- **Phase A (external pre-dispatch):** H `9be1a9dea4741f7765ebb648941b629672246003`; inputs `version=0.5.0-rc.6`, `publish=true`; actor `pnascimento9596` (`198005926`); authority owner 2026-08-07 delegated lane instruction scoped to exactly one rc.6 publish from that H plus post-publication ritual and (only after Phase 2) bounded host-e2e (external Phase A retains the full authority text); UTC pre-dispatch `2026-08-07T10:44:38Z`.
+- **Phase B (this entry):**
+  - Actual source SHA / event SHA: `9be1a9dea4741f7765ebb648941b629672246003` (equals H)
+  - Release run: `31171295831` — attempt **1** success (authorize, validate matrix, build, attest, publish all success)
+  - public-release environment approvals (integer env id `18411507164`): build deployment `5793315816`, attest `5793323562`, publish `5793334494`
+  - Tag reconcile (`ensure-release-tag.mjs` JSON): `{"ok":true,"tag":"v0.5.0-rc.6","tag_ref":"refs/tags/v0.5.0-rc.6","expected_tag_object":"e409d32245465dae563fef94ecbeb56755bd642c","outcome":"pushed","remoteSha":"e409d32245465dae563fef94ecbeb56755bd642c","pushed":true}` — clean first-publish path
+  - Identities: tag object `e409d32245465dae563fef94ecbeb56755bd642c`; distribution commit `ad6a01b308cac2cf6ebd953aecdf93e45cbd315a` (parent count 0); tree `20d90b09d730343b9bae2e8ce5bf247648c60c3c`; artifact-content SHA-256 `7a210d99d0dedd49453500b59672f2aeea6e1980a1cbfce1d19800ddd72c6b5d`; tarball SHA-256 `f594e59ff31ac8674078b0d8c1c6d00edba9a8d0c3c6710f569de1208a77e190`; release-manifest SHA-256 `1819faa8100811f04d33b57f4cecc796ea87a05d13cd7cdb6b6532dfc233f760`
+  - Attestation binding: SLSA provenance certificates bind run `31171295831` **attempt 1** (`…/attempts/1`); signer workflow `…/release.yml@refs/heads/main`; source digest H; source ref `refs/heads/main`; `workflow_dispatch`; `github-hosted` (self-hosted denied). Constrained `gh attestation verify` green for tarball, bundle, and receipt under owner/repo-prefixed `--signer-workflow`; bare-path form fails client-side (known tooling quirk, also reproduced on rc.5 control under identical flags — no rc.6-only difference).
+  - Release metadata: prerelease=true; operator purge-once-more language added via notes-only `gh release edit` after publish (assets and tag object unchanged — verified by before/after asset SHA-256 and tag ref equality). Prior tags rc.1–rc.5 unchanged via `ls-remote`.
+  - Exactly one release dispatch this lane; zero provider inference calls during Phase 1–2.
+
