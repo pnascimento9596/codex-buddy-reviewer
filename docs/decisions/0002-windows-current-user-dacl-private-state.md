@@ -38,10 +38,10 @@ be attacker-swappable under the same user — must be created and re-verified:
 | Durable mode/data root | `resolveDataDir` (`CODEX_BUDDY_DATA_DIR` or default under home) | mode, presentation, summary-guard, egress registry, rejected responses, optional co-located automatic roots |
 | Runtime / PLUGIN_DATA root | `resolveRuntimeDataDir` (`PLUGIN_DATA` / `CLAUDE_PLUGIN_DATA`) | automatic-reviews, outbox, turns, circuits |
 | Manual review store | `store.mjs` under data dir | temp dir `0700` then rename |
-| Provider temporary parent | `providerTempParent(os.tmpdir())` → `…/codex-buddy-provider-temp-<userKey>` | v2 markers; Windows path currently records `windows_acl_unverified` |
-| Provider temporary run dirs | children of the parent | may hold selected OpenCode auth entries transiently |
-| Atomic write temp inodes | `writePrivateJsonAtomic` / exclusive writers in `state.mjs` | mode temp **before** rename (already required to avoid chmod-after-rename races) |
-| File-lock / lease paths | `withFileLock` siblings under the same roots | must inherit verified parent DACLs |
+| Provider temporary parent | `providerTempParent(os.tmpdir())` → `…/codex-buddy-provider-v1-<userKey>` (`TEMP_PARENT_PREFIX` in `temp-state.mjs`; schema labels are `codex-buddy-provider-temp-v1/v2`) | Windows path currently records `windows_acl_unverified` |
+| Provider temporary run dirs | `run-*` children of that parent | may hold selected OpenCode auth entries transiently; these are the real content roots to secure |
+| Atomic write temp inodes + final files | `writePrivateJsonAtomic` / exclusive writers in `state.mjs` | mode temp **before** rename on POSIX; on Windows the helper must also secure **child files** (not only the directory template)—either `ensure_private_file` or OWNER ACE with object inheritance so new children do not fall back to the process default DACL |
+| File-lock / lease paths | `withFileLock` siblings under the same roots | must receive the same private DACL as other children |
 | Packaged helper path | `bin/win32-x64/buddy-job-supervisor.exe` | integrity pin already; not private state but trusted TCB for DACL ops |
 
 Ancestor chain: from each root up to (but not including) a reviewed trust
@@ -69,13 +69,19 @@ detection.
 binary) with an explicit subcommand/protocol for:
 
 1. `ensure_private_dir <path>` — create if missing with owner-only DACL
-   (no inherit-only holes; disable inheritance; explicit OWNER ALLOW
-   FILE_ALL_ACCESS; no Everyone/Users allow);
-2. `verify_private_dir <path>` — reopen by handle, verify owner SID == current
-   user, verify DACL matches the template, verify not a reparse point unless
-   explicitly allowed;
-3. `verify_private_tree <path> --ancestors-until <anchor>` — walk ancestors;
-4. optional `secure_temp_run` for provider temp creation under the parent.
+   (disable inheritance; explicit OWNER ALLOW FILE_ALL_ACCESS; no
+   Everyone/Users allow). The OWNER ACE must carry object/container inheritance
+   so children created without an explicit descriptor still receive the private
+   ACL, **or** every child write path must call `ensure_private_file` instead.
+2. `ensure_private_file <path>` — create/rewrite a file with the same
+   owner-only template (covers atomic JSON temps, lock files, and final
+   receipts when inheritance is not used).
+3. `verify_private_dir` / `verify_private_file` — reopen by handle, verify
+   owner SID == current user, verify DACL matches the template, verify not an
+   unexpected reparse point.
+4. `verify_private_tree <path> --ancestors-until <anchor>` — walk ancestors.
+5. optional `secure_temp_run` for provider temp `run-*` creation under the
+   real parent prefix `codex-buddy-provider-v1-`.
 
 Protocol remains versioned JSON on stdin/stdout (same containment family as
 Job Object control). Fail closed on any verify mismatch.
