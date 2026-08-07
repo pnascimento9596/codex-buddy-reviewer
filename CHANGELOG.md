@@ -2,6 +2,41 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
+## 0.5.0 - 2026-08-07
+
+First stable release of the v0.5 line. Cumulative highlights since rc.1:
+
+### Highlights (rc.1 → stable)
+
+- **Egress authorization boundary (v0.5).** Provider-capable work uses a dedicated provider lane, short mode/summary-consent locks for capability issuance, then durable single-use capability spend before inference. Mode and summary-consent mutations drain prior-revision capabilities before returning.
+- **Dual independent reviewers.** Concurrent primary/secondary lanes with per-connection circuit breakers; partial success when one lane fails; no silent provider substitution.
+- **Speculative continuous review.** At most two pre-Stop generations plus exact-final fallback; adoption of exact ready receipts without a second provider call (proven on published rc.4 artifact and re-proven at rc.6 host-e2e Turn 3).
+- **Native host pets.** Five public pets (Byte, Mochi, Orbit, Bella, Lupo) on Codex 0.146-compatible 8×9 atlases; first-enable baseline UX; speculative-worker keepalive and snapshot-retry.
+- **Publication and release machinery.** Deterministic public artifact, parentless distribution commit, annotated tags via `ensure-release-tag` (post-push REST race fixed), SLSA attestations, host-evidence v2 bundle gate for final publish.
+- **Privacy / publication scanners.** Filter-free Git evidence, structured publication payloads, tree-only and full-history publication boundary modes.
+
+### Operator-critical fixes landing in this stable
+
+- **#65 marketplace snapshot bind.** Installed-snapshot bind tolerates exactly one schema-valid root `.codex-marketplace-install.json`; extra files still fail.
+- **#66 multi-root data purge.** `data status` / `data purge` enumerate plugins/data identity roots and the legacy durable data-dir.
+  - **Purge once more after upgrade:** operators who purged under rc.5 (or earlier) while automatic review wrote under `~/.codex/plugins/data/...` should disable automatic review and run `data purge --confirm-purge` again so every root is cleared.
+- **Claude auth classification.** Claude Code OAuth/auth failure envelopes classify as `auth_unavailable` instead of generic `transport_exit` (exit 0/1 accepted so stdout can be inspected — same lesson as OpenCode).
+- **Packaged Windows x64 Job Object helper.** Reviewed hash-pinned `bin/win32-x64/buddy-job-supervisor.exe` is required for final-semver packaging. ARM64 remains unavailable. Live Windows provider egress remains **blocked** until DACL work ships.
+
+### Documented limitations (stable)
+
+- **Windows live provider egress:** SHIPS BLOCKED (rc.1-era posture, enforced in code). DACL + live Windows egress is post-stable engineering.
+- **Stop >600 s host enforcement:** configured hooks 210/1890 confirmed at rc.5/rc.6; end-to-end enforcement beyond ~17.5 s never observed. rc.6 oversized-evidence probe fail-closed via `invalid_pre_review_receipt` (~12.4 s Stop path).
+- **Speculative adoption:** PROVEN at rc.6 (Turn 3, key-matched, no post-Stop `review_started`).
+- **#62 consent-lock (Windows Node 24):** characterized as test-observed timing (1 s observation window); product `withFileLock` try/finally releases on throw; test window widened to 10 s.
+- **#63 pid-0 origin:** open; positive-integer guard landed earlier; origin path still tracked.
+- **Five-pet human observation:** satisfied by machine-captured artifact-bound bundles at rc.4/rc.5/rc.6 with human-unreviewed label — stable evidentiary basis is machine capture, deliberately.
+- **Claude dual-reviewer doctor health:** requires a valid Claude Code OAuth session on the host; expired OAuth is reported as `auth_unavailable`.
+
+### Release status
+
+- Prepared for publication only from the exact protected `main` head through the guarded release workflow with `version: 0.5.0` and `publish: true` under owner standing authorization. Do not treat this changelog entry alone as dispatch authorization.
+
 ## 0.5.0-rc.6 - 2026-08-07
 
 ### Fixed

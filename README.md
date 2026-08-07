@@ -12,12 +12,12 @@
     <a href="CONTRIBUTING.md">Contributing</a>
   </p>
   <p>
-    <a href="#status"><img alt="Version v0.5.0-rc.6" src="https://img.shields.io/badge/version-v0.5.0--rc.6-7c3aed" /></a>
+    <a href="#status"><img alt="Version v0.5.0" src="https://img.shields.io/badge/version-v0.5.0-7c3aed" /></a>
     <a href="#quick-start"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&amp;logoColor=white" /></a>
     <a href="#connection-support"><img alt="Four reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-4-0891b2" /></a>
     <a href="#pets"><img alt="Five public pets" src="https://img.shields.io/badge/public_pets-5-f59e0b" /></a>
     <a href="#license"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-2563eb" /></a>
-    <a href="#status"><img alt="Release gates pending" src="https://img.shields.io/badge/release_gates-pending-ea580c" /></a>
+    <a href="#status"><img alt="Stable candidate" src="https://img.shields.io/badge/release_gates-stable_candidate-16a34a" /></a>
   </p>
 </div>
 
@@ -37,9 +37,9 @@ Run the first-party `/pet` command once to keep the selected companion open. Inv
 
 ## Status
 
-Release candidate: `v0.5.0-rc.6`, prepared for publication only from the exact protected `main` head through the guarded release workflow.
+Stable release: `v0.5.0`, prepared for publication only from the exact protected `main` head through the guarded release workflow.
 
-This is a release candidate, not a stable release. Provider egress remains experimental until the frozen tree passes the complete security, cross-platform, independent-review, packaging, and Codex host gates below. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
+This is the first stable `0.5.0` line. Provider egress remains experimental in the sense that live Windows provider contact stays blocked until DACL work ships; other documented limitations are listed in the release note and CHANGELOG. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
 
 ## What Buddy does
 
@@ -59,17 +59,17 @@ This is a release candidate, not a stable release. Provider egress remains exper
 
 An internal sealed whole-repository Deep Security Scan of the pre-fix RC head found 20 findings: 17 medium and 3 low. They clustered around credential syntax gaps, denied-content fragment and live Git metadata coverage, and lossy handling of invalid UTF-8 Git pathnames. Provider-free reproductions proved that affected bytes could enter a prepared external-review prompt or that review evidence could be reported falsely complete.
 
-The release-candidate source implements structural remediations and regression coverage for those finding families, plus independent Grok and Opus review fixes. This is not yet a closure claim. Promotion to stable remains blocked until all release gates close:
+Those finding families were remediated with regression coverage and independent review fixes through the rc series. For stable `v0.5.0` the remaining public posture is:
 
-1. The exact source head passes the complete local suite, plugin and skill validators, and public-boundary verification.
-2. The frozen source passes final RepoPrompt context review, independent Grok 4.5 and Claude Opus 4.8 high reviews, and a fresh sealed whole-repository Codex Deep Security Scan with every reportable finding fixed and revalidated.
-3. GitHub Actions passes the Ubuntu, macOS, Windows x64, Node 22, and Node 24 matrix at that same protected default-branch head, then deterministically rebuilds, verifies, re-extracts, and installs the exact artifact.
-4. The positive artifact contains a reviewed, hash-pinned Windows x64 Job Object helper whose exact packaged bytes pass real Windows process-tree tests.
-5. Windows live provider egress remains disabled until Buddy can create and verify current-user-only DACLs for durable review state and provider temporary roots, with real Windows evidence.
+1. Exact protected `main` head passes the complete local suite, plugin and skill validators, and public-boundary verification.
+2. Security-scan seal of the final promotion head under the rewritten two-family gate (see `docs/releases/v0.5.0-stable-readiness.md`).
+3. GitHub Actions Ubuntu, macOS, Windows x64, Node 22/24 matrix green at that head; deterministic rebuild, verify, extract, and install of the exact artifact.
+4. Positive artifact contains the reviewed, hash-pinned Windows x64 Job Object helper (packaged under `bin/win32-x64/`).
+5. Windows live provider egress remains **disabled** until Buddy can create and verify current-user-only DACLs for durable review state and provider temporary roots, with real Windows evidence (post-stable epic).
 
-Human artifact-bound host observations for Byte, Mochi, Orbit, Bella, and Lupo are intentionally deferred until real users or pull requests make that adoption-scale process useful. They are not a public RC launch gate. The current protected workflow still reserves them for eventual stable promotion.
+Five-pet host evidence for Byte, Mochi, Orbit, Bella, and Lupo is carried as machine-captured artifact-bound host-e2e bundles (human-unreviewed label) rather than a separate multi-session human pet tour. Speculative adoption is proven on published rc.6 host-e2e. Stop-path multi-minute host enforcement remains a documented limitation.
 
-The automatic path preserves the main agent's result when Buddy cannot review, and manual review reports a failure instead of inventing an all-clear. Privacy policy, authorization, provider isolation, and result validation are designed to fail closed. The current remediations still require exact-final-tree security and platform revalidation before stable release.
+The automatic path preserves the main agent's result when Buddy cannot review, and manual review reports a failure instead of inventing an all-clear. Privacy policy, authorization, provider isolation, and result validation are designed to fail closed.
 
 Bella and Lupo are explicitly cleared for public redistribution with Byte, Mochi, and Orbit. Public source history is intentionally rooted at one reviewed commit with GitHub noreply author metadata. The former private development history has a private local backup and is not reachable from the public branch or release tags. Replacing refs in place does not claim that GitHub immediately purged every unreachable or cached private object.
 
@@ -162,21 +162,21 @@ Prerequisites:
 - At least one supported reviewer CLI installed and authenticated through its own normal login flow
 - Windows v0.5 RC supports nonprovider commands and offline validation, but live reviewer contact is disabled pending current-user-only DACL implementation and real Windows evidence
 
-After protected publication completes, install the published `v0.5.0-rc.6` release through Codex's Git marketplace support:
+After protected publication completes, install the published `v0.5.0` release through Codex's Git marketplace support:
 
 ```bash
-codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0-rc.6
+codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.5.0
 codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
 codex plugin list
 ```
 
-`v0.5.0-rc.6` carries post-rc.4 mechanics (release-tag reconcile, suite budget, security-scan fixes) on top of the post-rc.3 native-host fixes: speculative-worker snapshot-retry and event-loop keepalive (#36 / PRs #44 and #46), Codex 0.146 host-compatible 8×9 pet packages (#38 / PR #45), and first-enable baseline messaging (#37 / PR #50), on top of the rc.3 privacy, cleanup, corpus, and checked-JavaScript gates. Install the immutable tag, not the moving `main` branch.
+`v0.5.0` carries post-rc.4 mechanics (release-tag reconcile, suite budget, security-scan fixes) on top of the post-rc.3 native-host fixes: speculative-worker snapshot-retry and event-loop keepalive (#36 / PRs #44 and #46), Codex 0.146 host-compatible 8×9 pet packages (#38 / PR #45), and first-enable baseline messaging (#37 / PR #50), on top of the rc.3 privacy, cleanup, corpus, and checked-JavaScript gates. Install the immutable tag, not the moving `main` branch.
 
-This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0-rc.6`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
+This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.5.0`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
 
 The public default branch remains the contributor-friendly source repository. A release version tag is intended to resolve to a separate parentless distribution commit whose tree contains only the byte-verified positive artifact, including its `release-manifest.json`. It does not point at the full development checkout or inherit its objects and history. Install a pinned release tag, never a moving source branch.
 
-The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0-rc.6` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only release candidate. The stable `v0.5.0` tag remains unavailable until the security, platform, and five-pet Codex host gates close. During private development, use the existing `personal` marketplace flow.
+The two-command marketplace flow was verified locally with Codex CLI `0.144.4` against this repository layout. The public `v0.5.0` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only stable release. During private development, use the existing `personal` marketplace flow.
 
 ```mermaid
 flowchart TD
@@ -467,10 +467,10 @@ Purge preserves connection, pet, and mode settings unless `--include-settings` i
 
 - Reviewer CLIs are trusted local executables. Tool denial and isolated state reduce capability; they are not an operating-system sandbox.
 - On POSIX, the supervisor owns one provider process group, observes leader exit independently of inherited pipe EOF, kills remaining in-group descendants once, and drains bounded output. A malicious binary can deliberately escape into another session or process group.
-- On Windows, v0.5 RC blocks live reviewer contact before evidence or prompt persistence because durable Buddy state and provider temporary roots do not yet have verified current-user-only DACLs. The native Job Object helper and its host-independent tests remain process-containment work for a later enabled Windows path; they do not override this privacy gate.
+- On Windows, v0.5.0 blocks live reviewer contact before evidence or prompt persistence because durable Buddy state and provider temporary roots do not yet have verified current-user-only DACLs. The native Job Object helper is packaged and hash-pinned for process containment on a later enabled Windows path; it does not override this privacy gate.
 - Capability issuance is atomic for the full reviewer set. Capabilities are short-lived, single-use, exact-bound, and positively settled before a completed configuration revocation returns.
 - Delivery is durably tracked through prepared, claimed, stdout-written, and observed states. Without a host acknowledgment token, a crash after stdout becomes visible but before observation can still make a later replay duplicate the continuation.
-- Credential values never belong in source, fixtures, docs, prompt exports, receipts, logs, Git history, or release artifacts. CI scans complete committed history, and the release candidate is also scanned as a built directory.
+- Credential values never belong in source, fixtures, docs, prompt exports, receipts, logs, Git history, or release artifacts. CI scans complete committed history, and the release artifact is also scanned as a built directory.
 - Default tests and CI never consume a paid model subscription. Live checks are explicit and bounded.
 
 Read [docs/SECURITY.md](docs/SECURITY.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and [docs/AUTOMATIC-MODE.md](docs/AUTOMATIC-MODE.md) for the full contracts.
@@ -493,7 +493,7 @@ npm run release:build -- --output /tmp/codex-buddy-public-rc3
 npm run release:verify -- --input /tmp/codex-buddy-public-rc3
 npm run release:distribution -- \
   --artifact /tmp/codex-buddy-public-rc3 \
-  --output /tmp/codex-buddy-v0.5.0-rc.6-distribution \
+  --output /tmp/codex-buddy-v0.5.0-distribution \
   --policy-root .
 ```
 
