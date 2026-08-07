@@ -341,3 +341,20 @@ test('secret scan detects OpenCode-style nested key and GH/NPM TOKEN assignments
     { complete: true, detected: true }
   );
 });
+
+test('secret scan detects Stripe live/test keys and Docker registry auth blobs', () => {
+  for (const value of [
+    'sk_live_' + 'a'.repeat(24),
+    'sk_test_' + 'b'.repeat(24),
+    'rk_live_' + 'c'.repeat(24),
+    JSON.stringify({
+      auths: {
+        'https://index.docker.io/v1/': {
+          auth: Buffer.from('user:ghp_' + 'A'.repeat(36)).toString('base64')
+        }
+      }
+    })
+  ]) {
+    assert.deepEqual(scanSecretMaterial(Buffer.from(value)), { complete: true, detected: true }, value.slice(0, 40));
+  }
+});
