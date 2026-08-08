@@ -8,13 +8,14 @@ Security fix for a receipt-replay validation bypass found in the published v0.5.
 
 ### What the defect allowed (operator language)
 
-- **Forged legacy receipt replay (H07).** On a Stop replay, Buddy could present a previously written review continuation when the stored completion record and receipt file matched by digest. Because both files live in the same private-state trust boundary, a jointly mutable pair could present forged review findings without passing the full receipt validation that every other adoption path runs.
+- **Forged legacy receipt replay (H07).** On a Stop replay, Buddy could present a previously written review continuation when the stored completion record and receipt file matched by digest. Because both files live in the same private-state trust boundary, a jointly mutable pair could present forged review findings without passing the receipt validation that every other adoption path runs.
 - **Impact in practice.** A successful attack required write access to Buddy's private runtime state (for example, state left with a wide DACL, or local same-user access). The forged content would appear to the operator as a Buddy review continuation. No shipped user is known to have been exposed; v0.5.0's Windows egress was blocked, and this bypass is about *presentation* of stored state, not provider contact.
 - **What operators should do.** Upgrade to 0.5.1. If you suspect private runtime state was modified outside Buddy, disable automatic review, run `data purge --confirm-purge` (automatic mode disabled), and re-enable.
 
 ### Fixes in this release
 
-- **Receipt replay validation (H07).** Every replay path now runs the context-free structural receipt validation (schema version, review-key binding, canonical creation timestamp, exact terminal key set, terminal/result coherence) before presenting a continuation. Forged or malformed legacy pairs are rejected and the completion record is marked `invalid_pre_review_receipt`. A valid legacy receipt still replays correctly.
+- **Receipt replay validation (H07).** Every replay path now runs the context-free structural receipt validation (schema version, review-key binding, canonical creation timestamp, exact terminal key set, terminal/result coherence) before presenting a continuation. Structurally invalid or malformed legacy pairs — including the demonstrated forged-pair class (bad schema, bad timestamp, forged finding content) — are rejected and the completion record is marked `invalid_pre_review_receipt`. A valid legacy receipt still replays correctly.
+  - **Scope note (threat model):** this closes the malformed/forged-structure class. A shape-conformant pair written entirely by a process that already has write access to both private-state files remains indistinguishable from legitimate state at replay — same-user malicious-process defense is outside this product's accepted threat model (see docs/SECURITY.md).
 - **Windows egress gate re-engaged.** `WINDOWS_PROVIDER_EGRESS_GATE_LIFTED` is `false` for this line. Live Windows provider egress returns to the v0.5.0 blocked posture until the pending Windows private-state remediation (H01–H06) lands and is re-sealed; the kill-switch `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` continues to force fail-closed.
 
 ### Test coverage added

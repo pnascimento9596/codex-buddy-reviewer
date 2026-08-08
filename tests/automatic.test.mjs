@@ -3950,6 +3950,62 @@ test('a valid legacy receipt still replays after structural validation', async (
   assert.match(replay.output.reason, /no actionable correctness defect/u);
 });
 
+test('a structurally valid receipt with a tampered stored digest is never replayed', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const mode = await changeMode({ root, action: 'enable', dataDir: modeDataDir });
+  const identity = { session_id: 'tampered-digest-session', turn_id: 'tampered-digest-turn', cwd: root };
+  const stopInput = {
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'No repository changes were needed.'
+  };
+  const reviewKey = 'f'.repeat(64);
+  const directory = automaticTurnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id);
+  const receipt = automaticReceiptFile(runtimeDataDir, root, reviewKey);
+  await mkdir(directory, { recursive: true });
+  await mkdir(path.dirname(receipt), { recursive: true });
+  const terminal = {
+    schema_version: '1',
+    review_key: reviewKey,
+    terminal_status: 'no_findings',
+    provider: mode.provider,
+    model: mode.model,
+    baseline_tree: 'a'.repeat(40),
+    final_tree: 'b'.repeat(40),
+    patch_hash: 'c'.repeat(64),
+    changed_path_count: 1,
+    excluded_path_count: 0,
+    result: noFindings('No validated defects.'),
+    reviews: [],
+    review_failures: [],
+    review_sources: null,
+    reviewer_runs: [],
+    summary_claim_guard: null,
+    summary_claim_advisory: null,
+    provider_run: null,
+    egress_capability: null,
+    created_at: new Date().toISOString()
+  };
+  await writeFile(receipt, `${JSON.stringify(terminal)}\n`);
+  // Structurally valid receipt, but the stored digest does NOT match it.
+  await writeFile(path.join(directory, 'completed.json'), `${JSON.stringify({
+    schema_version: '1',
+    review_key: reviewKey,
+    receipt_sha256: '0'.repeat(64),
+    presentation_status: 'prepared',
+    completed_at: new Date().toISOString()
+  })}\n`);
+
+  const replay = await reviewTurnStop(stopInput, { modeDataDir, runtimeDataDir });
+  assert.notEqual(replay.skipped, 'replayed');
+  assert.equal(replay.output, null);
+  const completed = JSON.parse(await readFile(path.join(directory, 'completed.json'), 'utf8'));
+  assert.equal(completed.terminal_status, 'invalid_pre_review_receipt');
+});
+
 test('automatic provider failures write only an error hash and never loop on duplicate Stop', async () => {
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
