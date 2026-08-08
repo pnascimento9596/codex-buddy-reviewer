@@ -28,7 +28,6 @@ import { appendOutboxEvent } from './outbox.mjs';
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
 import { approveProviderReviewRequest } from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
-import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 import { DEADLINE_STALL_MAX_EXTENSION_MS } from './process.mjs';
 import { aggregateReviewOutcomes, ReviewAggregationError } from './review-aggregate.mjs';
 import { REVIEW_SCHEMA_VERSION } from './review-schema.mjs';
@@ -109,12 +108,12 @@ async function ensureLifecycleWindowsPrivateState(options) {
   const platform = options.platform ?? process.platform;
   if (platform !== 'win32') return null;
   if (options.windowsPrivateStateVerification) return options.windowsPrivateStateVerification;
-  // While the live-egress gate is closed, skip the default root ensure path so
-  // ordinary Windows/host tests keep legacy timing. Explicit injects (unit tests
-  // and future allow-path plumbing) still run.
-  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED && options.ensureWindowsPrivateState === undefined) {
-    return null;
-  }
+  // The automatic hook path only builds DACL verification when a caller wires an
+  // explicit ensure implementation (host integration). Until a real Windows
+  // Codex host is observed (host e2e UNRUN), the default builder is not invoked
+  // from automatic turns so host-level tests and non-egress surfaces keep
+  // working; policy still fails closed via evaluateProviderEgressPlatformPolicy.
+  if (options.ensureWindowsPrivateState === undefined) return null;
   return (options.ensureWindowsPrivateState ?? ensureWindowsPrivateStateRoots)({
     platform,
     arch: options.arch,
@@ -129,10 +128,7 @@ async function ensureLifecycleWindowsPrivateState(options) {
 async function reverifyLifecycleWindowsPrivateState(verification, options, execution) {
   const platform = options.platform ?? process.platform;
   if (platform !== 'win32') return null;
-  if (!verification && !WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
-      && options.reverifyWindowsPrivateState === undefined) {
-    return null;
-  }
+  if (!verification && options.reverifyWindowsPrivateState === undefined) return null;
   const current = await (options.reverifyWindowsPrivateState ?? reverifyWindowsPrivateStateRoots)(
     verification,
     {

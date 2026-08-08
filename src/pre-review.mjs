@@ -29,7 +29,6 @@ import {
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
 import { approveProviderReviewRequest } from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
-import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 import {
   providerCircuitIsOpen,
   recordProviderCircuit
@@ -630,7 +629,6 @@ function dependencies(options) {
 async function reverifyProviderRoots(deps, execution = 'not_started') {
   if (deps.platform !== 'win32') return null;
   if (!deps.windowsPrivateStateVerification
-      && !WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
       && deps.reverifyWindowsPrivateState === reverifyWindowsPrivateStateRoots) {
     return null;
   }
@@ -949,8 +947,7 @@ export async function runPreReviewWorker(rawInput, options = {}) {
       return disable('continuous_disabled');
     }
     if (deps.platform === 'win32'
-        && (WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
-          || deps.ensureWindowsPrivateState !== ensureWindowsPrivateStateRoots
+        && (deps.ensureWindowsPrivateState !== ensureWindowsPrivateStateRoots
           || deps.windowsPrivateStateVerification)) {
       deps.windowsPrivateStateVerification = deps.windowsPrivateStateVerification
         ?? await deps.ensureWindowsPrivateState({
