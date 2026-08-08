@@ -163,10 +163,12 @@ async function forceFixtureCleanup(pids) {
 test('packaged Windows x64 helper is hash-pinned; ARM64 remains unavailable', async () => {
   const manifest = JSON.parse(await readFile(initialManifest, 'utf8'));
   assert.equal(manifest.schema_version, '1');
-  assert.equal(manifest.protocol_version, WINDOWS_JOB_PROTOCOL_VERSION);
+  assert.equal(manifest.protocol_version, WINDOWS_HELPER_CAPABILITY_PROTOCOL_VERSION);
   assert.match(manifest.build.x64, /cl\.exe .*job-supervisor\.c/);
   assert.equal(manifest.helpers['win32-x64'].status, 'verified');
-  assert.equal(manifest.helpers['win32-x64'].protocol_version, WINDOWS_JOB_PROTOCOL_VERSION);
+  assert.equal(manifest.helpers['win32-x64'].protocol_version, WINDOWS_HELPER_CAPABILITY_PROTOCOL_VERSION);
+  assert.equal(manifest.helpers['win32-x64'].job_protocol, WINDOWS_JOB_PROTOCOL_VERSION);
+  assert.equal(manifest.helpers['win32-x64'].dacl_protocol, WINDOWS_HELPER_CAPABILITY_PROTOCOL_VERSION);
   assert.equal(manifest.helpers['win32-x64'].path, 'bin/win32-x64/buddy-job-supervisor.exe');
   assert.match(manifest.helpers['win32-x64'].sha256, /^[0-9a-f]{64}$/u);
   assert.equal(manifest.helpers['win32-arm64'].status, 'unavailable');
@@ -177,7 +179,7 @@ test('packaged Windows x64 helper is hash-pinned; ARM64 remains unavailable', as
     helperRoot: repositoryRoot
   });
   assert.equal(selected.sha256, manifest.helpers['win32-x64'].sha256);
-  assert.equal(selected.protocolVersion, WINDOWS_JOB_PROTOCOL_VERSION);
+  assert.equal(selected.protocolVersion, WINDOWS_HELPER_CAPABILITY_PROTOCOL_VERSION);
   await assert.rejects(
     resolveVerifiedWindowsJobHelper({
       platform: 'win32',

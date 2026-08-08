@@ -1,27 +1,28 @@
 {
   "schema_version": "1",
-  "protocol_version": "1",
-  "protocol_version_semantics": "Binary capability version; the Job Object wire protocol remains 1.",
+  "protocol_version": "2",
+  "protocol_version_semantics": "Binary capability version. Job Object control wire remains protocol 1 (CBJ 1). DACL subcommands require capability protocol 2.",
   "source": "native/windows/job-supervisor.c",
   "build": {
     "toolchain": "MSVC from a Visual Studio 2022 Native Tools command prompt",
     "x64": "cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:bin\\win32-x64\\buddy-job-supervisor.exe native\\windows\\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT advapi32.lib",
     "arm64": "cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:bin\\win32-arm64\\buddy-job-supervisor.exe native\\windows\\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT advapi32.lib",
     "packaged_from": {
-      "ci_run": "31184670872",
+      "ci_run": "31233008243",
       "job": "windows-latest / Node 22",
-      "head": "8c8133d2316de088fe5d4fb1aeec926cb41c84d2",
-      "bytes": 144384
+      "head": "d420938eb1a7b310c4f6ef196f1b96648ccc00be",
+      "bytes": 162816,
+      "note": "Native source identical on main tip c4707b4 (Phase 3 JS-only). Artifact from post-Phase-2 main validate upload win32-x64-job-supervisor."
     }
   },
   "helpers": {
     "win32-x64": {
       "status": "verified",
-      "protocol_version": "1",
+      "protocol_version": "2",
       "job_protocol": "1",
-      "dacl_protocol": "not_available_in_committed_binary",
+      "dacl_protocol": "2",
       "path": "bin/win32-x64/buddy-job-supervisor.exe",
-      "sha256": "d6fce879243a09ebb5fb12e432652a37ff5320acf3f20dee427bb40b73506f15"
+      "sha256": "22884692f20edb592d57cb3ea00d03dfa857bfe148a9625c986916fa83110fe1"
     },
     "win32-arm64": {
       "status": "unavailable",
