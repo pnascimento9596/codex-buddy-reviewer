@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "id": "defect-reversed-subtraction",
+  "category": "defect",
+  "description": "A reversed subtraction silently reports consumed capacity as remaining capacity.",
+  "live_eligible": true,
+  "egress_expected": true,
+  "evidence": {
+    "schema_version": "1",
+    "review_id": "eval-defect-reversed-subtraction",
+    "captured_at": "2026-07-18T00:00:00.000Z",
+    "repository_root": "eval-fixture",
+    "head": "2222222222222222222222222222222222222222",
+    "scope": "turn",
+    "base": "1111111111111111111111111111111111111111",
+    "changed_paths": ["src/quota.js"],
+    "excluded_paths": [],
+    "sensitive_change_count": 0,
+    "ignored_change_count": 0,
+    "path_evidence": [
+      {
+        "path": "src/quota.js",
+        "disposition": "complete",
+        "patch_bytes": 244,
+        "transmitted": true,
+        "hunk_ranges": [{ "start": 1, "end": 3, "side": "new" }]
+      }
+    ],
+    "incomplete_paths": [],
+    "hunk_ranges": { "src/quota.js": [{ "start": 1, "end": 3, "side": "new" }] },
+    "status": "deterministic eval fixture",
+    "patch": "diff --git a/src/quota.js b/src/quota.js\nindex 2222222..3333333 100644\n--- a/src/quota.js\n+++ b/src/quota.js\n@@ -1,3 +1,3 @@\n export function remaining(limit, used) {\n-  return Math.max(0, limit - used);\n+  return Math.max(0, used - limit);\n }\n",
+    "patch_hash": "1305febd9e5e799dd99ba991198c0a6ff66baf77963c50115650467646b440ea",
+    "patch_bytes": 244,
+    "truncated": false,
+    "line_counts": { "src/quota.js": 3 },
+    "old_line_counts": { "src/quota.js": 3 }
+  },
+  "expected": {
+    "allowed_statuses": ["findings"],
+    "min_findings": 1,
+    "max_findings": 5,
+    "provider_call": "required",
+    "required_anchors": [{ "path": "src/quota.js", "line_side": "new", "start": 2, "end": 2 }]
+  }
+}
