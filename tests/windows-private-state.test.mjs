@@ -165,6 +165,27 @@ test('DACL helper false outcomes return frozen structured results', async () => 
   assert.equal(Object.isFrozen(result), true);
 });
 
+test('DACL wrapper rejects operational failures that exit 125', async () => {
+  const response = {
+    ok: false,
+    op: 'verify_private_dir',
+    path: 'C:\\private',
+    code: 'wide_acl',
+    message: 'DACL contains an unexpected principal',
+    win32_error: 0,
+    protocol: 2
+  };
+  await assert.rejects(
+    runWindowsDaclOp('verify_private_dir', {
+      path: response.path,
+      platform: 'win32',
+      resolveHelper: async () => protocol2Helper,
+      spawnImpl: () => fakeChild({ stdout: `${JSON.stringify(response)}\n`, code: 125 })
+    }),
+    /did not match its process exit/
+  );
+});
+
 test('DACL wrapper sends the closed argv form and accepts a bound success object', async () => {
   let invocation;
   const response = {
@@ -198,8 +219,10 @@ test('native DACL source uses ACL authority APIs and leaves Job wire 1 isolated'
   assert.match(source, /return cbd_main\(argc, argv\);/u);
   assert.match(source, /#define CBJ_PROTOCOL_W L"1"/u);
   assert.match(source, /SetEntriesInAclW/u);
-  assert.match(source, /SetNamedSecurityInfoW/u);
-  assert.match(source, /GetNamedSecurityInfoW/u);
+  assert.match(source, /SetSecurityInfo/u);
+  assert.match(source, /GetSecurityInfo/u);
+  assert.doesNotMatch(source, /GetNamedSecurityInfoW/u);
+  assert.doesNotMatch(source, /SetNamedSecurityInfoW\s*\(\s*\(LPWSTR\)path/u);
   assert.match(source, /CreateWellKnownSid/u);
   assert.match(source, /OpenProcessToken/u);
   assert.match(source, /GetTokenInformation/u);

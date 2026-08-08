@@ -767,16 +767,40 @@ static BOOL cbd_set_private_security(const wchar_t *path, BOOL directory, DWORD 
   PTOKEN_USER token_user = NULL;
   PACL dacl = NULL;
   SECURITY_DESCRIPTOR descriptor;
+  HANDLE leaf = INVALID_HANDLE_VALUE;
+  FILE_ATTRIBUTE_TAG_INFO tag;
   DWORD result;
   BOOL success = FALSE;
+  const char *failure_code = "open_failed";
   if (!cbd_build_private_security(
         directory,
         &token_user,
         &dacl,
         &descriptor,
         error_code)) goto cleanup;
-  result = SetNamedSecurityInfoW(
-    (LPWSTR)path,
+  leaf = CreateFileW(
+    path,
+    READ_CONTROL | WRITE_DAC | WRITE_OWNER,
+    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+    NULL,
+    OPEN_EXISTING,
+    FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+    NULL
+  );
+  if (leaf == INVALID_HANDLE_VALUE) {
+    *error_code = GetLastError();
+    goto cleanup;
+  }
+  if (!GetFileInformationByHandleEx(leaf, FileAttributeTagInfo, &tag, (DWORD)sizeof(tag))) {
+    *error_code = GetLastError();
+    goto cleanup;
+  }
+  if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0U) {
+    *error_code = ERROR_REPARSE_TAG_INVALID;
+    goto cleanup;
+  }
+  result = SetSecurityInfo(
+    leaf,
     SE_FILE_OBJECT,
     OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
     token_user->User.Sid,
@@ -791,8 +815,10 @@ static BOOL cbd_set_private_security(const wchar_t *path, BOOL directory, DWORD 
   success = TRUE;
 
 cleanup:
+  if (leaf != INVALID_HANDLE_VALUE) CloseHandle(leaf);
   if (dacl != NULL) LocalFree(dacl);
   if (token_user != NULL) HeapFree(GetProcessHeap(), 0U, token_user);
+  (void)failure_code;
   return success;
 }
 
@@ -906,8 +932,8 @@ static BOOL cbd_verify_private_security(
     *failure_code = "open_failed";
     goto cleanup;
   }
-  result = GetNamedSecurityInfoW(
-    (LPWSTR)path,
+  result = GetSecurityInfo(
+    leaf,
     SE_FILE_OBJECT,
     OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
     &owner,

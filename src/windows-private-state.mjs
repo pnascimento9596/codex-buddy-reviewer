@@ -251,9 +251,8 @@ export async function runWindowsDaclOp(op, options = {}) {
       } catch (error) {
         return finish(error);
       }
-      const expectedCode = result.ok ? 0 : (result.code === 'invalid_arguments' ? 125 : code);
-      if ((result.ok && code !== 0) || (!result.ok && ![1, 125].includes(code))
-          || (result.code === 'invalid_arguments' && code !== expectedCode)) {
+      const expectedCode = result.ok ? 0 : (result.code === 'invalid_arguments' ? 125 : 1);
+      if (code !== expectedCode) {
         return finish(daclError('Windows DACL helper result did not match its process exit'));
       }
       return finish(null, result);
