@@ -109,6 +109,10 @@ function workspaceFingerprint(root) {
   return createHash('sha256').update(path.resolve(root)).digest('hex');
 }
 
+function enforceUnixMode(platform = process.platform) {
+  return platform !== 'win32' && process.platform !== 'win32';
+}
+
 async function secureParent(tempBase, platform = process.platform) {
   const parent = providerTempParent(tempBase);
   try {
@@ -119,7 +123,7 @@ async function secureParent(tempBase, platform = process.platform) {
 
   const before = await lstat(parent, { bigint: true });
   if (!before.isDirectory() || before.isSymbolicLink() || !ownedByCurrentUser(before)
-      || (platform !== 'win32' && !exactMode(before, 0o700))) {
+      || (enforceUnixMode(platform) && !exactMode(before, 0o700))) {
     throw new Error('Buddy provider temporary root is not a secured owned directory');
   }
   if (requiresStableCreationIdentity(platform) && !hasStableCreationIdentity(before)) {
@@ -129,7 +133,9 @@ async function secureParent(tempBase, platform = process.platform) {
 }
 
 async function openRunIdentityHandle(directory, platform) {
-  if (platform === 'win32') return null;
+  // Directory handle pinning is a POSIX capability. Even when tests force a
+  // logical non-Windows platform, skip it on a Windows host filesystem.
+  if (platform === 'win32' || process.platform === 'win32') return null;
   const handle = await open(
     directory,
     constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0)
@@ -150,7 +156,7 @@ async function assertParentUnchanged(parent, expected, platform = process.platfo
   const actual = await lstat(parent, { bigint: true });
   if (!actual.isDirectory() || actual.isSymbolicLink() || !ownedByCurrentUser(actual)
       || !providerTempIdentitiesMatch(actual, expected, platform)
-      || (platform !== 'win32' && !exactMode(actual, 0o700))) {
+      || (enforceUnixMode(platform) && !exactMode(actual, 0o700))) {
     throw new Error('Buddy provider temporary root changed during use');
   }
 }
@@ -205,7 +211,7 @@ async function readMarker(directory, runId, platform = process.platform) {
   }
   if (!before.isFile() || before.isSymbolicLink() || !ownedByCurrentUser(before)
       || before.size < 2n || before.size > 1_024n
-      || (platform !== 'win32' && !exactMode(before, 0o600))) {
+      || (enforceUnixMode(platform) && !exactMode(before, 0o600))) {
     return null;
   }
 
@@ -215,7 +221,7 @@ async function readMarker(directory, runId, platform = process.platform) {
     const opened = await handle.stat({ bigint: true });
     if (!opened.isFile() || !providerTempIdentitiesMatch(before, opened, platform) || opened.size !== before.size
         || !ownedByCurrentUser(opened)
-        || (platform !== 'win32' && !exactMode(opened, 0o600))) {
+        || (enforceUnixMode(platform) && !exactMode(opened, 0o600))) {
       return null;
     }
     const buffer = Buffer.alloc(Number(opened.size));
@@ -280,7 +286,7 @@ async function maybeRemoveStaleChild({
     return 'refused';
   }
   if (!before.isDirectory() || before.isSymbolicLink() || !ownedByCurrentUser(before)
-      || (platform !== 'win32' && !exactMode(before, 0o700))) {
+      || (enforceUnixMode(platform) && !exactMode(before, 0o700))) {
     return 'refused';
   }
   const marker = await readMarker(child, runId, platform);
@@ -292,7 +298,7 @@ async function maybeRemoveStaleChild({
   const rechecked = await lstat(child, { bigint: true }).catch(() => null);
   if (!rechecked || !rechecked.isDirectory() || rechecked.isSymbolicLink()
       || !providerTempIdentitiesMatch(before, rechecked, platform) || !ownedByCurrentUser(rechecked)
-      || (platform !== 'win32' && !exactMode(rechecked, 0o700))) {
+      || (enforceUnixMode(platform) && !exactMode(rechecked, 0o700))) {
     return 'refused';
   }
   const finalMarker = await readMarker(child, runId, platform);
@@ -320,7 +326,7 @@ async function maybeRemoveStaleChild({
   if (!moved || !moved.isDirectory() || moved.isSymbolicLink()
       || !providerTempIdentitiesMatch(before, moved, platform)
       || !ownedByCurrentUser(moved)
-      || (platform !== 'win32' && !exactMode(moved, 0o700))) {
+      || (enforceUnixMode(platform) && !exactMode(moved, 0o700))) {
     return 'refused';
   }
   try {
@@ -491,7 +497,7 @@ async function collectProviderTempInventory({
       const before = await lstat(child, { bigint: true }).catch(() => null);
       if (!before || !before.isDirectory() || before.isSymbolicLink()
           || !ownedByCurrentUser(before)
-          || (platform !== 'win32' && !exactMode(before, 0o700))) {
+          || (enforceUnixMode(platform) && !exactMode(before, 0o700))) {
         refused += 1;
         continue;
       }
@@ -643,7 +649,7 @@ async function removeAttributedTempRecord({
   const rechecked = await lstat(record.child, { bigint: true }).catch(() => null);
   if (!rechecked || !rechecked.isDirectory() || rechecked.isSymbolicLink()
       || !providerTempIdentitiesMatch(record.before, rechecked, platform) || !ownedByCurrentUser(rechecked)
-      || (platform !== 'win32' && !exactMode(rechecked, 0o700))) {
+      || (enforceUnixMode(platform) && !exactMode(rechecked, 0o700))) {
     return 'refused';
   }
   const marker = await readMarker(record.child, record.marker.run_id, platform);
@@ -676,7 +682,7 @@ async function removeAttributedTempRecord({
     : null;
   if (!moved || !moved.isDirectory() || moved.isSymbolicLink()
       || !providerTempIdentitiesMatch(record.before, moved, platform) || !ownedByCurrentUser(moved)
-      || (platform !== 'win32' && !exactMode(moved, 0o700))
+      || (enforceUnixMode(platform) && !exactMode(moved, 0o700))
       || !sameMarker(movedMarker, record.marker)) {
     return 'refused';
   }
@@ -865,7 +871,7 @@ export async function createProviderTempRun({
     }
     const runStat = await lstat(directory, { bigint: true });
     if (!runStat.isDirectory() || runStat.isSymbolicLink() || !ownedByCurrentUser(runStat)
-        || (platform !== 'win32' && !exactMode(runStat, 0o700))) {
+        || (enforceUnixMode(platform) && !exactMode(runStat, 0o700))) {
       throw new Error('Provider temporary run directory cannot be secured');
     }
     const pinned = await openRunIdentityHandle(directory, platform);
@@ -885,7 +891,7 @@ export async function createProviderTempRun({
     };
     const handle = await openImpl(path.join(directory, OWNER_MARKER), 'wx', 0o600);
     try {
-      if (platform !== 'win32') await handle.chmod(0o600);
+      if (enforceUnixMode(platform)) await handle.chmod(0o600);
       await handle.writeFile(`${JSON.stringify(marker)}\n`, 'utf8');
       await handle.sync();
     } finally {
@@ -915,7 +921,7 @@ export async function createProviderTempRun({
         && (createdIdentity
           ? providerTempIdentitiesMatch(cleanupTarget, createdIdentity, platform)
           : true)
-        && (platform === 'win32' || exactMode(cleanupTarget, 0o700))) {
+        && (!enforceUnixMode(platform) || exactMode(cleanupTarget, 0o700))) {
       await rm(directory, { recursive: true, force: true }).catch(() => {});
     }
     await identityHandle?.close().catch(() => {});
@@ -956,7 +962,7 @@ export async function cleanupProviderTempRun(run, { cleanupImpl = rm } = {}) {
         || !providerTempIdentitiesMatch(current, heldIdentity, issued.platform)
         || !providerTempIdentitiesMatch(heldIdentity, issued.identity, issued.platform)
         || !ownedByCurrentUser(current)
-        || (issued.platform !== 'win32' && !exactMode(current, 0o700))
+        || (enforceUnixMode(issued.platform) && !exactMode(current, 0o700))
         || !sameMarker(marker, issued.marker)) {
       throw new Error('Provider temporary cleanup ownership proof changed');
     }
