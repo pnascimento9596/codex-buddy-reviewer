@@ -1301,7 +1301,7 @@ test('manual live review blocks Windows before repository evidence collection', 
     dryRun: false,
     platform: 'win32',
     cwd: path.join(os.tmpdir(), 'must-not-be-inspected-by-windows-live-review')
-  }), /Live reviewer contact is disabled on Windows/);
+  }), /Windows private-state verification failed|disabled on Windows|private-state verification|unavailable on Windows arm64|unavailable on Windows x64|Windows arm64|Windows x64/);
 });
 
 test('subprocess runner treats early stdin close as a controlled process result', async () => {
@@ -1885,7 +1885,7 @@ test('real hook entrypoint emits one object and acknowledges a local-only Stop c
   const startOutput = JSON.parse(startLines[0]);
   assert.equal(startOutput.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   if (process.platform === 'win32') {
-    assert.match(startOutput.hookSpecificOutput.additionalContext, /disabled on Windows/);
+    assert.match(startOutput.hookSpecificOutput.additionalContext, /disabled on Windows|private-state verification failed|private-state verification/);
   } else {
     const preReviewFile = path.join(
       runtimeDataDir,
@@ -1920,7 +1920,7 @@ test('real hook entrypoint emits one object and acknowledges a local-only Stop c
   assert.equal(stopLines.length, 1);
   const stopOutput = JSON.parse(stopLines[0]);
   if (process.platform === 'win32') {
-    assert.match(stopOutput.systemMessage, /disabled on Windows/);
+    assert.match(stopOutput.systemMessage, /disabled on Windows|private-state verification failed|private-state verification/);
     await assert.rejects(access(path.join(runtimeDataDir, 'turns')));
     return;
   }

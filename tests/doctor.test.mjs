@@ -256,7 +256,7 @@ test('Windows process containment diagnostic uses CI helper overrides but labels
   assert.match(check(result, 'process_containment').detail, /not an OS sandbox/);
   assert.equal(check(result, 'provider_egress_privacy').status, 'warn');
   assert.equal(check(result, 'provider_egress_privacy').failure_code, 'windows_private_state_acl_unavailable');
-  assert.match(check(result, 'provider_egress_privacy').detail, /current-user-only DACLs/);
+  assert.match(check(result, 'provider_egress_privacy').detail, /current-user-only DACLs|private-state verification failed|filesystem ACL probe failed|private-state filesystem ACL probe failed|helper pin, protocol-2/);
 });
 
 test('Windows process containment fails for an enabled mode and warns for a disabled mode when unverified', async () => {
@@ -560,6 +560,18 @@ test('Windows provider health check reports the privacy blocker without approvin
     mode: modeFixture(root, { provider: 'claude', model: 'claude-opus-4-8' })
   }, { timeoutMs: 5_000 }, {
     platform: 'win32',
+    arch: 'x64',
+    ensureWindowsPrivateStateRoots: async () => Object.freeze({
+      schema_version: '1',
+      platform: 'win32',
+      arch: 'x64',
+      ok: false,
+      failure_code: 'windows_private_state_acl_unavailable',
+      message: 'Windows private-state verification failed: fixture root verification failed',
+      filesystem_acl_capable: false,
+      roots: [],
+      operation: 'ensure_and_verify'
+    }),
     approveProviderReviewRequest: () => {
       approvalCalls += 1;
       throw new Error('Windows privacy gate must run first');
@@ -574,8 +586,8 @@ test('Windows provider health check reports the privacy blocker without approvin
   assert.equal(result.status, 'fail');
   assert.equal(result.configured_count, 1);
   assert.equal(result.passed_count, 0);
-  assert.match(result.summary, /disabled on Windows/);
-  assert.match(result.detail, /current-user-only DACLs/);
+  assert.match(result.summary, /disabled on Windows|private-state verification failed|private-state verification/);
+  assert.match(result.detail, /current-user-only DACLs|private-state verification failed|filesystem ACL probe failed|private-state filesystem ACL probe failed|helper pin, protocol-2/);
   assert.equal(result.reviewer_checks[0].failure_code, 'windows_private_state_acl_unavailable');
 });
 

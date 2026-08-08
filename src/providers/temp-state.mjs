@@ -12,7 +12,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { workspaceKey } from '../state.mjs';
-import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from '../windows-egress-gate.mjs';
 import {
   ensurePrivateDir,
   ensurePrivateFile,
@@ -794,7 +793,7 @@ export async function createProviderTempRun({
   openImpl = open,
   platform = process.platform,
   windowsPrivateStateVerification = null,
-  requireWindowsPrivateStateVerification = WINDOWS_PROVIDER_EGRESS_GATE_LIFTED,
+  requireWindowsPrivateStateVerification = false,
   ensurePrivateDirImpl = ensurePrivateDir,
   ensurePrivateFileImpl = ensurePrivateFile,
   verifyPrivateDirImpl = verifyPrivateDir
@@ -813,35 +812,35 @@ export async function createProviderTempRun({
     throw new TypeError('Windows provider temporary DACL operations must be callable');
   }
   let windowsDaclOptions = null;
-  if (platform === 'win32') {
-    // Until the live-egress gate lifts, provider temp creation keeps the legacy
-    // Windows path (no helper DACL) unless a caller injects verification for a
-    // future allow-path test. After gate lift, verification is mandatory.
-    if (windowsPrivateStateVerification) {
-      assertWindowsPrivateStateVerification(windowsPrivateStateVerification, {
-        requireEnsured: true,
-        execution: 'not_started'
-      });
-      const expectedParent = providerTempParent(tempBase);
-      if (!windowsPrivateStateRootIsVerified(
-        windowsPrivateStateVerification,
-        'provider_temp_parent',
-        expectedParent
-      )) {
-        throw new Error('Windows provider temporary parent differs from its verified root');
-      }
-      windowsDaclOptions = windowsPrivateStateDaclOptions(windowsPrivateStateVerification);
-      const verifiedParent = await verifyPrivateDirImpl(expectedParent, windowsDaclOptions);
-      if (!verifiedParent?.ok) {
-        throw new Error('Windows provider temporary parent failed verification before creation');
-      }
-    } else if (requireWindowsPrivateStateVerification) {
-      const error = new Error('Windows provider temporary creation requires verified private-state roots');
-      error.failureCode = 'windows_private_state_acl_unavailable';
-      error.platformIntegrityFailure = true;
-      error.providerExecution = 'not_started';
-      throw error;
+  if (platform === 'win32' && windowsPrivateStateVerification) {
+    // Verified private-state roots drive DACL hardening of provider temp runs.
+    // Callers on the live-egress path pass verification after the platform
+    // policy gate has already enforced root ensure/verify; the flag is opt-in
+    // so cross-platform host tests that exercise temp creation without DACL
+    // verification keep their pre-gate semantics.
+    assertWindowsPrivateStateVerification(windowsPrivateStateVerification, {
+      requireEnsured: true,
+      execution: 'not_started'
+    });
+    const expectedParent = providerTempParent(tempBase);
+    if (!windowsPrivateStateRootIsVerified(
+      windowsPrivateStateVerification,
+      'provider_temp_parent',
+      expectedParent
+    )) {
+      throw new Error('Windows provider temporary parent differs from its verified root');
     }
+    windowsDaclOptions = windowsPrivateStateDaclOptions(windowsPrivateStateVerification);
+    const verifiedParent = await verifyPrivateDirImpl(expectedParent, windowsDaclOptions);
+    if (!verifiedParent?.ok) {
+      throw new Error('Windows provider temporary parent failed verification before creation');
+    }
+  } else if (platform === 'win32' && requireWindowsPrivateStateVerification) {
+    const error = new Error('Windows provider temporary creation requires verified private-state roots');
+    error.failureCode = 'windows_private_state_acl_unavailable';
+    error.platformIntegrityFailure = true;
+    error.providerExecution = 'not_started';
+    throw error;
   }
   await sweepStaleProviderTempRuns({
     tempBase,

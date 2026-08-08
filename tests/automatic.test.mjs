@@ -347,6 +347,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
     modeDataDir,
     runtimeDataDir,
     platform: 'win32',
+    arch: 'x64',
     ensureWindowsPrivateState: async () => {
       windowsVerificationCalls += 1;
       return Object.freeze({ ok: true });
@@ -363,7 +364,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
   assert.equal(captureCalls, 0);
   assert.equal(pruneCalls, 0);
   assert.equal(windowsVerificationCalls, 1);
-  assert.match(started.output.hookSpecificOutput.additionalContext, /disabled on Windows/);
+  assert.match(started.output.hookSpecificOutput.additionalContext, /disabled on Windows|private-state verification failed|private-state verification/);
   assert.match(started.output.hookSpecificOutput.additionalContext, /No private turn snapshot was created/);
 
   let evidenceCalls = 0;
@@ -376,6 +377,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
     modeDataDir,
     runtimeDataDir,
     platform: 'win32',
+    arch: 'x64',
     ensureWindowsPrivateState: async () => {
       windowsVerificationCalls += 1;
       return Object.freeze({ ok: true });

@@ -668,13 +668,14 @@ test('Windows provider temp creation refuses a missing private-state verificatio
   );
 });
 
-test('Windows provider temp creation keeps legacy path without verification while gate is closed', async () => {
+test('Windows provider temp creation keeps legacy path without verification when opted out', async () => {
   const tempBase = await temporaryBase('windows-legacy-no-verification');
   const run = await createProviderTempRun({
     root: DEFAULT_ROOT,
     provider: 'claude',
     tempBase,
     platform: 'win32',
+    requireWindowsPrivateStateVerification: false,
     randomBytesImpl: deterministicRandom(0x91)
   });
   assert.equal(run.parent, path.join(tempBase, path.basename(run.parent)));

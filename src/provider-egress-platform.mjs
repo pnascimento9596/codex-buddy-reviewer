@@ -56,7 +56,14 @@ export function evaluateProviderEgressPlatformPolicy(input = {}) {
       verification?.message ?? 'No verified Windows private-state helper is packaged for this architecture.'
     );
   }
-  if (verification?.arch !== arch) {
+  if (!verification) {
+    return blocked(
+      WINDOWS_PROVIDER_EGRESS_FAILURE_CODE,
+      'Live reviewer contact is disabled because Windows private-state verification failed.',
+      'All durable, runtime, and provider temporary roots must pass helper pin, protocol-2, filesystem ACL, ensure, and DACL verification.'
+    );
+  }
+  if (verification.arch !== undefined && verification.arch !== arch) {
     return blocked(
       WINDOWS_PRIVATE_STATE_FAILURE_CODES.helper,
       'Live reviewer contact is disabled because the Windows helper architecture is unverified.',
