@@ -481,3 +481,41 @@ test('Windows DACL helper microbenchmark emits non-gating evidence', {
   await writeFile(path.join(outputDirectory, 'dacl-bench.json'), `${JSON.stringify(report, null, 2)}\n`);
   t.diagnostic(`DACL benchmark ${JSON.stringify(report)}`);
 });
+
+const packagedIntegrationEnabled = process.platform === 'win32'
+  && process.env.CODEX_BUDDY_TEST_PACKAGED_WINDOWS_DACL === '1';
+
+test('packaged Windows helper hash-matches helpers.json and speaks DACL protocol 2', {
+  skip: !packagedIntegrationEnabled
+}, async () => {
+  const packagedHelper = path.join(repositoryRoot, 'bin', 'win32-x64', 'buddy-job-supervisor.exe');
+  const manifestPath = path.join(repositoryRoot, 'native', 'windows', 'helpers.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  const bytes = await readFile(packagedHelper);
+  const actual = createHash('sha256').update(bytes).digest('hex');
+  assert.equal(actual, manifest.helpers['win32-x64'].sha256);
+  assert.equal(manifest.helpers['win32-x64'].protocol_version, '2');
+  assert.equal(manifest.helpers['win32-x64'].dacl_protocol, '2');
+  assert.equal(bytes.length, manifest.build.packaged_from.bytes);
+
+  const options = Object.freeze({
+    platform: 'win32',
+    helperManifestFile: manifestPath,
+    helperRoot: repositoryRoot
+  });
+  const info = await runWindowsDaclOp('protocol_info', options);
+  assert.deepEqual(info, {
+    ok: true,
+    op: 'protocol_info',
+    job_protocol: 1,
+    dacl_protocol: 2,
+    protocol: 2
+  });
+  const root = await integrationRoot('codex-buddy-packaged-dacl-');
+  const target = path.join(root, 'private');
+  assert.equal((await ensurePrivateDir(target, options)).ok, true);
+  assert.equal((await verifyPrivateDir(target, options)).ok, true);
+  const child = path.join(target, 'state.json');
+  assert.equal((await ensurePrivateFile(child, options)).ok, true);
+  assert.equal((await verifyPrivateFile(child, options)).ok, true);
+});

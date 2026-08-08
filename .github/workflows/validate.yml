@@ -122,6 +122,23 @@ jobs:
           retention-days: 5
       - name: Validate source and runtime contracts
         run: npm run validate
+      - name: Exercise packaged Windows helper DACL protocol
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CODEX_BUDDY_TEST_PACKAGED_WINDOWS_DACL: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $packaged = (Resolve-Path 'bin\win32-x64\buddy-job-supervisor.exe').Path
+          $manifest = (Resolve-Path 'native\windows\helpers.json').Path
+          $root = (Resolve-Path '.').Path
+          $expected = (Get-Content $manifest -Raw | ConvertFrom-Json).helpers.'win32-x64'.sha256
+          $actual = (Get-FileHash -Algorithm SHA256 $packaged).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Packaged helper hash $actual != manifest $expected" }
+          $env:CODEX_BUDDY_TEST_WINDOWS_HELPER = $packaged
+          $env:CODEX_BUDDY_WINDOWS_HELPER_MANIFEST = $manifest
+          $env:CODEX_BUDDY_WINDOWS_HELPER_ROOT = $root
+          node --test --test-name-pattern='packaged Windows helper' tests/windows-private-state.test.mjs
       - name: Upload Windows DACL benchmark evidence
         if: runner.os == 'Windows' && matrix.node == 22 && always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
