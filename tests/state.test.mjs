@@ -208,9 +208,10 @@ test('private JSON Windows final paths receive the full file DACL after atomic r
     requireWindowsPrivateFileDacl: true,
     ensurePrivateFileImpl
   }), true);
-  assert.equal(calls[0].file, atomic);
-  assert.match(calls[1].file, /\.windows-exclusive\.json\..+\.tmp$/u);
-  assert.equal(calls[2].file, exclusive);
+  assert.match(calls[0].file, /\.windows-atomic\.json\..+\.tmp$/u);
+  assert.equal(calls[1].file, atomic);
+  assert.match(calls[2].file, /\.windows-exclusive\.json\..+\.tmp$/u);
+  assert.equal(calls[3].file, exclusive);
   assert.equal(calls.every((call) => call.options.platform === 'win32'), true);
 });
 

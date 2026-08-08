@@ -28,6 +28,7 @@ import { appendOutboxEvent } from './outbox.mjs';
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
 import { approveProviderReviewRequest } from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
+import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 import { DEADLINE_STALL_MAX_EXTENSION_MS } from './process.mjs';
 import { aggregateReviewOutcomes, ReviewAggregationError } from './review-aggregate.mjs';
 import { REVIEW_SCHEMA_VERSION } from './review-schema.mjs';
@@ -108,6 +109,9 @@ async function ensureLifecycleWindowsPrivateState(options) {
   const platform = options.platform ?? process.platform;
   if (platform !== 'win32') return null;
   if (options.windowsPrivateStateVerification) return options.windowsPrivateStateVerification;
+  // While the live-egress gate is closed, do not pay for root ensure/verify on
+  // every automatic turn. Policy still fails closed via GATE_LIFTED=false.
+  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED) return null;
   return (options.ensureWindowsPrivateState ?? ensureWindowsPrivateStateRoots)({
     platform,
     arch: options.arch,
@@ -122,6 +126,7 @@ async function ensureLifecycleWindowsPrivateState(options) {
 async function reverifyLifecycleWindowsPrivateState(verification, options, execution) {
   const platform = options.platform ?? process.platform;
   if (platform !== 'win32') return null;
+  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED && !verification) return null;
   const current = await (options.reverifyWindowsPrivateState ?? reverifyWindowsPrivateStateRoots)(
     verification,
     {

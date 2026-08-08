@@ -651,7 +651,7 @@ test('Windows attribution is visible but ACL-unverified runs are never swept or 
   await cleanupProviderTempRun(run);
 });
 
-test('Windows provider temp creation refuses a missing private-state verification', async () => {
+test('Windows provider temp creation refuses a missing private-state verification when required', async () => {
   const tempBase = await temporaryBase('windows-missing-verification');
   await assert.rejects(
     createProviderTempRun({
@@ -659,12 +659,26 @@ test('Windows provider temp creation refuses a missing private-state verificatio
       provider: 'claude',
       tempBase,
       platform: 'win32',
+      requireWindowsPrivateStateVerification: true,
       randomBytesImpl: deterministicRandom(0x90)
     }),
     (error) => error?.failureCode === 'windows_private_state_acl_unavailable'
       && error?.platformIntegrityFailure === true
       && error?.providerExecution === 'not_started'
   );
+});
+
+test('Windows provider temp creation keeps legacy path without verification while gate is closed', async () => {
+  const tempBase = await temporaryBase('windows-legacy-no-verification');
+  const run = await createProviderTempRun({
+    root: DEFAULT_ROOT,
+    provider: 'claude',
+    tempBase,
+    platform: 'win32',
+    randomBytesImpl: deterministicRandom(0x91)
+  });
+  assert.equal(run.parent, path.join(tempBase, path.basename(run.parent)));
+  await cleanupProviderTempRun(run);
 });
 
 test('Windows provider temp status accepts the historical marker and reports a freshly verified root distinctly', async () => {

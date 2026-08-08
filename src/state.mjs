@@ -296,6 +296,15 @@ export async function writePrivateJsonAtomic(file, value, {
     // Mode the temp inode before rename so concurrent cleanup cannot race a
     // post-rename chmod against a destination that has already disappeared.
     await chmod(temporary, 0o600);
+    await ensureWindowsPrivateFinalFile(temporary, {
+      platform,
+      arch,
+      env,
+      ensurePrivateFileImpl,
+      windowsHelperManifestFile,
+      windowsHelperRoot,
+      requireWindowsPrivateFileDacl
+    });
     await renamePrivateJsonAtomic(temporary, file, { platform, renameImpl, pauseImpl });
     await ensureWindowsPrivateFinalFile(file, {
       platform,

@@ -29,6 +29,7 @@ import {
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
 import { approveProviderReviewRequest } from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
+import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 import {
   providerCircuitIsOpen,
   recordProviderCircuit
@@ -628,6 +629,7 @@ function dependencies(options) {
 
 async function reverifyProviderRoots(deps, execution = 'not_started') {
   if (deps.platform !== 'win32') return null;
+  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED && !deps.windowsPrivateStateVerification) return null;
   const verification = await deps.reverifyWindowsPrivateState(
     deps.windowsPrivateStateVerification,
     {
@@ -733,7 +735,7 @@ async function executeProviders({
             onProviderDispatch: () => { lane.providerAttempted = true; }
           });
         } catch (error) {
-          if (deps.platform === 'win32' && lane.providerAttempted) {
+          if (deps.platform === 'win32' && lane.providerAttempted && executionVerification) {
             const terminalVerification = await deps.reverifyWindowsPrivateState(
               executionVerification,
               {
@@ -752,7 +754,7 @@ async function executeProviders({
           }
           throw error;
         }
-        if (deps.platform === 'win32') {
+        if (deps.platform === 'win32' && executionVerification) {
           executionVerification = await deps.reverifyWindowsPrivateState(
             executionVerification,
             {
@@ -942,7 +944,7 @@ export async function runPreReviewWorker(rawInput, options = {}) {
         || !validConsentTimestamp(mode.continuous_review_consented_at)) {
       return disable('continuous_disabled');
     }
-    if (deps.platform === 'win32') {
+    if (deps.platform === 'win32' && WINDOWS_PROVIDER_EGRESS_GATE_LIFTED) {
       deps.windowsPrivateStateVerification = await deps.ensureWindowsPrivateState({
         platform: deps.platform,
         arch: deps.arch,

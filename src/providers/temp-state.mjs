@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { workspaceKey } from '../state.mjs';
+import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from '../windows-egress-gate.mjs';
 import {
   ensurePrivateDir,
   ensurePrivateFile,
@@ -787,6 +788,7 @@ export async function createProviderTempRun({
   openImpl = open,
   platform = process.platform,
   windowsPrivateStateVerification = null,
+  requireWindowsPrivateStateVerification = WINDOWS_PROVIDER_EGRESS_GATE_LIFTED,
   ensurePrivateDirImpl = ensurePrivateDir,
   ensurePrivateFileImpl = ensurePrivateFile,
   verifyPrivateDirImpl = verifyPrivateDir
@@ -806,22 +808,33 @@ export async function createProviderTempRun({
   }
   let windowsDaclOptions = null;
   if (platform === 'win32') {
-    assertWindowsPrivateStateVerification(windowsPrivateStateVerification, {
-      requireEnsured: true,
-      execution: 'not_started'
-    });
-    const expectedParent = providerTempParent(tempBase);
-    if (!windowsPrivateStateRootIsVerified(
-      windowsPrivateStateVerification,
-      'provider_temp_parent',
-      expectedParent
-    )) {
-      throw new Error('Windows provider temporary parent differs from its verified root');
-    }
-    windowsDaclOptions = windowsPrivateStateDaclOptions(windowsPrivateStateVerification);
-    const verifiedParent = await verifyPrivateDirImpl(expectedParent, windowsDaclOptions);
-    if (!verifiedParent?.ok) {
-      throw new Error('Windows provider temporary parent failed verification before creation');
+    // Until the live-egress gate lifts, provider temp creation keeps the legacy
+    // Windows path (no helper DACL) unless a caller injects verification for a
+    // future allow-path test. After gate lift, verification is mandatory.
+    if (windowsPrivateStateVerification) {
+      assertWindowsPrivateStateVerification(windowsPrivateStateVerification, {
+        requireEnsured: true,
+        execution: 'not_started'
+      });
+      const expectedParent = providerTempParent(tempBase);
+      if (!windowsPrivateStateRootIsVerified(
+        windowsPrivateStateVerification,
+        'provider_temp_parent',
+        expectedParent
+      )) {
+        throw new Error('Windows provider temporary parent differs from its verified root');
+      }
+      windowsDaclOptions = windowsPrivateStateDaclOptions(windowsPrivateStateVerification);
+      const verifiedParent = await verifyPrivateDirImpl(expectedParent, windowsDaclOptions);
+      if (!verifiedParent?.ok) {
+        throw new Error('Windows provider temporary parent failed verification before creation');
+      }
+    } else if (requireWindowsPrivateStateVerification) {
+      const error = new Error('Windows provider temporary creation requires verified private-state roots');
+      error.failureCode = 'windows_private_state_acl_unavailable';
+      error.platformIntegrityFailure = true;
+      error.providerExecution = 'not_started';
+      throw error;
     }
   }
   await sweepStaleProviderTempRuns({
@@ -838,18 +851,18 @@ export async function createProviderTempRun({
   if (!RUN_ID_PATTERN.test(runId)) throw new Error('Provider temporary run ID generation failed');
   const directory = path.join(parent, `${RUN_PREFIX}${runId}`);
   await mkdir(directory, { mode: 0o700 });
-  if (windowsDaclOptions !== null) {
-    const ensured = await ensurePrivateDirImpl(directory, windowsDaclOptions);
-    if (!ensured?.ok) {
-      throw new Error('Provider temporary run directory failed Windows DACL ensure');
-    }
-  }
 
   let issuedIdentity;
   let issuedMarker;
   let createdIdentity;
   let identityHandle;
   try {
+    if (windowsDaclOptions !== null) {
+      const ensured = await ensurePrivateDirImpl(directory, windowsDaclOptions);
+      if (!ensured?.ok) {
+        throw new Error('Provider temporary run directory failed Windows DACL ensure');
+      }
+    }
     const runStat = await lstat(directory, { bigint: true });
     if (!runStat.isDirectory() || runStat.isSymbolicLink() || !ownedByCurrentUser(runStat)
         || (platform !== 'win32' && !exactMode(runStat, 0o700))) {
@@ -896,11 +909,12 @@ export async function createProviderTempRun({
     await assertParentUnchanged(parent, identity, platform);
   } catch (error) {
     const cleanupTarget = await lstat(directory, { bigint: true }).catch(() => null);
-    if (createdIdentity
-        && cleanupTarget?.isDirectory()
+    if (cleanupTarget?.isDirectory()
         && !cleanupTarget.isSymbolicLink()
-        && providerTempIdentitiesMatch(cleanupTarget, createdIdentity, platform)
         && ownedByCurrentUser(cleanupTarget)
+        && (createdIdentity
+          ? providerTempIdentitiesMatch(cleanupTarget, createdIdentity, platform)
+          : true)
         && (platform === 'win32' || exactMode(cleanupTarget, 0o700))) {
       await rm(directory, { recursive: true, force: true }).catch(() => {});
     }
