@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { assertAbsoluteWindowsExecutablePath } from './executable.mjs';
 
 export const WINDOWS_JOB_PROTOCOL_VERSION = '1';
+const WINDOWS_HELPER_CAPABILITY_PROTOCOLS = new Set(['1', '2']);
 
 const DEFAULT_HELPER_MANIFEST = fileURLToPath(
   new URL('../native/windows/helpers.json', import.meta.url)
@@ -196,7 +197,7 @@ async function readPeMachine(file, fileSize) {
 function validateManifestShape(manifest) {
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)
       || manifest.schema_version !== '1'
-      || manifest.protocol_version !== WINDOWS_JOB_PROTOCOL_VERSION
+      || !WINDOWS_HELPER_CAPABILITY_PROTOCOLS.has(manifest.protocol_version)
       || !manifest.helpers || typeof manifest.helpers !== 'object' || Array.isArray(manifest.helpers)) {
     throw containmentError('Windows helper manifest has an unsupported schema or protocol');
   }
@@ -235,7 +236,8 @@ export async function resolveVerifiedWindowsJobHelper({
       kind: 'helper_unavailable'
     });
   }
-  if (record.protocol_version !== WINDOWS_JOB_PROTOCOL_VERSION
+  if (!WINDOWS_HELPER_CAPABILITY_PROTOCOLS.has(record.protocol_version)
+      || record.protocol_version !== manifest.protocol_version
       || !SHA256_PATTERN.test(record.sha256)) {
     throw containmentError(`Windows Job Object helper metadata is invalid for ${key}`);
   }
@@ -287,7 +289,9 @@ export async function resolveVerifiedWindowsJobHelper({
     path: canonical,
     arch,
     sha256: actualHash,
-    protocolVersion: WINDOWS_JOB_PROTOCOL_VERSION
+    // This is the binary capability protocol from the manifest. Job Object
+    // supervision deliberately continues to use WINDOWS_JOB_PROTOCOL_VERSION.
+    protocolVersion: record.protocol_version
   });
 }
 
