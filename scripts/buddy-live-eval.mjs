@@ -14,6 +14,7 @@ import { parseReviewerOutput, validateReviewResult } from '../src/result.mjs';
 import { REVIEW_RESULT_SCHEMA } from '../src/review-schema.mjs';
 import { escapeDiagnosticLine } from '../src/policy.mjs';
 import { assertProviderEgressPlatformAllowed } from '../src/provider-egress-platform.mjs';
+import { ensureWindowsPrivateStateRoots } from '../src/windows-private-state-roots.mjs';
 import { DEFAULT_CORPUS_MANIFEST, loadEvalCorpus } from './lib/eval-corpus.mjs';
 
 const HELP = `Codex Buddy explicit live-provider evaluator
@@ -130,8 +131,25 @@ export async function runLiveEval(argv, overrides = {}) {
   if (options.maxCalls !== plannedCalls) {
     throw new Error(`--max-calls must exactly equal the ${plannedCalls} planned provider call(s)`);
   }
+  const platform = overrides.platform ?? process.platform;
+  const windowsPrivateStateVerification = plannedCalls > 0 && platform === 'win32'
+    ? await (overrides.ensureWindowsPrivateStateRoots ?? ensureWindowsPrivateStateRoots)({
+        platform,
+        arch: overrides.arch,
+        env: overrides.env,
+        dataDir: overrides.dataDir,
+        runtimeDataDir: overrides.runtimeDataDir,
+        tempBase: overrides.providerTempBase,
+        ...(overrides.windowsPrivateStateOptions ?? {})
+      })
+    : null;
   if (plannedCalls > 0) {
-    assertProviderEgressPlatformAllowed(overrides.platform ?? process.platform);
+    assertProviderEgressPlatformAllowed({
+      platform,
+      arch: overrides.arch,
+      env: overrides.env,
+      verification: windowsPrivateStateVerification
+    });
   }
   const buildPrompt = overrides.buildReviewPrompt ?? buildReviewPrompt;
   const prompts = new Map();
@@ -215,7 +233,16 @@ export async function runLiveEval(argv, overrides = {}) {
             providerCalled = true;
             response = await (overrides.dispatchProviderReview ?? dispatchProviderReview)(
               approvedRequest,
-              { platform: overrides.platform ?? process.platform }
+              {
+                platform,
+                ...(platform === 'win32'
+                  ? {
+                      arch: overrides.arch,
+                      env: overrides.env,
+                      verification: windowsPrivateStateVerification
+                    }
+                  : {})
+              }
             );
           }
           if (response.provider !== options.provider || response.model !== options.model) {

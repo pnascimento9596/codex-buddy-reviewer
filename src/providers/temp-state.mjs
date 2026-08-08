@@ -12,10 +12,22 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { workspaceKey } from '../state.mjs';
+import {
+  ensurePrivateDir,
+  ensurePrivateFile,
+  verifyPrivateDir
+} from '../windows-private-state.mjs';
+import {
+  assertWindowsPrivateStateVerification,
+  windowsPrivateStateDaclOptions,
+  windowsPrivateStateRootIsVerified
+} from '../windows-private-state-roots.mjs';
+import { providerTempParent } from './temp-path.mjs';
+
+export { providerTempParent } from './temp-path.mjs';
 
 const LEGACY_TEMP_SCHEMA = 'codex-buddy-provider-temp-v1';
 const TEMP_SCHEMA = 'codex-buddy-provider-temp-v2';
-const TEMP_PARENT_PREFIX = 'codex-buddy-provider-v1-';
 const RUN_PREFIX = 'run-';
 const QUARANTINE_PREFIX = '.quarantine-';
 const OWNER_MARKER = '.codex-buddy-owner.json';
@@ -94,21 +106,6 @@ function ownershipCanBeProven(platform = process.platform) {
 
 function workspaceFingerprint(root) {
   return createHash('sha256').update(path.resolve(root)).digest('hex');
-}
-
-function stableUserKey() {
-  if (typeof process.getuid === 'function') return `uid-${process.getuid()}`;
-  return `user-${createHash('sha256')
-    .update(`${os.homedir()}\0${os.userInfo().username}`)
-    .digest('hex')
-    .slice(0, 16)}`;
-}
-
-export function providerTempParent(tempBase = os.tmpdir()) {
-  if (typeof tempBase !== 'string' || !path.isAbsolute(tempBase)) {
-    throw new TypeError('Provider temporary base must be an absolute path');
-  }
-  return path.join(tempBase, `${TEMP_PARENT_PREFIX}${stableUserKey()}`);
 }
 
 async function secureParent(tempBase, platform = process.platform) {
@@ -549,7 +546,7 @@ async function collectProviderTempInventory({
   };
 }
 
-function summarizeProviderTempInventory(inventory, platform) {
+function summarizeProviderTempInventory(inventory, platform, windowsPrivateStateVerification = null) {
   const providerTotals = new Map(PROVIDERS.map((provider) => [provider, {
     provider,
     runs: 0,
@@ -568,13 +565,19 @@ function summarizeProviderTempInventory(inventory, platform) {
   }
   const files = inventory.records.reduce((total, record) => total + record.files, 0);
   const bytes = inventory.records.reduce((total, record) => total + record.bytes, 0);
+  const windowsDaclVerified = platform === 'win32'
+    && windowsPrivateStateRootIsVerified(
+      windowsPrivateStateVerification,
+      'provider_temp_parent',
+      inventory.parent
+    );
   return Object.freeze({
     schema_version: '1',
     workspace_key: inventory.expectedWorkspace,
     complete: !inventory.limited && inventory.refusedAttributed === 0,
     ownership_assurance: ownershipCanBeProven(platform)
       ? 'posix_uid_and_mode_verified'
-      : 'windows_acl_unverified',
+      : windowsDaclVerified ? 'windows_dacl_verified' : 'windows_acl_unverified',
     purge_supported: ownershipCanBeProven(platform),
     scanned_entries: inventory.scanned,
     limited: inventory.limited,
@@ -598,6 +601,7 @@ export async function workspaceProviderTempStatus({
   scanLimit = PROVIDER_TEMP_SCAN_LIMIT,
   processAliveImpl = defaultProcessAlive,
   platform = process.platform,
+  windowsPrivateStateVerification = null,
   monotonicNowImpl = () => performance.now()
 } = {}) {
   const inventory = await collectProviderTempInventory({
@@ -608,7 +612,7 @@ export async function workspaceProviderTempStatus({
     platform,
     monotonicNowImpl
   });
-  return summarizeProviderTempInventory(inventory, platform);
+  return summarizeProviderTempInventory(inventory, platform, windowsPrivateStateVerification);
 }
 
 function sameMarker(left, right) {
@@ -697,6 +701,7 @@ export async function purgeWorkspaceProviderTempRuns({
   renameImpl = rename,
   removeImpl = rm,
   platform = process.platform,
+  windowsPrivateStateVerification = null,
   monotonicNowImpl = () => performance.now()
 } = {}) {
   for (const [label, implementation] of Object.entries({
@@ -712,7 +717,11 @@ export async function purgeWorkspaceProviderTempRuns({
     platform,
     monotonicNowImpl
   });
-  const before = summarizeProviderTempInventory(inventory, platform);
+  const before = summarizeProviderTempInventory(
+    inventory,
+    platform,
+    windowsPrivateStateVerification
+  );
   if (!before.complete) {
     throw new Error(
       'Buddy provider temporary purge refused because the bounded ownership inventory is incomplete'
@@ -776,7 +785,11 @@ export async function createProviderTempRun({
   processAliveImpl = defaultProcessAlive,
   staleRemoveImpl = rm,
   openImpl = open,
-  platform = process.platform
+  platform = process.platform,
+  windowsPrivateStateVerification = null,
+  ensurePrivateDirImpl = ensurePrivateDir,
+  ensurePrivateFileImpl = ensurePrivateFile,
+  verifyPrivateDirImpl = verifyPrivateDir
 } = {}) {
   if (typeof root !== 'string' || !path.isAbsolute(root)) {
     throw new TypeError('Provider temporary workspace root must be an absolute path');
@@ -787,6 +800,30 @@ export async function createProviderTempRun({
   if (!Number.isFinite(nowMs)) throw new TypeError('Provider temporary creation time must be finite');
   if (!Number.isSafeInteger(pid) || pid < 1) throw new TypeError('Provider temporary owner PID is invalid');
   if (typeof openImpl !== 'function') throw new TypeError('Provider temporary marker opener must be callable');
+  if (typeof ensurePrivateDirImpl !== 'function' || typeof ensurePrivateFileImpl !== 'function'
+      || typeof verifyPrivateDirImpl !== 'function') {
+    throw new TypeError('Windows provider temporary DACL operations must be callable');
+  }
+  let windowsDaclOptions = null;
+  if (platform === 'win32') {
+    assertWindowsPrivateStateVerification(windowsPrivateStateVerification, {
+      requireEnsured: true,
+      execution: 'not_started'
+    });
+    const expectedParent = providerTempParent(tempBase);
+    if (!windowsPrivateStateRootIsVerified(
+      windowsPrivateStateVerification,
+      'provider_temp_parent',
+      expectedParent
+    )) {
+      throw new Error('Windows provider temporary parent differs from its verified root');
+    }
+    windowsDaclOptions = windowsPrivateStateDaclOptions(windowsPrivateStateVerification);
+    const verifiedParent = await verifyPrivateDirImpl(expectedParent, windowsDaclOptions);
+    if (!verifiedParent?.ok) {
+      throw new Error('Windows provider temporary parent failed verification before creation');
+    }
+  }
   await sweepStaleProviderTempRuns({
     tempBase,
     nowMs,
@@ -801,6 +838,12 @@ export async function createProviderTempRun({
   if (!RUN_ID_PATTERN.test(runId)) throw new Error('Provider temporary run ID generation failed');
   const directory = path.join(parent, `${RUN_PREFIX}${runId}`);
   await mkdir(directory, { mode: 0o700 });
+  if (windowsDaclOptions !== null) {
+    const ensured = await ensurePrivateDirImpl(directory, windowsDaclOptions);
+    if (!ensured?.ok) {
+      throw new Error('Provider temporary run directory failed Windows DACL ensure');
+    }
+  }
 
   let issuedIdentity;
   let issuedMarker;
@@ -834,6 +877,15 @@ export async function createProviderTempRun({
       await handle.sync();
     } finally {
       await handle.close();
+    }
+    if (windowsDaclOptions !== null) {
+      const ensured = await ensurePrivateFileImpl(
+        path.join(directory, OWNER_MARKER),
+        windowsDaclOptions
+      );
+      if (!ensured?.ok) {
+        throw new Error('Provider temporary ownership marker failed Windows DACL ensure');
+      }
     }
     const checked = await readMarker(directory, runId, platform);
     if (!checked || checked.legacy) {

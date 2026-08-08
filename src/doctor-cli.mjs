@@ -7,6 +7,7 @@ import {
   providerEgressPlatformPolicy,
   WINDOWS_PROVIDER_EGRESS_FAILURE_CODE
 } from './provider-egress-platform.mjs';
+import { ensureWindowsPrivateStateRoots } from './windows-private-state-roots.mjs';
 
 const HEALTH_SCHEMA = Object.freeze({
   type: 'object',
@@ -111,7 +112,24 @@ export async function explicitProviderCheck(
       reviewer_checks: []
     };
   }
-  const platformPolicy = providerEgressPlatformPolicy(dependencies.platform ?? process.platform);
+  const platform = dependencies.platform ?? process.platform;
+  const windowsPrivateStateVerification = platform === 'win32'
+    ? await (dependencies.ensureWindowsPrivateStateRoots ?? ensureWindowsPrivateStateRoots)({
+        platform,
+        arch: dependencies.arch,
+        env: dependencies.env,
+        dataDir: dependencies.dataDir,
+        runtimeDataDir: dependencies.runtimeDataDir,
+        tempBase: dependencies.providerTempBase,
+        ...(dependencies.windowsPrivateStateOptions ?? {})
+      })
+    : null;
+  const platformPolicy = providerEgressPlatformPolicy({
+    platform,
+    arch: dependencies.arch,
+    env: dependencies.env,
+    verification: windowsPrivateStateVerification
+  });
   if (!platformPolicy.allowed) {
     return {
       status: 'fail',
@@ -144,7 +162,14 @@ export async function explicitProviderCheck(
         summaryGuardPacket: null
       });
       const response = await dispatch(approvedRequest, {
-        platform: dependencies.platform ?? process.platform
+        platform,
+        ...(platform === 'win32'
+          ? {
+              arch: dependencies.arch,
+              env: dependencies.env,
+              verification: windowsPrivateStateVerification
+            }
+          : {})
       });
       healthPayload(response);
       return {
@@ -200,7 +225,14 @@ export async function runDoctorCommand(argv, dependencies = {}) {
             providerCheck: (context) => explicitProviderCheck(context, options, {
               approveProviderReviewRequest: dependencies.approveProviderReviewRequest,
               dispatchProviderReview: dependencies.dispatchProviderReview,
-              platform: dependencies.platform
+              ensureWindowsPrivateStateRoots: dependencies.ensureWindowsPrivateStateRoots,
+              windowsPrivateStateOptions: dependencies.windowsPrivateStateOptions,
+              platform: dependencies.platform,
+              arch: dependencies.arch,
+              env: dependencies.env,
+              dataDir: dependencies.dataDir,
+              runtimeDataDir: dependencies.runtimeDataDir,
+              providerTempBase: dependencies.providerTempBase
             })
         }
       : {})

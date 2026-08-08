@@ -120,12 +120,23 @@ export function inspectApprovedProviderReviewRequest(approvedRequest) {
 
 export function dispatchProviderReview(approvedRequest, options = {}) {
   const approved = APPROVAL_AUTHORITY.unwrap(approvedRequest);
-  assertProviderEgressPlatformAllowed(options.platform ?? process.platform);
+  const platform = options.platform ?? process.platform;
+  assertProviderEgressPlatformAllowed({
+    platform,
+    arch: options.arch,
+    env: options.env,
+    verification: options.verification ?? null
+  });
   const entry = providerEntry(approved.provider);
   const normalized = normalizeOptions(entry.definition, approved);
+  const dispatchOptions = {
+    ...normalized,
+    platform,
+    windowsPrivateStateVerification: options.verification ?? null
+  };
   if (approved.provider === 'ollama') {
-    const { effort, ...ollamaOptions } = normalized;
+    const { effort, ...ollamaOptions } = dispatchOptions;
     return entry.review({ ...ollamaOptions, think: effort, signal: options.signal });
   }
-  return entry.review({ ...normalized, signal: options.signal });
+  return entry.review({ ...dispatchOptions, signal: options.signal });
 }

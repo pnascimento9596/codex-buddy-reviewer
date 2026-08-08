@@ -38,6 +38,10 @@ import { renderSetupCommand, runSetupCommand } from './setup-cli.mjs';
 import { renderDataCommand, runDataCommand } from './data-cli.mjs';
 import { assertProviderEgressPlatformAllowed } from './provider-egress-platform.mjs';
 import { preserveRejectedReviewerResponse } from './rejected-response.mjs';
+import {
+  ensureWindowsPrivateStateRoots,
+  reverifyWindowsPrivateStateRoots
+} from './windows-private-state-roots.mjs';
 
 const HELP = `Codex Buddy Reviewer
 
@@ -177,13 +181,32 @@ function requireProviderEligiblePrivacyCoverage(evidence) {
 }
 
 export async function runReview(options) {
+  const platform = options.platform ?? process.platform;
+  let windowsPrivateStateVerification = options.windowsPrivateStateVerification ?? null;
   if (!options.dryRun) {
-    assertProviderEgressPlatformAllowed(options.platform ?? process.platform);
+    if (platform === 'win32' && windowsPrivateStateVerification === null) {
+      windowsPrivateStateVerification = await (options.ensureWindowsPrivateStateRoots
+        ?? ensureWindowsPrivateStateRoots)({
+        platform,
+        arch: options.arch,
+        env: options.env,
+        dataDir: options.dataDir,
+        runtimeDataDir: options.runtimeDataDir,
+        tempBase: options.providerTempBase,
+        ...(options.windowsPrivateStateOptions ?? {})
+      });
+    }
+    assertProviderEgressPlatformAllowed({
+      platform,
+      arch: options.arch,
+      env: options.env,
+      verification: windowsPrivateStateVerification
+    });
   }
   const evidence = await collectEvidence(options);
   if (options.dryRun) return { evidence, result: null, provider: null, model: null, receiptDir: null };
 
-  return reviewEvidence(evidence, options);
+  return reviewEvidence(evidence, { ...options, windowsPrivateStateVerification });
 }
 
 function deepFreezeJson(value) {
@@ -251,7 +274,35 @@ export async function reviewEvidence(evidence, options) {
   if (options.onProviderDispatch !== undefined && typeof options.onProviderDispatch !== 'function') {
     throw new TypeError('Buddy provider-dispatch observer must be a function');
   }
-  assertProviderEgressPlatformAllowed(options.platform ?? process.platform);
+  const platform = options.platform ?? process.platform;
+  let windowsPrivateStateVerification = options.windowsPrivateStateVerification ?? null;
+  if (platform === 'win32') {
+    windowsPrivateStateVerification = windowsPrivateStateVerification === null
+      ? await (options.ensureWindowsPrivateStateRoots ?? ensureWindowsPrivateStateRoots)({
+          platform,
+          arch: options.arch,
+          env: options.env,
+          dataDir: options.dataDir,
+          runtimeDataDir: options.runtimeDataDir,
+          tempBase: options.providerTempBase,
+          ...(options.windowsPrivateStateOptions ?? {})
+        })
+      : await (options.reverifyWindowsPrivateStateRoots ?? reverifyWindowsPrivateStateRoots)(
+          windowsPrivateStateVerification,
+          {
+            platform,
+            arch: options.arch,
+            env: options.env,
+            ...(options.windowsPrivateStateOptions ?? {})
+          }
+        );
+  }
+  assertProviderEgressPlatformAllowed({
+    platform,
+    arch: options.arch,
+    env: options.env,
+    verification: windowsPrivateStateVerification
+  });
   requireProviderEligiblePrivacyCoverage(evidence);
   const definition = getProviderDefinition(options.provider);
   const model = options.model ?? definition.defaultModel;
@@ -303,7 +354,14 @@ export async function reviewEvidence(evidence, options) {
   let response;
   try {
     response = await dispatchProviderReview(approvedRequest, {
-      platform: options.platform ?? process.platform,
+      platform,
+      ...(platform === 'win32'
+        ? {
+            arch: options.arch,
+            env: options.env,
+            verification: windowsPrivateStateVerification
+          }
+        : {}),
       signal: options.signal
     });
   } catch (error) {

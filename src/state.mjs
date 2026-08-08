@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { chmod, link, lstat, mkdir, open, readdir, realpath, rename, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { ensurePrivateFile } from './windows-private-state.mjs';
 
 export const BUDDY_PLUGIN_PACKAGE_NAME = 'codex-buddy-reviewer';
 
@@ -228,10 +229,50 @@ async function renamePrivateJsonAtomic(source, destination, {
   }
 }
 
+async function ensureWindowsPrivateFinalFile(file, {
+  platform,
+  arch = process.arch,
+  env = process.env,
+  ensurePrivateFileImpl = ensurePrivateFile,
+  windowsHelperManifestFile,
+  windowsHelperRoot
+}) {
+  if (platform !== 'win32') return;
+  if (typeof ensurePrivateFileImpl !== 'function') {
+    throw new TypeError('Windows private file DACL ensure must be callable');
+  }
+  const helperManifestFile = windowsHelperManifestFile
+    ?? env.CODEX_BUDDY_WINDOWS_HELPER_MANIFEST;
+  const helperRoot = windowsHelperRoot
+    ?? env.CODEX_BUDDY_WINDOWS_HELPER_ROOT;
+  const result = await ensurePrivateFileImpl(file, {
+    platform,
+    arch,
+    ...(helperManifestFile ? { helperManifestFile } : {}),
+    ...(helperRoot ? { helperRoot } : {})
+  });
+  if (!result?.ok) {
+    const error = new Error('Buddy private-state final file failed Windows DACL ensure');
+    error.failureCode = result?.code === 'protocol_mismatch'
+      ? 'windows_private_state_helper_protocol_mismatch'
+      : result?.code === 'filesystem_acl_unavailable'
+        ? 'windows_private_state_filesystem_acl_unavailable'
+        : typeof result?.code === 'string'
+          ? `windows_private_state_${result.code}`
+          : 'windows_private_state_acl_unavailable';
+    throw error;
+  }
+}
+
 export async function writePrivateJsonAtomic(file, value, {
   platform = process.platform,
   renameImpl = rename,
-  pauseImpl = pause
+  pauseImpl = pause,
+  arch = process.arch,
+  env = process.env,
+  ensurePrivateFileImpl = ensurePrivateFile,
+  windowsHelperManifestFile,
+  windowsHelperRoot
 } = {}) {
   await ensurePrivateDirectory(path.dirname(file));
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
@@ -246,6 +287,14 @@ export async function writePrivateJsonAtomic(file, value, {
     // post-rename chmod against a destination that has already disappeared.
     await chmod(temporary, 0o600);
     await renamePrivateJsonAtomic(temporary, file, { platform, renameImpl, pauseImpl });
+    await ensureWindowsPrivateFinalFile(file, {
+      platform,
+      arch,
+      env,
+      ensurePrivateFileImpl,
+      windowsHelperManifestFile,
+      windowsHelperRoot
+    });
     await syncParentDirectory(file);
     return file;
   } finally {
@@ -254,7 +303,14 @@ export async function writePrivateJsonAtomic(file, value, {
   }
 }
 
-export async function writePrivateJsonExclusive(file, value) {
+export async function writePrivateJsonExclusive(file, value, {
+  platform = process.platform,
+  arch = process.arch,
+  env = process.env,
+  ensurePrivateFileImpl = ensurePrivateFile,
+  windowsHelperManifestFile,
+  windowsHelperRoot
+} = {}) {
   await ensurePrivateDirectory(path.dirname(file));
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
   let handle;
@@ -265,7 +321,23 @@ export async function writePrivateJsonExclusive(file, value) {
     await handle.close();
     handle = null;
     await chmod(temporary, 0o600);
+    await ensureWindowsPrivateFinalFile(temporary, {
+      platform,
+      arch,
+      env,
+      ensurePrivateFileImpl,
+      windowsHelperManifestFile,
+      windowsHelperRoot
+    });
     await link(temporary, file);
+    await ensureWindowsPrivateFinalFile(file, {
+      platform,
+      arch,
+      env,
+      ensurePrivateFileImpl,
+      windowsHelperManifestFile,
+      windowsHelperRoot
+    });
     await syncParentDirectory(file);
     return true;
   } catch (error) {

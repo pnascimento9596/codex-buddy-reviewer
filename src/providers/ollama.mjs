@@ -77,6 +77,7 @@ export async function reviewWithOllama(options = {}) {
     platform = process.platform,
     runProcessImpl = runProcess,
     cleanupImpl = rm,
+    windowsPrivateStateVerification = null,
     signal
   } = options;
   if (!responseSchema || typeof responseSchema !== 'object' || Array.isArray(responseSchema)) {
@@ -117,7 +118,12 @@ export async function reviewWithOllama(options = {}) {
   let failure;
   try {
     try {
-      tempRun = await createProviderTempRun({ root, provider: 'ollama' });
+      tempRun = await createProviderTempRun({
+        root,
+        provider: 'ollama',
+        platform,
+        windowsPrivateStateVerification
+      });
     } catch (error) {
       throw providerFailure({
         provider: 'ollama', model: resolvedModel, stage: 'preflight',

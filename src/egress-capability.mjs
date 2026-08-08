@@ -521,7 +521,15 @@ function errorWithCapabilityAudit(error, audit, stage) {
   const wrapped = new Error(`Buddy egress capability: ${stage} failed`, {
     cause: error instanceof Error ? error : undefined
   });
-  for (const key of ['failureCode', 'run', 'provider', 'model']) {
+  for (const key of [
+    'failureCode',
+    'run',
+    'provider',
+    'model',
+    'platformIntegrityFailure',
+    'providerExecution',
+    'blockMutation'
+  ]) {
     if (error && Object.hasOwn(error, key)) wrapped[key] = error[key];
   }
   Object.defineProperties(wrapped, {
@@ -546,7 +554,15 @@ function errorWithSettlementEvidence(executionError, settlementError, audit) {
     const wrapped = new Error('Buddy egress capability: executor and settlement failed', {
       cause: primary
     });
-    for (const key of ['failureCode', 'run', 'provider', 'model']) {
+    for (const key of [
+      'failureCode',
+      'run',
+      'provider',
+      'model',
+      'platformIntegrityFailure',
+      'providerExecution',
+      'blockMutation'
+    ]) {
       if (Object.hasOwn(primary, key)) wrapped[key] = primary[key];
     }
     Object.defineProperties(wrapped, {

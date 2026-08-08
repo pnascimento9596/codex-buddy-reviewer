@@ -23,6 +23,14 @@ async function temporaryDirectory() {
   return directory;
 }
 
+const ensureWindowsPrivateFile = async (file) => ({
+  ok: true,
+  op: 'ensure_private_file',
+  path: file,
+  owner_sid: 'S-1-5-21-1-2-3-1001',
+  protocol: 2
+});
+
 test('private state roots must remain outside the reviewed repository', async () => {
   const root = await temporaryDirectory();
   assert.equal(
@@ -106,6 +114,7 @@ test('private JSON atomic replacement retries only bounded Windows sharing confl
     const pauses = [];
     await writePrivateJsonAtomic(file, { revision: 2 }, {
       platform: 'win32',
+      ensurePrivateFileImpl: ensureWindowsPrivateFile,
       renameImpl: async (source, destination) => {
         attempts += 1;
         if (attempts < 3) {
@@ -135,6 +144,7 @@ test('private JSON atomic replacement retries only bounded Windows sharing confl
     await assert.rejects(
       writePrivateJsonAtomic(file, { revision: 3 }, {
         platform,
+        ...(platform === 'win32' ? { ensurePrivateFileImpl: ensureWindowsPrivateFile } : {}),
         renameImpl: async () => {
           rejectedAttempts += 1;
           throw expected;
@@ -160,6 +170,7 @@ test('private JSON atomic replacement stops after its bounded Windows retry budg
   await assert.rejects(
     writePrivateJsonAtomic(file, { revision: 2 }, {
       platform: 'win32',
+      ensurePrivateFileImpl: ensureWindowsPrivateFile,
       renameImpl: async () => {
         attempts += 1;
         throw expected;
@@ -172,6 +183,33 @@ test('private JSON atomic replacement stops after its bounded Windows retry budg
   assert.deepEqual(pauses, [10, 20, 40, 80, 160]);
   assert.deepEqual(await readPrivateJson(file), { revision: 1 });
   assert.deepEqual(await readdir(directory), ['atomic.json']);
+});
+
+test('private JSON Windows final paths receive the full file DACL after atomic rename and exclusive link', async () => {
+  const directory = await temporaryDirectory();
+  const calls = [];
+  const ensurePrivateFileImpl = async (file, options) => {
+    calls.push({ file, options });
+    return ensureWindowsPrivateFile(file);
+  };
+  const atomic = path.join(directory, 'windows-atomic.json');
+  const exclusive = path.join(directory, 'windows-exclusive.json');
+  await writePrivateJsonAtomic(atomic, { revision: 1 }, {
+    platform: 'win32',
+    arch: 'x64',
+    env: {},
+    ensurePrivateFileImpl
+  });
+  assert.equal(await writePrivateJsonExclusive(exclusive, { revision: 1 }, {
+    platform: 'win32',
+    arch: 'x64',
+    env: {},
+    ensurePrivateFileImpl
+  }), true);
+  assert.equal(calls[0].file, atomic);
+  assert.match(calls[1].file, /\.windows-exclusive\.json\..+\.tmp$/u);
+  assert.equal(calls[2].file, exclusive);
+  assert.equal(calls.every((call) => call.options.platform === 'win32'), true);
 });
 
 test('private JSON atomic write modes the temp path before rename so destination cleanup cannot race chmod', async () => {

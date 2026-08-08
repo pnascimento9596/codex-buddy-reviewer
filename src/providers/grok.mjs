@@ -189,6 +189,8 @@ export async function reviewWithGrok({
   cleanupImpl = rm,
   monotonicNow = () => performance.now(),
   runProcessImpl = runProcess,
+  platform = process.platform,
+  windowsPrivateStateVerification = null,
   signal
 }) {
   if (!responseSchema || typeof responseSchema !== 'object' || Array.isArray(responseSchema)) {
@@ -214,7 +216,12 @@ export async function reviewWithGrok({
   let outcome;
   let failure;
   try {
-    tempRun = await createProviderTempRun({ root, provider: 'grok' });
+    tempRun = await createProviderTempRun({
+      root,
+      provider: 'grok',
+      platform,
+      windowsPrivateStateVerification
+    });
     tempDir = tempRun.directory;
     // Grok requires --prompt-file. POSIX uses a private relative FIFO so the
     // provider opens exactly one reader while the supervised producer supplies

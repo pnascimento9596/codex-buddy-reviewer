@@ -357,6 +357,111 @@ test('ordinary speculative provider failure increments its exact circuit', async
   assert.equal(receipt.value.reviewer_runs[0].failure.failure_code, 'transport_exit');
 });
 
+function goodWindowsVerification() {
+  return Object.freeze({
+    schema_version: '1',
+    platform: 'win32',
+    arch: 'x64',
+    ok: true,
+    failure_code: null,
+    message: null,
+    helper: Object.freeze({
+      verified: true,
+      path: 'C:\\trusted\\buddy-job-supervisor.exe',
+      arch: 'x64',
+      sha256: 'a'.repeat(64),
+      protocol_version: '2'
+    }),
+    filesystem_acl_capable: true,
+    roots: Object.freeze([
+      Object.freeze({
+        class: 'durable_data', path: 'C:\\Buddy\\data',
+        filesystem_acl_capable: true, ensured: true, verified: true
+      }),
+      Object.freeze({
+        class: 'runtime_data', path: 'C:\\Buddy\\runtime',
+        filesystem_acl_capable: true, ensured: true, verified: true
+      }),
+      Object.freeze({
+        class: 'provider_temp_parent', path: 'C:\\Buddy\\temp',
+        filesystem_acl_capable: true, ensured: true, verified: true
+      })
+    ]),
+    operation: 'ensure_and_verify'
+  });
+}
+
+function failedWindowsVerification() {
+  return Object.freeze({
+    ...goodWindowsVerification(),
+    ok: false,
+    failure_code: 'windows_private_state_wide_acl',
+    message: 'A Windows private-state root failed current-user DACL verification.'
+  });
+}
+
+test('Windows verification failure before capability issue refuses cleanly with no capability', async () => {
+  const seed = await harness({
+    options: {
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
+      ensureWindowsPrivateState: async () => goodWindowsVerification(),
+      reverifyWindowsPrivateState: async () => failedWindowsVerification()
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.skipped, 'worker_error');
+  assert.equal(seed.metrics().capabilityIssues, 0);
+  assert.equal(seed.metrics().reviewCalls, 0);
+  assert.deepEqual(seed.circuitRecords, []);
+});
+
+test('Windows verification failure after spend settles as non-execution without provider circuit charge', async () => {
+  const verifications = [goodWindowsVerification(), failedWindowsVerification()];
+  const seed = await harness({
+    options: {
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
+      ensureWindowsPrivateState: async () => goodWindowsVerification(),
+      reverifyWindowsPrivateState: async () => verifications.shift()
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
+  assert.equal(seed.metrics().capabilityIssues, 1);
+  assert.equal(seed.metrics().reviewCalls, 0);
+  assert.deepEqual(seed.circuitRecords, []);
+  const receipt = seed.writes.find(({ file }) => file.includes(`${path.sep}automatic-reviews${path.sep}`));
+  assert.equal(receipt.value.reviewer_runs[0].failure.stage, 'platform_integrity');
+  assert.equal(receipt.value.reviewer_runs[0].failure.failure_code, 'windows_private_state_wide_acl');
+});
+
+test('Windows integrity failure detected after provider entry is containment, not provider quality', async () => {
+  const verifications = [
+    goodWindowsVerification(),
+    goodWindowsVerification(),
+    failedWindowsVerification()
+  ];
+  const seed = await harness({
+    options: {
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
+      ensureWindowsPrivateState: async () => goodWindowsVerification(),
+      reverifyWindowsPrivateState: async () => verifications.shift()
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
+  assert.equal(seed.metrics().reviewCalls, 1);
+  assert.deepEqual(seed.circuitRecords, []);
+  const receipt = seed.writes.find(({ file }) => file.includes(`${path.sep}automatic-reviews${path.sep}`));
+  assert.equal(receipt.value.reviewer_runs[0].failure.stage, 'platform_integrity');
+  assert.equal(receipt.value.reviewer_runs[0].failure.failure_code, 'windows_private_state_wide_acl');
+});
+
 test('all-open speculative circuits write an exact failure receipt without provider calls', async () => {
   const seed = await harness({
     openCircuits: [{ provider: 'grok', model: 'grok-4.5' }]

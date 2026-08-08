@@ -338,6 +338,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
   };
   let captureCalls = 0;
   let pruneCalls = 0;
+  let windowsVerificationCalls = 0;
   const started = await captureTurnStartImpl({
     ...identity,
     hook_event_name: 'UserPromptSubmit',
@@ -346,6 +347,10 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
     modeDataDir,
     runtimeDataDir,
     platform: 'win32',
+    ensureWindowsPrivateState: async () => {
+      windowsVerificationCalls += 1;
+      return Object.freeze({ ok: true });
+    },
     captureSnapshot: async () => {
       captureCalls += 1;
       throw new Error('Windows privacy gate must run first');
@@ -357,6 +362,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
   assert.equal(started.skipped, 'windows_private_state_acl_unavailable');
   assert.equal(captureCalls, 0);
   assert.equal(pruneCalls, 0);
+  assert.equal(windowsVerificationCalls, 1);
   assert.match(started.output.hookSpecificOutput.additionalContext, /disabled on Windows/);
   assert.match(started.output.hookSpecificOutput.additionalContext, /No private turn snapshot was created/);
 
@@ -370,6 +376,10 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
     modeDataDir,
     runtimeDataDir,
     platform: 'win32',
+    ensureWindowsPrivateState: async () => {
+      windowsVerificationCalls += 1;
+      return Object.freeze({ ok: true });
+    },
     captureSnapshot: async () => {
       captureCalls += 1;
       throw new Error('Windows privacy gate must run first');
@@ -382,6 +392,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
   assert.equal(stopped.skipped, 'windows_private_state_acl_unavailable');
   assert.equal(captureCalls, 0);
   assert.equal(evidenceCalls, 0);
+  assert.equal(windowsVerificationCalls, 2);
   assert.match(stopped.output.systemMessage, /No private turn snapshot or provider prompt was created/);
   assert.deepEqual(await filesBelow(runtimeDataDir), []);
 });
