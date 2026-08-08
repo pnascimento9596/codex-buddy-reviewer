@@ -54,12 +54,23 @@ function badVerification(failureCode, message = 'verification failed') {
   });
 }
 
-test('production Windows provider egress gate remains compile-time closed', () => {
-  assert.equal(WINDOWS_PROVIDER_EGRESS_GATE_LIFTED, false);
+test('production Windows provider egress gate is lifted and allows complete verification', () => {
+  assert.equal(WINDOWS_PROVIDER_EGRESS_GATE_LIFTED, true);
   const policy = providerEgressPlatformPolicy({
     platform: 'win32',
     arch: 'x64',
     verification: goodVerification(),
+    env: {}
+  });
+  assert.equal(policy.allowed, true);
+  assert.equal(policy.failureCode, null);
+});
+
+test('production Windows provider egress gate fails closed without verification', () => {
+  const policy = providerEgressPlatformPolicy({
+    platform: 'win32',
+    arch: 'x64',
+    verification: null,
     env: {}
   });
   assert.equal(policy.allowed, false);

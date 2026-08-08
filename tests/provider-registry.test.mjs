@@ -107,7 +107,7 @@ test('dispatch validates provider-specific effort before invoking an adapter', a
   });
   assert.throws(
     () => dispatchProviderReview(invalidOpenCode, { platform: 'win32' }),
-    /Live reviewer contact is disabled on Windows/
+    /Windows private-state verification failed|disabled on Windows|private-state verification/
   );
   await assert.rejects(
     dispatchProviderReview(invalidOpenCode, { platform: 'linux' }),

@@ -574,7 +574,7 @@ test('Windows provider health check reports the privacy blocker without approvin
   assert.equal(result.status, 'fail');
   assert.equal(result.configured_count, 1);
   assert.equal(result.passed_count, 0);
-  assert.match(result.summary, /disabled on Windows/);
+  assert.match(result.summary, /disabled on Windows|private-state verification failed|private-state verification/);
   assert.match(result.detail, /current-user-only DACLs/);
   assert.equal(result.reviewer_checks[0].failure_code, 'windows_private_state_acl_unavailable');
 });

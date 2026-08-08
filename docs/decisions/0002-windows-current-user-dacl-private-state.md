@@ -1,6 +1,6 @@
 # 0002. Windows current-user-only DACL private-state epic (v0.6)
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-07
 - Lane: lane-g Phase 5 (design only; zero provider calls); **amended lane-h Phase 1**
   (empirical template + filesystem contract; still proposed until gate-lift evidence)
@@ -230,7 +230,7 @@ provider dispatch. There is no module-level “last verified” singleton. POSIX
 create, mode, and ownership behavior is unchanged.
 
 Production provider egress remains closed in this phase through the compile-time
-constant `WINDOWS_PROVIDER_EGRESS_GATE_LIFTED = false`. The pure policy can
+constant `WINDOWS_PROVIDER_EGRESS_GATE_LIFTED = true` (Phase 5). The pure policy can
 represent the eventual verified allow path for unit testing, but the production
 wrapper cannot enable it. Phase 5 remains the only authorized constant flip,
 after packaged-helper proof. The permanent emergency control
@@ -330,3 +330,27 @@ ACL-capable, kill-switch disengaged) — not only a platform string.
 5. **Per-file ensure on every atomic write** — correct but a latency foot-gun
    on Windows hot paths; declined as default in favor of OI|CI inheritance
    with measurement in Phase 2.
+
+
+## Readiness evidence (Phase 5)
+
+Gate lift is authorized only with the following anchors (machine-captured):
+
+| Item | Value |
+|---|---|
+| Helper sha256 (win32-x64) | `22884692f20edb592d57cb3ea00d03dfa857bfe148a9625c986916fa83110fe1` |
+| Helper bytes | 162816 |
+| Packaged-from CI run | `31233008243` (head `d420938`; native identical on later main) |
+| Protocol | capability 2 / job wire 1 / dacl 2 |
+| Phase 2 PR | #80 |
+| Phase 3 PR | #81 |
+| Phase 4 PR | #82 |
+| Phase 1 ACL probe run | `31226627271` |
+| Windows matrix | windows-latest Node 22 and 24 |
+| Packaged-byte CI | hash-verify + DACL protocol suite against committed `bin/win32-x64` |
+| Adversarial CI cases | fresh root ensure/verify; Users/Everyone reject; deny ACE; junction; rename writers; protocol mismatch; wrong hash; non-ACL volume untestable on NTFS runner (recorded) |
+| ARM64 | still unavailable |
+| Kill-switch | `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` |
+| **WINDOWS HOST E2E** | **UNRUN** — no Windows Codex host session observed in this lane |
+
+Threat-model honesty after lift: protection against other local non-admin users and inherited wide ACLs on NTFS; **not** protection against local Administrators, SYSTEM, or a malicious same-user process.

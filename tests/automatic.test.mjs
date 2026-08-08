@@ -363,7 +363,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
   assert.equal(captureCalls, 0);
   assert.equal(pruneCalls, 0);
   assert.equal(windowsVerificationCalls, 1);
-  assert.match(started.output.hookSpecificOutput.additionalContext, /disabled on Windows/);
+  assert.match(started.output.hookSpecificOutput.additionalContext, /disabled on Windows|private-state verification failed|private-state verification/);
   assert.match(started.output.hookSpecificOutput.additionalContext, /No private turn snapshot was created/);
 
   let evidenceCalls = 0;
