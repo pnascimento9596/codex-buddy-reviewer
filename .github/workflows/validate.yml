@@ -79,7 +79,7 @@ jobs:
           New-Item -ItemType Directory -Force 'build\windows-tests', 'build\windows-tests\trusted-bin' | Out-Null
           @(
             "call `"$devcmd`" -arch=x64 -host_arch=x64",
-            'cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:build\windows-tests\buddy-job-supervisor.exe native\windows\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT',
+            'cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:build\windows-tests\buddy-job-supervisor.exe native\windows\job-supervisor.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT advapi32.lib',
             'if errorlevel 1 exit /b %errorlevel%',
             'cl.exe /nologo /std:c17 /O2 /W4 /guard:cf /DUNICODE /D_UNICODE /MT /Fe:build\windows-tests\breakaway-probe.exe tests\fixtures\windows\breakaway-probe.c /link /DYNAMICBASE /NXCOMPAT /CETCOMPAT',
             'if errorlevel 1 exit /b %errorlevel%',
@@ -96,11 +96,11 @@ jobs:
           $runtimeManifest = (Resolve-Path 'build\windows-tests').Path + '\helpers.json'
           @{
             schema_version = '1'
-            protocol_version = '1'
+            protocol_version = '2'
             helpers = @{
               'win32-x64' = @{
                 status = 'verified'
-                protocol_version = '1'
+                protocol_version = '2'
                 path = 'buddy-job-supervisor.exe'
                 sha256 = $hash
               }
@@ -122,6 +122,14 @@ jobs:
           retention-days: 5
       - name: Validate source and runtime contracts
         run: npm run validate
+      - name: Upload Windows DACL benchmark evidence
+        if: runner.os == 'Windows' && matrix.node == 22 && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: win32-x64-dacl-benchmark
+          path: build/windows-tests/dacl-bench.json
+          if-no-files-found: warn
+          retention-days: 5
 
   validation-gate:
     name: Validation gate

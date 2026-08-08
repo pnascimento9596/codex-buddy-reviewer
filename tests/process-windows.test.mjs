@@ -26,6 +26,7 @@ const windowsSupervisorSource = path.join(repositoryRoot, 'src', 'windows-job-su
 const initialManifest = path.join(repositoryRoot, 'native', 'windows', 'helpers.json');
 const fixtures = path.join(repositoryRoot, 'tests', 'fixtures', 'windows');
 const temporaryPaths = [];
+const WINDOWS_HELPER_CAPABILITY_PROTOCOL_VERSION = '2';
 
 test.after(async () => {
   await Promise.all(temporaryPaths.map((target) => rm(target, { recursive: true, force: true })));
@@ -118,10 +119,10 @@ async function runtimeHelperOptions() {
   const manifestDirectory = await temporaryDirectory('codex-buddy-runtime-helper-manifest-');
   const manifestFile = await writeManifest(manifestDirectory, {
     status: 'verified',
-    protocol_version: WINDOWS_JOB_PROTOCOL_VERSION,
+    protocol_version: WINDOWS_HELPER_CAPABILITY_PROTOCOL_VERSION,
     path: path.basename(helper),
     sha256: sha256(bytes)
-  });
+  }, { protocol_version: WINDOWS_HELPER_CAPABILITY_PROTOCOL_VERSION });
   return { helperManifestFile: manifestFile, helperRoot: root };
 }
 
@@ -219,18 +220,26 @@ test('helper selection requires a hash-pinned regular PE matching the requested 
   );
 });
 
-test('helper selection rejects protocol drift, path escape, symlinks, and unsupported platforms', async () => {
+test('helper selection accepts capability 2 for job wire 1 and rejects drift or unsafe inputs', async () => {
   const fixture = await verifiedFixture();
   const protocolManifest = await writeManifest(fixture.root, {
     status: 'verified', protocol_version: '2',
     path: path.join('bin', 'buddy-job-supervisor.exe'), sha256: sha256(fixture.bytes)
+  }, {
+    protocol_version: '2'
   });
-  await assert.rejects(
-    resolveVerifiedWindowsJobHelper({
-      platform: 'win32', arch: 'x64', manifestFile: protocolManifest, helperRoot: fixture.root
-    }),
-    /metadata is invalid/
-  );
+  const capability2 = await resolveVerifiedWindowsJobHelper({
+    platform: 'win32', arch: 'x64', manifestFile: protocolManifest, helperRoot: fixture.root
+  });
+  assert.equal(capability2.protocolVersion, '2');
+
+  const driftManifest = await writeManifest(fixture.root, {
+    status: 'verified', protocol_version: '2',
+    path: path.join('bin', 'buddy-job-supervisor.exe'), sha256: sha256(fixture.bytes)
+  });
+  await assert.rejects(resolveVerifiedWindowsJobHelper({
+    platform: 'win32', arch: 'x64', manifestFile: driftManifest, helperRoot: fixture.root
+  }), /metadata is invalid/);
 
   const escapeManifest = await writeManifest(fixture.root, {
     status: 'verified', protocol_version: WINDOWS_JOB_PROTOCOL_VERSION,
