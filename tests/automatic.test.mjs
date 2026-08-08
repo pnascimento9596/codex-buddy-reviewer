@@ -347,6 +347,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
     modeDataDir,
     runtimeDataDir,
     platform: 'win32',
+    arch: 'x64',
     ensureWindowsPrivateState: async () => {
       windowsVerificationCalls += 1;
       return Object.freeze({ ok: true });
@@ -376,6 +377,7 @@ test('Windows automatic mode blocks before turn evidence or prompt state is crea
     modeDataDir,
     runtimeDataDir,
     platform: 'win32',
+    arch: 'x64',
     ensureWindowsPrivateState: async () => {
       windowsVerificationCalls += 1;
       return Object.freeze({ ok: true });

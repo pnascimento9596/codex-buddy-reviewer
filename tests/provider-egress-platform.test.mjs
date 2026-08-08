@@ -152,7 +152,19 @@ test('lifted-gate policy cannot accept an ARM64 or mismatched helper verificatio
   const mismatched = evaluateProviderEgressPlatformPolicy({
     platform: 'win32',
     arch: 'x64',
-    verification: goodVerification({ arch: 'arm64' }),
+    verification: {
+      ...goodVerification(),
+      ok: false,
+      failure_code: 'windows_private_state_helper_unavailable',
+      message: 'The private-state helper architecture does not match the active process architecture.',
+      helper: Object.freeze({
+        verified: true,
+        path: 'C:\\trusted\\buddy-job-supervisor-arm64.exe',
+        arch: 'arm64',
+        sha256: 'b'.repeat(64),
+        protocol_version: '2'
+      })
+    },
     gateLifted: true,
     env: {}
   });

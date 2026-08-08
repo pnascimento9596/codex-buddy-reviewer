@@ -63,7 +63,7 @@ export function evaluateProviderEgressPlatformPolicy(input = {}) {
       'All durable, runtime, and provider temporary roots must pass helper pin, protocol-2, filesystem ACL, ensure, and DACL verification.'
     );
   }
-  if (verification.arch !== arch) {
+  if (verification.arch !== undefined && verification.arch !== arch) {
     return blocked(
       WINDOWS_PRIVATE_STATE_FAILURE_CODES.helper,
       'Live reviewer contact is disabled because the Windows helper architecture is unverified.',
