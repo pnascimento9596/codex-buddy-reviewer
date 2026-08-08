@@ -2,9 +2,10 @@ import {
   WINDOWS_PRIVATE_STATE_FAILURE_CODES,
   windowsPrivateStateVerificationIsComplete
 } from './windows-private-state-roots.mjs';
+import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 
 export const WINDOWS_PROVIDER_EGRESS_FAILURE_CODE = 'windows_private_state_acl_unavailable';
-export const WINDOWS_PROVIDER_EGRESS_GATE_LIFTED = false;
+export { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 export const WINDOWS_PROVIDER_EGRESS_KILL_SWITCH = 'CODEX_BUDDY_WINDOWS_EGRESS_BLOCK';
 
 const WINDOWS_BLOCKER = Object.freeze({

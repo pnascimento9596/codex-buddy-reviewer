@@ -198,12 +198,14 @@ test('private JSON Windows final paths receive the full file DACL after atomic r
     platform: 'win32',
     arch: 'x64',
     env: {},
+    requireWindowsPrivateFileDacl: true,
     ensurePrivateFileImpl
   });
   assert.equal(await writePrivateJsonExclusive(exclusive, { revision: 1 }, {
     platform: 'win32',
     arch: 'x64',
     env: {},
+    requireWindowsPrivateFileDacl: true,
     ensurePrivateFileImpl
   }), true);
   assert.equal(calls[0].file, atomic);
