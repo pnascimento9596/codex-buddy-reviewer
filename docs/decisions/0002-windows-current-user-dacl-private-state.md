@@ -237,6 +237,13 @@ after packaged-helper proof. The permanent emergency control
 `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` takes precedence and re-blocks Windows
 egress even after a future gate lift.
 
+> **0.5.1 disposition (2026-08-08):** the production constant was flipped to
+> `false` for the security-fix release so v0.5.1 never ships a lifted gate while
+> the Phase 6 sealed-scan findings H01–H06 remain unremediated. This is a
+> release-posture change, not a design change: the constant is re-lifted for the
+> v0.6.0-rc.1 promotion head after the Phase 2 remediation and the Phase 4
+> full re-seal pass.
+
 Distinct fail-closed results identify non-ACL filesystems, unavailable helper
 architecture (including unavailable ARM64 packaging), unavailable helper,
 protocol mismatch, kill-switch engagement, and useful root verification

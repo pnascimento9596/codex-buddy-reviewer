@@ -4,12 +4,22 @@ This document separates validation evidence into five explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` after rc.4 publication includes post-rc.4 mechanics
-(PRs #54, #55, #57), attest pin #27, and scan-gate rewrite #59. Immutable rc.4
-source remains `b56224fb8e37ca02e071cda41702af4ef20f1ebb`. The immutable
-published rc.3 source remains `0c6f09ae14d834fccb2a2289f6731511dbbdb034`.
-Package/plugin version on this candidate is `0.5.0`. Frozen Layers B–E are
+Current protected `main` is the v0.5.1 security-fix candidate: H07
+receipt-replay validation plus the re-engaged Windows egress gate, on top of
+the lane-h Windows DACL epic (PRs #79–#83). The immutable published v0.5.0
+source remains `d23890eb8e7f6cc92ce7b02a31240871b6e3e6b0`. Frozen Layers B–E are
 unchanged historical publication evidence.
+
+### 0.5.1 candidate local validation (pre-merge head)
+
+Authoritative serial local `node --test` on the 0.5.1 candidate head recorded
+`846` tests, `846` passes, `30` intentional skips, and `0` failures.
+`check:syntax`, `check:types`, `check:assets`, `check:atlas-structure`,
+`eval:validate`, and `release:boundary` all pass. Provider tests were mocked
+and no live provider was contacted during this gate. The H07 reproduction
+against the published v0.5.0 artifact (tarball sha256 `0b474c51…`) is recorded
+in the lane-i evidence directory (`phase-0d-repro-v050.mjs`); the fix-delta
+security-scan packet and host-evidence bundle are recorded in `docs/releases/v0.5.1-readiness.md`.
 
 ### rc.4 candidate local validation (pre-merge head)
 

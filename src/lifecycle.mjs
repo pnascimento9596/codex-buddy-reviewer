@@ -8,7 +8,8 @@ import {
 } from './automatic-paths.mjs';
 import {
   automaticReceiptDigest,
-  validateAutomaticReceipt
+  validateAutomaticReceipt,
+  validateAutomaticReceiptReplay
 } from './automatic-receipt.mjs';
 import { prepareReviewRequest, reviewEvidence } from './cli.mjs';
 import {
@@ -770,7 +771,18 @@ export async function reviewTurnStop(input, options = {}) {
       const completedReceipt = automaticReceiptFile(options.runtimeDataDir, root, completed.review_key);
       await ensurePrivateStatePath(runtimeRoot, path.dirname(completedReceipt));
       const terminal = await readPrivateJson(completedReceipt);
-      const receiptDigestMatches = REVIEW_KEY_PATTERN.test(completed.receipt_sha256 ?? '')
+      // H07: the legacy replay path must not accept a receipt on digest match
+      // alone — both files share the same private-state trust boundary, so a
+      // jointly mutable pair can present forged content. Enforce the
+      // context-free structural receipt contract before replaying it.
+      let replayReceiptError = null;
+      try {
+        validateAutomaticReceiptReplay(terminal, { reviewKey: completed.review_key });
+      } catch (error) {
+        replayReceiptError = error;
+      }
+      const receiptDigestMatches = replayReceiptError === null
+        && REVIEW_KEY_PATTERN.test(completed.receipt_sha256 ?? '')
         && terminal
         && automaticReceiptDigest(terminal) === completed.receipt_sha256;
       const turnCleanupComplete = await cleanTurnDirectory(directory);
@@ -791,6 +803,7 @@ export async function reviewTurnStop(input, options = {}) {
           ...completed,
           terminal_status: 'invalid_pre_review_receipt',
           failure_code: 'invalid_pre_review_receipt',
+          ...(replayReceiptError ? { error_hash: sha256(replayReceiptError.message) } : {}),
           presentation_status: 'terminal',
           completed_at: new Date().toISOString()
         });
