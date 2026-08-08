@@ -229,13 +229,14 @@ The verification value is passed explicitly through platform policy and
 provider dispatch. There is no module-level “last verified” singleton. POSIX
 create, mode, and ownership behavior is unchanged.
 
-Production provider egress remains closed in this phase through the compile-time
-constant `WINDOWS_PROVIDER_EGRESS_GATE_LIFTED = true` (Phase 5). The pure policy can
+Production provider egress is controlled by the compile-time constant
+`WINDOWS_PROVIDER_EGRESS_GATE_LIFTED` (Phase 5): `true` lifts the gate after
+packaged-helper proof, `false` keeps win32 live egress closed. The pure policy can
 represent the eventual verified allow path for unit testing, but the production
-wrapper cannot enable it. Phase 5 remains the only authorized constant flip,
-after packaged-helper proof. The permanent emergency control
-`CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` takes precedence and re-blocks Windows
-egress even after a future gate lift.
+wrapper enables it only through the constant. Phase 5 remains the only
+authorized constant flip, after packaged-helper proof. The permanent emergency
+control `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` takes precedence and re-blocks
+Windows egress even after a future gate lift.
 
 > **0.5.1 disposition (2026-08-08):** the production constant was flipped to
 > `false` for the security-fix release so v0.5.1 never ships a lifted gate while
