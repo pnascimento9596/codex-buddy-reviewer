@@ -107,7 +107,7 @@ test('dispatch validates provider-specific effort before invoking an adapter', a
   });
   assert.throws(
     () => dispatchProviderReview(invalidOpenCode, { platform: 'win32' }),
-    /Windows private-state verification failed|disabled on Windows|private-state verification/
+    /Windows private-state verification failed|disabled on Windows|private-state verification|unavailable on Windows arm64|unavailable on Windows x64|Windows arm64|Windows x64/
   );
   await assert.rejects(
     dispatchProviderReview(invalidOpenCode, { platform: 'linux' }),

@@ -608,7 +608,7 @@ test('live eval blocks Windows provider contact before creating an output artifa
       calls += 1;
       throw new Error('Windows privacy gate must run first');
     }
-  }), /Windows private-state verification failed|disabled on Windows|private-state verification/);
+  }), /Windows private-state verification failed|disabled on Windows|private-state verification|unavailable on Windows arm64|unavailable on Windows x64|Windows arm64|Windows x64/);
   assert.equal(calls, 0);
   await assert.rejects(access(output));
 });

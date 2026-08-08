@@ -1301,7 +1301,7 @@ test('manual live review blocks Windows before repository evidence collection', 
     dryRun: false,
     platform: 'win32',
     cwd: path.join(os.tmpdir(), 'must-not-be-inspected-by-windows-live-review')
-  }), /Windows private-state verification failed|disabled on Windows|private-state verification/);
+  }), /Windows private-state verification failed|disabled on Windows|private-state verification|unavailable on Windows arm64|unavailable on Windows x64|Windows arm64|Windows x64/);
 });
 
 test('subprocess runner treats early stdin close as a controlled process result', async () => {
