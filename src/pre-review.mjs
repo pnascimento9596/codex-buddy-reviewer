@@ -629,7 +629,11 @@ function dependencies(options) {
 
 async function reverifyProviderRoots(deps, execution = 'not_started') {
   if (deps.platform !== 'win32') return null;
-  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED && !deps.windowsPrivateStateVerification) return null;
+  if (!deps.windowsPrivateStateVerification
+      && !WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+      && deps.reverifyWindowsPrivateState === reverifyWindowsPrivateStateRoots) {
+    return null;
+  }
   const verification = await deps.reverifyWindowsPrivateState(
     deps.windowsPrivateStateVerification,
     {
@@ -944,15 +948,19 @@ export async function runPreReviewWorker(rawInput, options = {}) {
         || !validConsentTimestamp(mode.continuous_review_consented_at)) {
       return disable('continuous_disabled');
     }
-    if (deps.platform === 'win32' && WINDOWS_PROVIDER_EGRESS_GATE_LIFTED) {
-      deps.windowsPrivateStateVerification = await deps.ensureWindowsPrivateState({
-        platform: deps.platform,
-        arch: deps.arch,
-        env: deps.env,
-        dataDir: modeDataDir,
-        runtimeDataDir,
-        ...deps.windowsPrivateStateOptions
-      });
+    if (deps.platform === 'win32'
+        && (WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+          || deps.ensureWindowsPrivateState !== ensureWindowsPrivateStateRoots
+          || deps.windowsPrivateStateVerification)) {
+      deps.windowsPrivateStateVerification = deps.windowsPrivateStateVerification
+        ?? await deps.ensureWindowsPrivateState({
+          platform: deps.platform,
+          arch: deps.arch,
+          env: deps.env,
+          dataDir: modeDataDir,
+          runtimeDataDir,
+          ...deps.windowsPrivateStateOptions
+        });
     }
     if (!deps.platformPolicy({
       platform: deps.platform,

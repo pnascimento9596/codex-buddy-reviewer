@@ -109,9 +109,12 @@ async function ensureLifecycleWindowsPrivateState(options) {
   const platform = options.platform ?? process.platform;
   if (platform !== 'win32') return null;
   if (options.windowsPrivateStateVerification) return options.windowsPrivateStateVerification;
-  // While the live-egress gate is closed, do not pay for root ensure/verify on
-  // every automatic turn. Policy still fails closed via GATE_LIFTED=false.
-  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED) return null;
+  // While the live-egress gate is closed, skip the default root ensure path so
+  // ordinary Windows/host tests keep legacy timing. Explicit injects (unit tests
+  // and future allow-path plumbing) still run.
+  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED && options.ensureWindowsPrivateState === undefined) {
+    return null;
+  }
   return (options.ensureWindowsPrivateState ?? ensureWindowsPrivateStateRoots)({
     platform,
     arch: options.arch,
@@ -126,7 +129,10 @@ async function ensureLifecycleWindowsPrivateState(options) {
 async function reverifyLifecycleWindowsPrivateState(verification, options, execution) {
   const platform = options.platform ?? process.platform;
   if (platform !== 'win32') return null;
-  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED && !verification) return null;
+  if (!verification && !WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+      && options.reverifyWindowsPrivateState === undefined) {
+    return null;
+  }
   const current = await (options.reverifyWindowsPrivateState ?? reverifyWindowsPrivateStateRoots)(
     verification,
     {
