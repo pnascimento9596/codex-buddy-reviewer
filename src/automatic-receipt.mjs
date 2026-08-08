@@ -566,3 +566,43 @@ export function automaticReceiptDigest(receipt) {
   if (!plainObject(receipt)) fail('digest input must be a plain data object');
   return createHash('sha256').update(canonicalJson(receipt)).digest('hex');
 }
+
+/**
+ * Validates a durable receipt during continuation replay, when the originating
+ * turn's baseline/final/evidence have already been cleaned by design. Runs the
+ * context-free structural core of validateAutomaticReceipt: schema version,
+ * review-key binding, canonical creation timestamp, exact terminal key set,
+ * and success-receipt terminal/result coherence. Evidence-bound checks cannot
+ * run here; they ran when the receipt was originally adopted.
+ */
+export function validateAutomaticReceiptReplay(receipt, context) {
+  if (!plainObject(context) || !REVIEW_KEY_PATTERN.test(context.reviewKey ?? '')) {
+    fail('replay validation context is incomplete');
+  }
+  const reviewKey = context.reviewKey;
+  if (!plainObject(receipt)
+      || receipt.schema_version !== RECEIPT_SCHEMA_VERSION
+      || receipt.review_key !== reviewKey
+      || !canonicalTimestamp(receipt.created_at)) {
+    fail('schema, review key, or creation timestamp is invalid');
+  }
+  const success = Object.hasOwn(receipt, 'result');
+  const failureKind = success
+    ? null
+    : receipt.terminal_status === 'circuit_open' ? 'circuit'
+      : Object.hasOwn(receipt, 'provider_run') ? 'catch'
+        : Object.hasOwn(receipt, 'error_hash') ? 'aggregate'
+          : 'speculative';
+  const failureKeys = failureKind === 'circuit' ? CIRCUIT_FAILURE_KEYS
+    : failureKind === 'catch' ? CATCH_FAILURE_KEYS
+      : failureKind === 'aggregate' ? FOREGROUND_FAILURE_KEYS
+        : FAILURE_KEYS;
+  exactKeys(receipt, success ? SUCCESS_KEYS : failureKeys, success ? 'success receipt' : 'failure receipt');
+  if (success) {
+    if (receipt.terminal_status !== receipt.result?.status
+        || !SUCCESS_STATUSES.has(receipt.terminal_status)) {
+      fail('success receipt terminal status does not match its result');
+    }
+  }
+  return receipt;
+}

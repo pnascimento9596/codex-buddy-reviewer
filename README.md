@@ -12,7 +12,7 @@
     <a href="CONTRIBUTING.md">Contributing</a>
   </p>
   <p>
-    <a href="#status"><img alt="Version v0.5.0" src="https://img.shields.io/badge/version-v0.5.0-7c3aed" /></a>
+    <a href="#status"><img alt="Version v0.5.1" src="https://img.shields.io/badge/version-v0.5.1-7c3aed" /></a>
     <a href="#quick-start"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&amp;logoColor=white" /></a>
     <a href="#connection-support"><img alt="Four reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-4-0891b2" /></a>
     <a href="#pets"><img alt="Five public pets" src="https://img.shields.io/badge/public_pets-5-f59e0b" /></a>
@@ -37,9 +37,9 @@ Run the first-party `/pet` command once to keep the selected companion open. Inv
 
 ## Status
 
-Stable release: `v0.5.0`, prepared for publication only from the exact protected `main` head through the guarded release workflow.
+Stable release: `v0.5.1` (security fix on the v0.5 line), prepared for publication only from the exact protected `main` head through the guarded release workflow.
 
-This is the first stable `0.5.0` line. Provider egress remains experimental in the sense that live Windows provider contact stays blocked until DACL work ships; other documented limitations are listed in the release note and CHANGELOG. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
+This is the first stable `0.5.0` line with a follow-up security release. Provider egress remains experimental in the sense that live Windows provider contact stays blocked (the egress gate is re-engaged for 0.5.1) until DACL work ships; other documented limitations are listed in the release note and CHANGELOG. See the [validation record](docs/VALIDATION.md) for the exact evidence state.
 
 ## What Buddy does
 
