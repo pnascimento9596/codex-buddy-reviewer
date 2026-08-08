@@ -73,11 +73,62 @@ test('provider temporary identity strengthens stable birth-time platforms withou
 });
 
 function createTempRun(options = {}) {
+  const windowsOptions = options.platform === 'win32'
+    ? windowsPrivateStateFixture(options.tempBase)
+    : {};
   return createProviderTempRun({
     root: DEFAULT_ROOT,
     provider: 'claude',
+    ...windowsOptions,
     ...options
   });
+}
+
+function windowsPrivateStateFixture(tempBase) {
+  const verification = Object.freeze({
+    schema_version: '1',
+    platform: 'win32',
+    arch: 'x64',
+    ok: true,
+    failure_code: null,
+    message: null,
+    helper: Object.freeze({
+      verified: true,
+      path: 'C:\\trusted\\buddy-job-supervisor.exe',
+      arch: 'x64',
+      sha256: 'a'.repeat(64),
+      protocol_version: '2'
+    }),
+    filesystem_acl_capable: true,
+    roots: Object.freeze([
+      Object.freeze({
+        class: 'durable_data', path: '/fixture/data',
+        filesystem_acl_capable: true, ensured: true, verified: true
+      }),
+      Object.freeze({
+        class: 'runtime_data', path: '/fixture/runtime',
+        filesystem_acl_capable: true, ensured: true, verified: true
+      }),
+      Object.freeze({
+        class: 'provider_temp_parent', path: providerTempParent(tempBase),
+        filesystem_acl_capable: true, ensured: true, verified: true
+      })
+    ]),
+    operation: 'ensure_and_verify'
+  });
+  const ensured = async (target, _options) => ({
+    ok: true,
+    op: target.endsWith('.json') ? 'ensure_private_file' : 'ensure_private_dir',
+    path: target,
+    owner_sid: 'S-1-5-21-1-2-3-1001',
+    protocol: 2
+  });
+  return {
+    windowsPrivateStateVerification: verification,
+    ensurePrivateDirImpl: ensured,
+    ensurePrivateFileImpl: ensured,
+    verifyPrivateDirImpl: ensured
+  };
 }
 
 async function writeEmptyFiles(directory, count, prefix) {
@@ -597,6 +648,65 @@ test('Windows attribution is visible but ACL-unverified runs are never swept or 
   assert.equal(swept.removed, 0);
   assert.equal(swept.refused, 1);
   await access(run.directory);
+  await cleanupProviderTempRun(run);
+});
+
+test('Windows provider temp creation refuses a missing private-state verification when required', async () => {
+  const tempBase = await temporaryBase('windows-missing-verification');
+  await assert.rejects(
+    createProviderTempRun({
+      root: DEFAULT_ROOT,
+      provider: 'claude',
+      tempBase,
+      platform: 'win32',
+      requireWindowsPrivateStateVerification: true,
+      randomBytesImpl: deterministicRandom(0x90)
+    }),
+    (error) => error?.failureCode === 'windows_private_state_acl_unavailable'
+      && error?.platformIntegrityFailure === true
+      && error?.providerExecution === 'not_started'
+  );
+});
+
+test('Windows provider temp creation keeps legacy path without verification while gate is closed', async () => {
+  const tempBase = await temporaryBase('windows-legacy-no-verification');
+  const run = await createProviderTempRun({
+    root: DEFAULT_ROOT,
+    provider: 'claude',
+    tempBase,
+    platform: 'win32',
+    randomBytesImpl: deterministicRandom(0x91)
+  });
+  assert.equal(run.parent, path.join(tempBase, path.basename(run.parent)));
+  await cleanupProviderTempRun(run);
+});
+
+test('Windows provider temp status accepts the historical marker and reports a freshly verified root distinctly', async () => {
+  const tempBase = await temporaryBase('windows-verified-status');
+  const windows = windowsPrivateStateFixture(tempBase);
+  const run = await createTempRun({
+    tempBase,
+    pid: 4302,
+    platform: 'win32',
+    randomBytesImpl: deterministicRandom(0x92),
+    ...windows
+  });
+  const historical = await workspaceProviderTempStatus({
+    root: DEFAULT_ROOT,
+    tempBase,
+    platform: 'win32',
+    processAliveImpl: () => false
+  });
+  assert.equal(historical.ownership_assurance, 'windows_acl_unverified');
+  const verified = await workspaceProviderTempStatus({
+    root: DEFAULT_ROOT,
+    tempBase,
+    platform: 'win32',
+    processAliveImpl: () => false,
+    windowsPrivateStateVerification: windows.windowsPrivateStateVerification
+  });
+  assert.equal(verified.ownership_assurance, 'windows_dacl_verified');
+  assert.equal(verified.purge_supported, false);
   await cleanupProviderTempRun(run);
 });
 

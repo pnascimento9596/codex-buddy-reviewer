@@ -355,6 +355,8 @@ export async function reviewWithOpenCode({
   cleanupImpl = rm,
   ambient = process.env,
   monotonicNow = () => performance.now(),
+  platform = process.platform,
+  windowsPrivateStateVerification = null,
   signal
 }) {
   if (!responseSchema || typeof responseSchema !== 'object' || Array.isArray(responseSchema)) {
@@ -398,7 +400,12 @@ export async function reviewWithOpenCode({
   try {
     try {
       try {
-        tempRun = await createProviderTempRun({ root, provider: 'opencode' });
+        tempRun = await createProviderTempRun({
+          root,
+          provider: 'opencode',
+          platform,
+          windowsPrivateStateVerification
+        });
         tempRoot = tempRun.directory;
         checkPreflightRemaining();
       } catch (error) {

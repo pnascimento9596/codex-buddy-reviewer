@@ -28,6 +28,7 @@ import { appendOutboxEvent } from './outbox.mjs';
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
 import { approveProviderReviewRequest } from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
+import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 import { DEADLINE_STALL_MAX_EXTENSION_MS } from './process.mjs';
 import { aggregateReviewOutcomes, ReviewAggregationError } from './review-aggregate.mjs';
 import { REVIEW_SCHEMA_VERSION } from './review-schema.mjs';
@@ -73,6 +74,13 @@ import {
   providerCircuitIsOpen,
   recordProviderCircuit
 } from './provider-circuit.mjs';
+import {
+  assertWindowsPrivateStateVerification,
+  ensureWindowsPrivateStateRoots,
+  isWindowsPlatformIntegrityFailure,
+  reverifyWindowsPrivateStateRoots,
+  WindowsPrivateStateVerificationError
+} from './windows-private-state-roots.mjs';
 
 const MAX_CONTINUATION_CHARS = 1_800;
 const STOP_LEASE_HELD = Symbol('Buddy stop lease held');
@@ -95,6 +103,58 @@ function validConsentTimestamp(value) {
 function continuousReviewIsConsented(mode) {
   return mode.continuous_review_enabled === true
     && validConsentTimestamp(mode.continuous_review_consented_at);
+}
+
+async function ensureLifecycleWindowsPrivateState(options) {
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'win32') return null;
+  if (options.windowsPrivateStateVerification) return options.windowsPrivateStateVerification;
+  // While the live-egress gate is closed, skip the default root ensure path so
+  // ordinary Windows/host tests keep legacy timing. Explicit injects (unit tests
+  // and future allow-path plumbing) still run.
+  if (!WINDOWS_PROVIDER_EGRESS_GATE_LIFTED && options.ensureWindowsPrivateState === undefined) {
+    return null;
+  }
+  return (options.ensureWindowsPrivateState ?? ensureWindowsPrivateStateRoots)({
+    platform,
+    arch: options.arch,
+    env: options.env,
+    dataDir: options.modeDataDir,
+    runtimeDataDir: options.runtimeDataDir,
+    tempBase: options.providerTempBase,
+    ...(options.windowsPrivateStateOptions ?? {})
+  });
+}
+
+async function reverifyLifecycleWindowsPrivateState(verification, options, execution) {
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'win32') return null;
+  if (!verification && !WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+      && options.reverifyWindowsPrivateState === undefined) {
+    return null;
+  }
+  const current = await (options.reverifyWindowsPrivateState ?? reverifyWindowsPrivateStateRoots)(
+    verification,
+    {
+      platform,
+      arch: options.arch,
+      env: options.env,
+      ...(options.windowsPrivateStateOptions ?? {})
+    }
+  );
+  return assertWindowsPrivateStateVerification(current, {
+    execution,
+    requireEnsured: false
+  });
+}
+
+function lifecyclePlatformPolicy(options, verification) {
+  return (options.platformPolicy ?? providerEgressPlatformPolicy)({
+    platform: options.platform ?? process.platform,
+    arch: options.arch,
+    env: options.env,
+    verification
+  });
 }
 
 function intentionalProviderCancellation(error) {
@@ -188,11 +248,15 @@ function safeReviewerFailure(error, stage = 'provider') {
     ? stage
     : 'provider';
   return Object.freeze({
-    stage: error?.egressCapabilityStage === 'settlement' ? 'settlement' : safeStage,
+    stage: error?.egressCapabilityStage === 'settlement'
+      ? 'settlement'
+      : isWindowsPlatformIntegrityFailure(error) ? 'platform_integrity' : safeStage,
     failure_code: safeFailureCode(error),
     message: error?.egressCapabilityStage === 'settlement'
       ? 'Reviewer completed, but its egress capability could not be settled.'
-      : 'Reviewer did not complete.'
+      : isWindowsPlatformIntegrityFailure(error)
+        ? 'Windows private-state integrity failed; provider execution was contained and no provider-quality circuit was charged.'
+        : 'Reviewer did not complete.'
   });
 }
 
@@ -526,7 +590,8 @@ export async function captureTurnStart(input, options = {}) {
     }).catch(() => null);
     return { output: null, skipped: 'disabled' };
   }
-  const platformPolicy = providerEgressPlatformPolicy(options.platform ?? process.platform);
+  const windowsPrivateStateVerification = await ensureLifecycleWindowsPrivateState(options);
+  const platformPolicy = lifecyclePlatformPolicy(options, windowsPrivateStateVerification);
   if (!platformPolicy.allowed) {
     return {
       output: {
@@ -661,7 +726,8 @@ export async function reviewTurnStop(input, options = {}) {
   const root = await tryResolveRoot(input, options.resolveRoot ?? resolveRepositoryRoot);
   if (!root) return { output: null, skipped: 'non_git' };
   await assertStateOutsideRepository(root, resolveRuntimeDataDir(options.runtimeDataDir), 'runtime state');
-  const platformPolicy = providerEgressPlatformPolicy(options.platform ?? process.platform);
+  let windowsPrivateStateVerification = await ensureLifecycleWindowsPrivateState(options);
+  const platformPolicy = lifecyclePlatformPolicy(options, windowsPrivateStateVerification);
   if (!platformPolicy.allowed) {
     const mode = await readMode({ root, dataDir: options.modeDataDir });
     if (!mode.enabled) return { output: null, skipped: 'disabled' };
@@ -1025,6 +1091,11 @@ export async function reviewTurnStop(input, options = {}) {
     const modeStillAuthorized = (authorizedMode) => authorizedMode.enabled
       && authorizedMode.config_revision === baselineRecord.mode_revision;
     const issueForPackets = async (authorizedMode, executableReviewers, primaryPacket, consent) => {
+      windowsPrivateStateVerification = await reverifyLifecycleWindowsPrivateState(
+        windowsPrivateStateVerification,
+        options,
+        'not_started'
+      );
       const entries = executableReviewers.map(({ reviewer, sourceIndex }) => {
         const packet = sourceIndex === 0 ? primaryPacket : null;
         const preparedRequest = prepareReviewRequest(evidence, { summaryGuardPacket: packet });
@@ -1145,7 +1216,12 @@ export async function reviewTurnStop(input, options = {}) {
             root,
             dataDir: options.modeDataDir,
             capability
-          }, (approvedRequest) => {
+          }, async (approvedRequest) => {
+            let executionVerification = await reverifyLifecycleWindowsPrivateState(
+              windowsPrivateStateVerification,
+              options,
+              'definite_non_execution'
+            );
             reviewStartedEmission = safeEmit({
               runtimeDataDir: options.runtimeDataDir, repositoryRoot: root,
               sessionId: input.session_id, turnId: input.turn_id, reviewKey,
@@ -1158,6 +1234,9 @@ export async function reviewTurnStop(input, options = {}) {
               model: reviewer.model,
               effort: reviewer.effort,
               platform: options.platform ?? process.platform,
+              arch: options.arch,
+              env: options.env,
+              windowsPrivateStateVerification: executionVerification,
               minConfidence: authorizedMode.min_confidence,
               timeoutMs: authorizedMode.timeout_ms,
               dataDir: options.modeDataDir,
@@ -1166,20 +1245,47 @@ export async function reviewTurnStop(input, options = {}) {
               summaryGuardPacket: lane.sourceIndex === 0 ? summaryGuardPacket : null,
               approvedRequest
             };
-            if (options.review !== undefined && options.review !== null) {
-              lane.providerAttempted = true;
-              providerAttempted = true;
-              return options.review(evidence, {
-                ...executionOptions
-              });
-            }
-            return reviewEvidence(evidence, {
-              ...executionOptions,
-              onProviderDispatch: () => {
+            let reviewed;
+            try {
+              if (options.review !== undefined && options.review !== null) {
                 lane.providerAttempted = true;
                 providerAttempted = true;
+                reviewed = await options.review(evidence, {
+                  ...executionOptions
+                });
+              } else {
+                reviewed = await reviewEvidence(evidence, {
+                  ...executionOptions,
+                  onProviderDispatch: () => {
+                    lane.providerAttempted = true;
+                    providerAttempted = true;
+                  }
+                });
               }
-            });
+            } catch (error) {
+              if ((options.platform ?? process.platform) === 'win32' && lane.providerAttempted) {
+                const terminalVerification = await (options.reverifyWindowsPrivateState
+                  ?? reverifyWindowsPrivateStateRoots)(executionVerification, {
+                  platform: 'win32',
+                  arch: options.arch,
+                  env: options.env,
+                  ...(options.windowsPrivateStateOptions ?? {})
+                });
+                if (!terminalVerification?.ok) {
+                  throw new WindowsPrivateStateVerificationError(terminalVerification, {
+                    execution: 'containment',
+                    message: 'Windows private-state integrity failed while provider execution was active.'
+                  });
+                }
+              }
+              throw error;
+            }
+            executionVerification = await reverifyLifecycleWindowsPrivateState(
+              executionVerification,
+              options,
+              'containment'
+            );
+            return reviewed;
           });
         } finally {
           await reviewStartedEmission;
@@ -1222,6 +1328,7 @@ export async function reviewTurnStop(input, options = {}) {
       } catch (error) {
         if (lane.providerAttempted
             && error.egressCapabilityStage !== 'settlement'
+            && !isWindowsPlatformIntegrityFailure(error)
             && !intentionalProviderCancellation(error)) {
           await recordProviderCircuit({
             runtimeDataDir: options.runtimeDataDir,
@@ -1462,6 +1569,7 @@ export async function reviewTurnStop(input, options = {}) {
   } catch (error) {
     if (stage === 'provider' && providerAttempted && !circuitRecorded
         && error.egressCapabilityStage !== 'settlement'
+        && !isWindowsPlatformIntegrityFailure(error)
         && !intentionalProviderCancellation(error)) {
       await recordProviderCircuit({
         runtimeDataDir: options.runtimeDataDir, root, provider: mode.provider, model: mode.model

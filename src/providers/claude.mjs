@@ -197,6 +197,7 @@ export async function reviewWithClaude({
   runProcessImpl = runProcess,
   cleanupImpl = rm,
   monotonicNow = () => performance.now(),
+  windowsPrivateStateVerification = null,
   signal
 }) {
   if (!plainObject(responseSchema)) {
@@ -231,7 +232,12 @@ export async function reviewWithClaude({
 
   try {
     try {
-      tempRun = await createProviderTempRun({ root, provider: 'claude' });
+      tempRun = await createProviderTempRun({
+        root,
+        provider: 'claude',
+        platform,
+        windowsPrivateStateVerification
+      });
     } catch (error) {
       throw providerFailure({
         provider: 'claude', model, stage: 'preflight',

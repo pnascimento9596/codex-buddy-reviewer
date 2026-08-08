@@ -29,10 +29,18 @@ import {
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
 import { approveProviderReviewRequest } from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
+import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 import {
   providerCircuitIsOpen,
   recordProviderCircuit
 } from './provider-circuit.mjs';
+import {
+  assertWindowsPrivateStateVerification,
+  ensureWindowsPrivateStateRoots,
+  isWindowsPlatformIntegrityFailure,
+  reverifyWindowsPrivateStateRoots,
+  WindowsPrivateStateVerificationError
+} from './windows-private-state-roots.mjs';
 import { aggregateReviewOutcomes, ReviewAggregationError } from './review-aggregate.mjs';
 import {
   assertStateOutsideRepository,
@@ -217,11 +225,15 @@ function safeFailure(error) {
     ? error.failureCode
     : error?.name === 'AbortError' ? 'superseded' : 'provider_error';
   return Object.freeze({
-    stage: error?.egressCapabilityStage === 'settlement' ? 'settlement' : 'provider',
+    stage: error?.egressCapabilityStage === 'settlement'
+      ? 'settlement'
+      : isWindowsPlatformIntegrityFailure(error) ? 'platform_integrity' : 'provider',
     failure_code: code,
     message: code === 'superseded'
       ? 'The speculative review was superseded by a newer exact checkpoint.'
-      : 'The reviewer did not complete.'
+      : isWindowsPlatformIntegrityFailure(error)
+        ? 'Windows private-state integrity failed; provider execution was contained and no provider-quality circuit was charged.'
+        : 'The reviewer did not complete.'
   });
 }
 
@@ -556,6 +568,10 @@ function dependencies(options) {
     withModeLock: options.withModeLock ?? withModeLock,
     readSummaryConsent: options.readSummaryConsent ?? readSummaryClaimGuardConsent,
     platformPolicy: options.platformPolicy ?? providerEgressPlatformPolicy,
+    ensureWindowsPrivateState: options.ensureWindowsPrivateState ?? ensureWindowsPrivateStateRoots,
+    reverifyWindowsPrivateState: options.reverifyWindowsPrivateState ?? reverifyWindowsPrivateStateRoots,
+    windowsPrivateStateVerification: options.windowsPrivateStateVerification ?? null,
+    windowsPrivateStateOptions: options.windowsPrivateStateOptions ?? {},
     captureSnapshot: options.captureSnapshot ?? captureTurnSnapshot,
     buildEvidence: options.buildEvidence ?? buildTurnEvidence,
     privacyComplete: options.privacyComplete ?? privacyCoverageIsCurrentComplete,
@@ -597,6 +613,8 @@ function dependencies(options) {
     snapshotDigest: options.snapshotDigest ?? turnSnapshotDigest,
     createMutationMonitor: options.createMutationMonitor ?? createRepositoryMutationMonitor,
     platform: options.platform ?? process.platform,
+    arch: options.arch ?? process.arch,
+    env: options.env ?? process.env,
     now: options.now ?? Date.now,
     workerLifetimeMs: validateWorkerLifetime(
       options.workerLifetimeMs ?? PRE_REVIEW_MAX_LIFETIME_MS
@@ -609,7 +627,31 @@ function dependencies(options) {
   };
 }
 
+async function reverifyProviderRoots(deps, execution = 'not_started') {
+  if (deps.platform !== 'win32') return null;
+  if (!deps.windowsPrivateStateVerification
+      && !WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+      && deps.reverifyWindowsPrivateState === reverifyWindowsPrivateStateRoots) {
+    return null;
+  }
+  const verification = await deps.reverifyWindowsPrivateState(
+    deps.windowsPrivateStateVerification,
+    {
+      platform: deps.platform,
+      arch: deps.arch,
+      env: deps.env,
+      ...deps.windowsPrivateStateOptions
+    }
+  );
+  deps.windowsPrivateStateVerification = verification;
+  return assertWindowsPrivateStateVerification(verification, {
+    execution,
+    requireEnsured: false
+  });
+}
+
 async function issueProviderLanes({ root, input, mode, modeDataDir, evidence, reviewKey, lanes, deps }) {
+  await reverifyProviderRoots(deps, 'not_started');
   const prepared = deps.prepareRequest(evidence, { summaryGuardPacket: null });
   const entries = lanes.map(({ reviewer }) => ({
     binding: {
@@ -663,6 +705,7 @@ async function executeProviders({
   try {
     const settlements = await Promise.allSettled(lanes.map((lane, index) => (
       deps.spendCapability({ root, dataDir: modeDataDir, capability: capabilities[index] }, async (approvedRequest) => {
+        let executionVerification = await reverifyProviderRoots(deps, 'definite_non_execution');
         reviewStartedEmission ??= safeEmit(deps, {
           runtimeDataDir,
           repositoryRoot: root,
@@ -675,21 +718,61 @@ async function executeProviders({
           detail: `${lanes.length} reviewer ${lanes.length === 1 ? 'connection is' : 'connections are'} reviewing ${evidence.changed_paths.length} allowlisted path(s) from an exact checkpoint.`
         });
         if (deps.reviewInjected) lane.providerAttempted = true;
-        const reviewed = await deps.review(evidence, {
-          provider: lane.reviewer.provider,
-          model: lane.reviewer.model,
-          effort: lane.reviewer.effort,
-          platform: deps.platform,
-          minConfidence: mode.min_confidence,
-          timeoutMs: mode.timeout_ms,
-          dataDir: modeDataDir,
-          store: false,
-          retainEvidence: false,
-          summaryGuardPacket: null,
-          approvedRequest,
-          signal: controller.signal,
-          onProviderDispatch: () => { lane.providerAttempted = true; }
-        });
+        let reviewed;
+        try {
+          reviewed = await deps.review(evidence, {
+            provider: lane.reviewer.provider,
+            model: lane.reviewer.model,
+            effort: lane.reviewer.effort,
+            platform: deps.platform,
+            arch: deps.arch,
+            env: deps.env,
+            windowsPrivateStateVerification: executionVerification,
+            minConfidence: mode.min_confidence,
+            timeoutMs: mode.timeout_ms,
+            dataDir: modeDataDir,
+            store: false,
+            retainEvidence: false,
+            summaryGuardPacket: null,
+            approvedRequest,
+            signal: controller.signal,
+            onProviderDispatch: () => { lane.providerAttempted = true; }
+          });
+        } catch (error) {
+          if (deps.platform === 'win32' && lane.providerAttempted && executionVerification) {
+            const terminalVerification = await deps.reverifyWindowsPrivateState(
+              executionVerification,
+              {
+                platform: deps.platform,
+                arch: deps.arch,
+                env: deps.env,
+                ...deps.windowsPrivateStateOptions
+              }
+            );
+            if (!terminalVerification?.ok) {
+              throw new WindowsPrivateStateVerificationError(terminalVerification, {
+                execution: 'containment',
+                message: 'Windows private-state integrity failed while provider execution was active.'
+              });
+            }
+          }
+          throw error;
+        }
+        if (deps.platform === 'win32' && executionVerification) {
+          executionVerification = await deps.reverifyWindowsPrivateState(
+            executionVerification,
+            {
+              platform: deps.platform,
+              arch: deps.arch,
+              env: deps.env,
+              ...deps.windowsPrivateStateOptions
+            }
+          );
+          assertWindowsPrivateStateVerification(executionVerification, {
+            execution: 'containment',
+            requireEnsured: false
+          });
+        }
         if (reviewed.provider !== lane.reviewer.provider || reviewed.model !== lane.reviewer.model) {
           const error = new Error('reviewer result identity does not match its configured lane');
           error.failureCode = 'invalid_review_schema';
@@ -711,6 +794,7 @@ async function executeProviders({
       }
       if (lane.providerAttempted
           && settlement.reason?.egressCapabilityStage !== 'settlement'
+          && !isWindowsPlatformIntegrityFailure(settlement.reason)
           && !intentionalProviderCancellation(settlement.reason)) {
         await deps.recordCircuit({
           runtimeDataDir,
@@ -864,7 +948,26 @@ export async function runPreReviewWorker(rawInput, options = {}) {
         || !validConsentTimestamp(mode.continuous_review_consented_at)) {
       return disable('continuous_disabled');
     }
-    if (!deps.platformPolicy(deps.platform).allowed) return disable('platform_blocked');
+    if (deps.platform === 'win32'
+        && (WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+          || deps.ensureWindowsPrivateState !== ensureWindowsPrivateStateRoots
+          || deps.windowsPrivateStateVerification)) {
+      deps.windowsPrivateStateVerification = deps.windowsPrivateStateVerification
+        ?? await deps.ensureWindowsPrivateState({
+          platform: deps.platform,
+          arch: deps.arch,
+          env: deps.env,
+          dataDir: modeDataDir,
+          runtimeDataDir,
+          ...deps.windowsPrivateStateOptions
+        });
+    }
+    if (!deps.platformPolicy({
+      platform: deps.platform,
+      arch: deps.arch,
+      env: deps.env,
+      verification: deps.windowsPrivateStateVerification
+    }).allowed) return disable('platform_blocked');
     phase = 'baseline_load';
     const baselineRecord = await deps.readJson(path.join(directory, 'baseline.json'));
     if (!baselineRecord?.snapshot || baselineRecord.mode_revision !== mode.config_revision) {

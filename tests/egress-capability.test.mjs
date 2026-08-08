@@ -640,6 +640,38 @@ test('executor failures retain capability audit metadata and still settle exactl
   assert.equal(wrapped.egressCapabilityAudit.capability_id, frozenCapability.capability_id);
 });
 
+test('post-spend platform-integrity refusal settles as definite non-execution and preserves mutation block metadata', async () => {
+  const scope = await fixture('platform-integrity-non-execution');
+  const capability = await issueEgressCapability({
+    ...scope,
+    binding: binding(),
+    approvedRequest: approveRequest(scope, binding(), technicalRequest())
+  });
+  const integrityError = Object.freeze(Object.assign(
+    new Error('Windows private-state root changed before executor entry'),
+    {
+      failureCode: 'windows_private_state_wide_acl',
+      platformIntegrityFailure: true,
+      providerExecution: 'definite_non_execution',
+      blockMutation: true
+    }
+  ));
+  let caught;
+  try {
+    await spendEgressCapability({ ...scope, capability }, async () => {
+      throw integrityError;
+    });
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught.failureCode, 'windows_private_state_wide_acl');
+  assert.equal(caught.platformIntegrityFailure, true);
+  assert.equal(caught.providerExecution, 'definite_non_execution');
+  assert.equal(caught.blockMutation, true);
+  assert.equal(caught.egressCapabilityStage, 'executor');
+  assert.equal((await readEgressRegistry(scope)).active.length, 0);
+});
+
 test('settlement failures are distinguished and dual failures preserve both stages', async () => {
   const scope = await fixture('settlement-error');
   const removeConsumedRecord = async () => {

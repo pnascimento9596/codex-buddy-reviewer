@@ -240,7 +240,7 @@ test('Windows process containment diagnostic uses CI helper overrides but labels
         path: path.join(helperRoot, 'job-supervisor.exe'),
         arch: 'x64',
         sha256: 'a'.repeat(64),
-        protocolVersion: '1'
+        protocolVersion: '2'
       };
     }
   });

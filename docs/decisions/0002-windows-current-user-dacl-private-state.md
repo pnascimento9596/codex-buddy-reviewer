@@ -213,6 +213,62 @@ Product already declines to claim protection against a malicious same-user
 process. DACL work raises the bar for **other local users and inherited wide
 ACLs**, and makes “private state” an honest label on NTFS.
 
+### Phase 3 Node wiring and closed-gate contract
+
+Lane-H Phase 3 adds an explicit, deeply frozen verification value covering the
+durable data root, active runtime data root, and provider temporary parent.
+On `win32`, the builder resolves the hash-pinned helper once, requires helper
+capability protocol 2, probes persistent filesystem ACL capability for every
+root, then performs `ensure_private_dir` followed by `verify_private_dir` for
+each root. Later integrity checkpoints use verify-only operations: they never
+repair a root and thereby hide a TOCTOU failure. Provider temporary `run-*`
+directories receive `ensure_private_dir` after creation, and private JSON final
+files receive `ensure_private_file` after atomic rename or exclusive link.
+
+The verification value is passed explicitly through platform policy and
+provider dispatch. There is no module-level “last verified” singleton. POSIX
+create, mode, and ownership behavior is unchanged.
+
+Production provider egress remains closed in this phase through the compile-time
+constant `WINDOWS_PROVIDER_EGRESS_GATE_LIFTED = false`. The pure policy can
+represent the eventual verified allow path for unit testing, but the production
+wrapper cannot enable it. Phase 5 remains the only authorized constant flip,
+after packaged-helper proof. The permanent emergency control
+`CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` takes precedence and re-blocks Windows
+egress even after a future gate lift.
+
+Distinct fail-closed results identify non-ACL filesystems, unavailable helper
+architecture (including unavailable ARM64 packaging), unavailable helper,
+protocol mismatch, kill-switch engagement, and useful root verification
+failures. While the Phase 3 production constant is false, aggregate automatic
+surfaces may continue to report the generic
+`windows_private_state_acl_unavailable` blocker.
+
+### TOCTOU terminal-state contract
+
+Windows root integrity is checked at three provider-lifecycle boundaries:
+
+| Point | Required terminal behavior |
+|---|---|
+| Before capability issue | Refuse cleanly. Issue no capability and enter no provider executor. |
+| After capability spend, before executor entry | Settle the consumed capability exactly once as **definite non-execution**, conservatively block further mutation/dispatch, and do not charge the provider-quality circuit. |
+| After provider entry / at execution terminal state | Classify a detected DACL failure as `platform_integrity` containment, discard the provider outcome, and do not charge the provider-quality circuit. |
+
+The executor error carries non-public typed metadata distinguishing
+`definite_non_execution` from `containment`. Public receipts retain only the
+bounded failure code, `platform_integrity` stage, and a non-diagnostic message.
+Raw helper output and root paths do not enter provider prompts or default
+receipts.
+
+### Provider temporary status migration
+
+The historical `windows_acl_unverified` ownership-assurance marker remains a
+valid and observable state after upgrade. It is emitted whenever Windows DACL
+verification is absent, skipped, or blocked by the closed gate. A caller that
+supplies a current explicit verification for the exact provider temporary root
+receives `windows_dacl_verified`. The POSIX marker remains
+`posix_uid_and_mode_verified`.
+
 ### Adversarial CI constructibility (Phase 1d)
 
 On the observed unelevated admin runner, all of the following were

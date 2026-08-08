@@ -501,7 +501,7 @@ async function processContainmentCheck(mode, options) {
       ...(helperRoot ? { helperRoot } : {})
     });
     if (!helper || helper.arch !== arch || !SHA256_PATTERN.test(helper.sha256)
-        || typeof helper.path !== 'string' || helper.protocolVersion !== '1') {
+        || typeof helper.path !== 'string' || !['1', '2'].includes(helper.protocolVersion)) {
       throw new Error('Windows Job Object helper resolver returned invalid verification metadata');
     }
     return check(
@@ -583,7 +583,12 @@ async function openCodeCliSurfaceCheck(mode, options = {}) {
 }
 
 function providerEgressPrivacyCheck(mode, options) {
-  const policy = providerEgressPlatformPolicy(options.platform ?? process.platform);
+  const policy = providerEgressPlatformPolicy({
+    platform: options.platform ?? process.platform,
+    arch: options.arch,
+    env: options.env,
+    verification: options.windowsPrivateStateVerification ?? null
+  });
   if (policy.allowed) {
     return check(
       'provider_egress_privacy',
