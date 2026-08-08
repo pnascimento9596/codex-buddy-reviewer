@@ -3,7 +3,6 @@ import { constants } from 'node:fs';
 import { chmod, link, lstat, mkdir, open, readdir, realpath, rename, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 import { ensurePrivateFile } from './windows-private-state.mjs';
 
 export const BUDDY_PLUGIN_PACKAGE_NAME = 'codex-buddy-reviewer';
@@ -237,13 +236,12 @@ async function ensureWindowsPrivateFinalFile(file, {
   ensurePrivateFileImpl = ensurePrivateFile,
   windowsHelperManifestFile,
   windowsHelperRoot,
-  requireWindowsPrivateFileDacl = WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+  requireWindowsPrivateFileDacl = false
 }) {
   if (platform !== 'win32') return;
-  // Until the egress gate is lifted, per-write DACL ensure is opt-in only.
-  // Hot paths (locks, pre-review state, receipts) must keep working on Windows
-  // hosts whose helper is still protocol 1 or whose tests exercise non-egress
-  // surfaces. Phase 5 flips the gate and thereby requires ensure by default.
+  // Per-write DACL ensure is opt-in for verified-leaf paths (rejected-response,
+  // explicit secure writes). The live-egress gate depends on root ensure/verify
+  // plus inheritance, not a helper round-trip on every hot-path file write.
   if (!requireWindowsPrivateFileDacl) return;
   if (typeof ensurePrivateFileImpl !== 'function') {
     throw new TypeError('Windows private file DACL ensure must be callable');
@@ -282,7 +280,7 @@ export async function writePrivateJsonAtomic(file, value, {
   ensurePrivateFileImpl = ensurePrivateFile,
   windowsHelperManifestFile,
   windowsHelperRoot,
-  requireWindowsPrivateFileDacl = WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+  requireWindowsPrivateFileDacl = false
 } = {}) {
   await ensurePrivateDirectory(path.dirname(file));
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
@@ -330,7 +328,7 @@ export async function writePrivateJsonExclusive(file, value, {
   ensurePrivateFileImpl = ensurePrivateFile,
   windowsHelperManifestFile,
   windowsHelperRoot,
-  requireWindowsPrivateFileDacl = WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+  requireWindowsPrivateFileDacl = false
 } = {}) {
   await ensurePrivateDirectory(path.dirname(file));
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);

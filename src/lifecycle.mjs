@@ -578,18 +578,9 @@ export async function captureTurnStart(input, options = {}) {
   const root = await tryResolveRoot(input, options.resolveRoot ?? resolveRepositoryRoot);
   if (!root) return { output: null, skipped: 'non_git' };
   await assertStateOutsideRepository(root, resolveRuntimeDataDir(options.runtimeDataDir), 'runtime state');
-  const mode = await readMode({ root, dataDir: options.modeDataDir });
-  if (!mode.enabled) {
-    await (options.pruneTurns ?? pruneWorkspaceTurns)({
-      runtimeDataDir: options.runtimeDataDir,
-      modeDataDir: resolveDataDir(options.modeDataDir),
-      root,
-      sessionId: input.session_id,
-      turnId: input.turn_id,
-      ...(options.pruneOptions ?? {})
-    }).catch(() => null);
-    return { output: null, skipped: 'disabled' };
-  }
+  // Verify Windows private-state roots BEFORE reading any value that can
+  // authorize provider contact. A pre-lift mode/consent file under a wide DACL
+  // must not be trusted and then "repaired" into an authorized-looking state.
   const windowsPrivateStateVerification = await ensureLifecycleWindowsPrivateState(options);
   const platformPolicy = lifecyclePlatformPolicy(options, windowsPrivateStateVerification);
   if (!platformPolicy.allowed) {
@@ -601,9 +592,20 @@ export async function captureTurnStart(input, options = {}) {
         }
       },
       root,
-      mode,
       skipped: platformPolicy.failureCode
     };
+  }
+  const mode = await readMode({ root, dataDir: options.modeDataDir });
+  if (!mode.enabled) {
+    await (options.pruneTurns ?? pruneWorkspaceTurns)({
+      runtimeDataDir: options.runtimeDataDir,
+      modeDataDir: resolveDataDir(options.modeDataDir),
+      root,
+      sessionId: input.session_id,
+      turnId: input.turn_id,
+      ...(options.pruneOptions ?? {})
+    }).catch(() => null);
+    return { output: null, skipped: 'disabled' };
   }
   await (options.pruneTurns ?? pruneWorkspaceTurns)({
     runtimeDataDir: options.runtimeDataDir,
