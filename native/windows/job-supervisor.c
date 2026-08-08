@@ -1324,12 +1324,12 @@ static int cbd_main(int argc, wchar_t **argv) {
   }
   if (!cbd_path_length_valid(path) || (anchor != NULL && !cbd_path_length_valid(anchor))) {
     (void)cbd_emit_failure(op, path, "path_too_long", L"DACL path exceeds 32766 UTF-16 units", 0U);
-    return 125;
+    return 1;
   }
   if ((!cbd_is_absolute_drive_path(path) && !cbd_is_unc_path(path))
       || (anchor != NULL && !cbd_is_absolute_drive_path(anchor) && !cbd_is_unc_path(anchor))) {
     (void)cbd_emit_failure(op, path, "path_not_absolute", L"DACL paths must be drive-qualified or UNC", 0U);
-    return 125;
+    return 1;
   }
   /* Ensure rejects UNC inside cbd_ensure_and_emit; verify may probe capability. */
   if (wcscmp(op, L"ensure_private_dir") == 0 && anchor == NULL) {
