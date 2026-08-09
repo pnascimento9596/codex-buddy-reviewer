@@ -27,7 +27,8 @@ function blocked(failureCode, summary, detail) {
 }
 
 export function readWindowsEgressKillSwitch(env = process.env) {
-  return env?.[WINDOWS_PROVIDER_EGRESS_KILL_SWITCH] === '1';
+  const source = env ?? process.env;
+  return source[WINDOWS_PROVIDER_EGRESS_KILL_SWITCH] === '1';
 }
 
 export function evaluateProviderEgressPlatformPolicy(input = {}) {
