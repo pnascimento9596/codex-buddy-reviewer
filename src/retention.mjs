@@ -90,7 +90,7 @@ function runtimeAreaTargets(runtimeRoot, workspace, index, total) {
 
 async function exactWorkspaceTargets(options) {
   const dataRoot = path.resolve(resolveDataDir(options.dataDir, options.env, options.home));
-  const runtimeRoots = await enumerateRuntimeDataDirs({
+  const runtimeInventory = await enumerateRuntimeDataDirs({
     dataDir: options.dataDir,
     runtimeDataDir: options.runtimeDataDir,
     codexHome: options.codexHome,
@@ -100,6 +100,7 @@ async function exactWorkspaceTargets(options) {
     readdirImpl: options.readdirImpl,
     lstatImpl: options.lstatImpl
   });
+  const runtimeRoots = runtimeInventory.map((entry) => entry.path);
   const workspace = workspaceKey(path.resolve(options.root));
   const content = [
     { id: 'manual_reviews', family: 'manual_reviews', root: dataRoot, target: path.join(dataRoot, 'reviews', workspace) },

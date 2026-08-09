@@ -86,7 +86,7 @@ function createTempRun(options = {}) {
 
 function windowsPrivateStateFixture(tempBase) {
   const verification = Object.freeze({
-    schema_version: '1',
+    schema_version: '2',
     platform: 'win32',
     arch: 'x64',
     ok: true,
@@ -103,17 +103,18 @@ function windowsPrivateStateFixture(tempBase) {
     roots: Object.freeze([
       Object.freeze({
         class: 'durable_data', path: '/fixture/data',
-        filesystem_acl_capable: true, ensured: true, verified: true
+        filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
       }),
       Object.freeze({
         class: 'runtime_data', path: '/fixture/runtime',
-        filesystem_acl_capable: true, ensured: true, verified: true
+        filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
       }),
       Object.freeze({
         class: 'provider_temp_parent', path: providerTempParent(tempBase),
-        filesystem_acl_capable: true, ensured: true, verified: true
+        filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
       })
     ]),
+    assured_paths: Object.freeze([]),
     operation: 'ensure_and_verify'
   });
   const ensured = async (target, _options) => ({
@@ -649,6 +650,54 @@ test('Windows attribution is visible but ACL-unverified runs are never swept or 
   assert.equal(swept.refused, 1);
   await access(run.directory);
   await cleanupProviderTempRun(run);
+});
+
+test('Windows provider temp DACL failures preserve typed platform-integrity metadata', async (t) => {
+  const failure = Object.freeze({ ok: false, code: 'wide_acl' });
+  const cases = [
+    {
+      name: 'parent verify result',
+      overrides: { verifyPrivateDirImpl: async () => failure }
+    },
+    {
+      name: 'run directory ensure result',
+      overrides: {
+        ensurePrivateDirImpl: async () => failure
+      }
+    },
+    {
+      name: 'ownership marker ensure result',
+      overrides: {
+        ensurePrivateFileImpl: async () => failure
+      }
+    },
+    {
+      name: 'parent helper throw',
+      overrides: {
+        verifyPrivateDirImpl: async () => {
+          throw new Error('helper transport failed');
+        }
+      },
+      failureCode: 'windows_private_state_helper_unavailable'
+    }
+  ];
+  for (const fixture of cases) {
+    await t.test(fixture.name, async () => {
+      const tempBase = await temporaryBase(`windows-dacl-${fixture.name.replaceAll(' ', '-')}`);
+      await assert.rejects(
+        createTempRun({
+          tempBase,
+          platform: 'win32',
+          randomBytesImpl: deterministicRandom(0x91),
+          ...fixture.overrides
+        }),
+        (error) => error?.failureCode === (fixture.failureCode ?? 'windows_private_state_wide_acl')
+          && error?.platformIntegrityFailure === true
+          && error?.providerExecution === 'definite_non_execution'
+          && error?.blockMutation === true
+      );
+    });
+  }
 });
 
 test('Windows provider temp creation refuses a missing private-state verification when required', async () => {

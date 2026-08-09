@@ -10,21 +10,21 @@ import {
 const ROOTS = Object.freeze([
   Object.freeze({
     class: 'durable_data', path: 'C:\\Buddy\\data',
-    filesystem_acl_capable: true, ensured: true, verified: true
+    filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
   }),
   Object.freeze({
     class: 'runtime_data', path: 'C:\\Buddy\\runtime',
-    filesystem_acl_capable: true, ensured: true, verified: true
+    filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
   }),
   Object.freeze({
     class: 'provider_temp_parent', path: 'C:\\Temp\\codex-buddy-provider-v1-user',
-    filesystem_acl_capable: true, ensured: true, verified: true
+    filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
   })
 ]);
 
 function goodVerification(overrides = {}) {
   return Object.freeze({
-    schema_version: '1',
+    schema_version: '2',
     platform: 'win32',
     arch: 'x64',
     ok: true,
@@ -39,6 +39,7 @@ function goodVerification(overrides = {}) {
     }),
     filesystem_acl_capable: true,
     roots: ROOTS,
+    assured_paths: Object.freeze([]),
     operation: 'ensure_and_verify',
     ...overrides
   });

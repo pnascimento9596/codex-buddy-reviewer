@@ -20,6 +20,7 @@ import {
 import {
   assertWindowsPrivateStateVerification,
   windowsPrivateStateDaclOptions,
+  windowsPrivateStateFailureCodeForResult,
   windowsPrivateStateRootIsVerified
 } from '../windows-private-state-roots.mjs';
 import { providerTempParent } from './temp-path.mjs';
@@ -59,6 +60,23 @@ export const PROVIDER_TEMP_INVENTORY_DEADLINE_MS = 2_000;
 const issuedRuns = new WeakMap();
 
 class ProviderTempInventoryIncomplete extends Error {}
+
+function windowsProviderTempIntegrityError(message, {
+  result = null,
+  cause = null,
+  execution = 'definite_non_execution'
+} = {}) {
+  const error = new Error(message, cause ? { cause } : undefined);
+  error.failureCode = result
+    ? windowsPrivateStateFailureCodeForResult(result)
+    : typeof cause?.failureCode === 'string'
+      ? cause.failureCode
+      : 'windows_private_state_helper_unavailable';
+  error.platformIntegrityFailure = true;
+  error.providerExecution = execution;
+  error.blockMutation = true;
+  return error;
+}
 
 function plainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -828,18 +846,33 @@ export async function createProviderTempRun({
       'provider_temp_parent',
       expectedParent
     )) {
-      throw new Error('Windows provider temporary parent differs from its verified root');
+      throw windowsProviderTempIntegrityError(
+        'Windows provider temporary parent differs from its verified root',
+        { result: { code: 'root_set_changed' }, execution: 'not_started' }
+      );
     }
     windowsDaclOptions = windowsPrivateStateDaclOptions(windowsPrivateStateVerification);
-    const verifiedParent = await verifyPrivateDirImpl(expectedParent, windowsDaclOptions);
+    let verifiedParent;
+    try {
+      verifiedParent = await verifyPrivateDirImpl(expectedParent, windowsDaclOptions);
+    } catch (cause) {
+      throw windowsProviderTempIntegrityError(
+        'Windows provider temporary parent verification failed before creation',
+        { cause }
+      );
+    }
     if (!verifiedParent?.ok) {
-      throw new Error('Windows provider temporary parent failed verification before creation');
+      throw windowsProviderTempIntegrityError(
+        'Windows provider temporary parent failed verification before creation',
+        { result: verifiedParent }
+      );
     }
   } else if (platform === 'win32' && requireWindowsPrivateStateVerification) {
     const error = new Error('Windows provider temporary creation requires verified private-state roots');
     error.failureCode = 'windows_private_state_acl_unavailable';
     error.platformIntegrityFailure = true;
     error.providerExecution = 'not_started';
+    error.blockMutation = true;
     throw error;
   }
   await sweepStaleProviderTempRuns({
@@ -863,9 +896,20 @@ export async function createProviderTempRun({
   let identityHandle;
   try {
     if (windowsDaclOptions !== null) {
-      const ensured = await ensurePrivateDirImpl(directory, windowsDaclOptions);
+      let ensured;
+      try {
+        ensured = await ensurePrivateDirImpl(directory, windowsDaclOptions);
+      } catch (cause) {
+        throw windowsProviderTempIntegrityError(
+          'Provider temporary run directory Windows DACL ensure failed',
+          { cause }
+        );
+      }
       if (!ensured?.ok) {
-        throw new Error('Provider temporary run directory failed Windows DACL ensure');
+        throw windowsProviderTempIntegrityError(
+          'Provider temporary run directory failed Windows DACL ensure',
+          { result: ensured }
+        );
       }
     }
     const runStat = await lstat(directory, { bigint: true });
@@ -897,12 +941,23 @@ export async function createProviderTempRun({
       await handle.close();
     }
     if (windowsDaclOptions !== null) {
-      const ensured = await ensurePrivateFileImpl(
-        path.join(directory, OWNER_MARKER),
-        windowsDaclOptions
-      );
+      let ensured;
+      try {
+        ensured = await ensurePrivateFileImpl(
+          path.join(directory, OWNER_MARKER),
+          windowsDaclOptions
+        );
+      } catch (cause) {
+        throw windowsProviderTempIntegrityError(
+          'Provider temporary ownership marker Windows DACL ensure failed',
+          { cause }
+        );
+      }
       if (!ensured?.ok) {
-        throw new Error('Provider temporary ownership marker failed Windows DACL ensure');
+        throw windowsProviderTempIntegrityError(
+          'Provider temporary ownership marker failed Windows DACL ensure',
+          { result: ensured }
+        );
       }
     }
     const checked = await readMarker(directory, runId, platform);
