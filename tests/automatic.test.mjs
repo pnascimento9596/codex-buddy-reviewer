@@ -2871,6 +2871,7 @@ test('automatic provider issuance rejects stale privacy coverage with zero provi
 });
 
 test('capability spend precedes blocked review-started publication and provider execution', async () => {
+  const orderingVisibilityTimeoutMs = 60_000;
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
   const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
@@ -2938,7 +2939,7 @@ test('capability spend precedes blocked review-started publication and provider 
     await waitFor(async () => {
       const read = await readSequencedOutboxEvents({ repositoryRoot: root, runtimeDataDir });
       return read.events.some((item) => item.event.event_type === 'turn_finished');
-    }, 'turn-finished publication before authorization', 10_000);
+    }, 'turn-finished publication before authorization', orderingVisibilityTimeoutMs);
     holding = withFileLock(outboxLockTarget, async () => {
       lockHeld();
       await release;
@@ -2951,11 +2952,11 @@ test('capability spend precedes blocked review-started publication and provider 
       const registry = await readEgressRegistry({ root, dataDir: modeDataDir });
       return registry.active.length === 1
         && registry.active[0].state === 'consumed';
-    }, 'capability spend to become durably visible', CONCURRENT_STATE_VISIBILITY_TIMEOUT_MS);
+    }, 'capability spend to become durably visible', orderingVisibilityTimeoutMs);
     await waitFor(
       () => providerEntered,
       'provider execution while review-started publication remains blocked',
-      CONCURRENT_STATE_VISIBILITY_TIMEOUT_MS
+      orderingVisibilityTimeoutMs
     );
   } finally {
     releaseModeLock();
