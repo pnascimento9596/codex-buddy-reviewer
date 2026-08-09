@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  readWindowsEgressKillSwitch,
+  WINDOWS_PROVIDER_EGRESS_KILL_SWITCH,
   WINDOWS_PROVIDER_EGRESS_GATE_LIFTED,
   evaluateProviderEgressPlatformPolicy,
   providerEgressPlatformPolicy
@@ -88,6 +90,26 @@ test('pure policy allows Windows only with the lifted gate and complete injected
   });
   assert.equal(policy.allowed, true);
   assert.equal(policy.failureCode, null);
+});
+
+test('null environment input cannot bypass the live Windows egress kill-switch', () => {
+  const previous = process.env[WINDOWS_PROVIDER_EGRESS_KILL_SWITCH];
+  process.env[WINDOWS_PROVIDER_EGRESS_KILL_SWITCH] = '1';
+  try {
+    assert.equal(readWindowsEgressKillSwitch(null), true);
+    const policy = evaluateProviderEgressPlatformPolicy({
+      platform: 'win32',
+      arch: 'x64',
+      verification: goodVerification(),
+      gateLifted: true,
+      env: null
+    });
+    assert.equal(policy.allowed, false);
+    assert.equal(policy.failureCode, 'windows_private_state_kill_switch');
+  } finally {
+    if (previous === undefined) delete process.env[WINDOWS_PROVIDER_EGRESS_KILL_SWITCH];
+    else process.env[WINDOWS_PROVIDER_EGRESS_KILL_SWITCH] = previous;
+  }
 });
 
 test('lifted-gate policy preserves distinct Windows private-state failures', async (t) => {
