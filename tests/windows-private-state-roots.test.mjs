@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -159,21 +160,25 @@ test('Windows root re-verification never repairs a failed root', async () => {
 
 test('default Windows inventory keeps one active root per class and assures non-active runtime paths', async () => {
   const visited = [];
-  const activeRuntime = '/laneh/Buddy/active-runtime';
-  const alternateRuntime = '/laneh/Buddy/alternate-runtime';
-  const discoveredRuntime = '/laneh/Codex/plugins/data/codex-buddy-reviewer-discovered';
-  const symlinkedRuntime = '/laneh/Codex/plugins/data/codex-buddy-reviewer-symlink';
+  const laneRoot = path.resolve(path.parse(process.cwd()).root, 'laneh');
+  const dataRoot = path.join(laneRoot, 'Buddy', 'data');
+  const activeRuntime = path.join(laneRoot, 'Buddy', 'active-runtime');
+  const alternateRuntime = path.join(laneRoot, 'Buddy', 'alternate-runtime');
+  const codexHome = path.join(laneRoot, 'Codex');
+  const pluginDataRoot = path.join(codexHome, 'plugins', 'data');
+  const discoveredRuntime = path.join(pluginDataRoot, 'codex-buddy-reviewer-discovered');
+  const symlinkedRuntime = path.join(pluginDataRoot, 'codex-buddy-reviewer-symlink');
   const verification = await ensureWindowsPrivateStateRoots({
     platform: 'win32',
     arch: 'x64',
     env: {
-      CODEX_BUDDY_DATA_DIR: '/laneh/Buddy/data',
+      CODEX_BUDDY_DATA_DIR: dataRoot,
       PLUGIN_DATA: activeRuntime,
       CLAUDE_PLUGIN_DATA: alternateRuntime
     },
-    codexHome: '/laneh/Codex',
-    tempBase: '/laneh/Buddy/temp-base',
-    readdirImpl: async (target) => target === '/laneh/Codex/plugins/data'
+    codexHome,
+    tempBase: path.join(laneRoot, 'Buddy', 'temp-base'),
+    readdirImpl: async (target) => target === pluginDataRoot
       ? [
           { name: 'codex-buddy-reviewer-discovered' },
           { name: 'codex-buddy-reviewer-symlink' },
@@ -228,7 +233,7 @@ test('default Windows inventory keeps one active root per class and assures non-
   ]);
   assert.equal(verification.assured_paths.every((entry) => entry.ensured && entry.verified), true);
   assert.equal(visited.some(([, path]) => path === symlinkedRuntime), false);
-  assert.equal(visited.filter(([, path]) => path === '/laneh/Buddy/data').length, 4);
+  assert.equal(visited.filter(([, path]) => path === dataRoot).length, 4);
 });
 
 test('Windows root re-verification rejects a supplied active root-set mismatch', async () => {
