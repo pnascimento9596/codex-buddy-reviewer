@@ -57,16 +57,16 @@ function badVerification(failureCode, message = 'verification failed') {
   });
 }
 
-test('production Windows provider egress gate is re-engaged for the 0.5.1 line', () => {
-  assert.equal(WINDOWS_PROVIDER_EGRESS_GATE_LIFTED, false);
+test('production Windows provider egress gate is deliberately lifted for the RC re-seal', () => {
+  assert.equal(WINDOWS_PROVIDER_EGRESS_GATE_LIFTED, true);
   const policy = providerEgressPlatformPolicy({
     platform: 'win32',
     arch: 'x64',
     verification: goodVerification(),
     env: {}
   });
-  assert.equal(policy.allowed, false);
-  assert.equal(policy.failureCode, 'windows_private_state_acl_unavailable');
+  assert.equal(policy.allowed, true);
+  assert.equal(policy.failureCode, null);
 });
 
 test('production Windows provider egress gate fails closed without verification', () => {
