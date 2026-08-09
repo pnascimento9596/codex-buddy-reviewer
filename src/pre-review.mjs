@@ -571,6 +571,9 @@ function dependencies(options) {
     reverifyWindowsPrivateState: options.reverifyWindowsPrivateState ?? reverifyWindowsPrivateStateRoots,
     windowsPrivateStateVerification: options.windowsPrivateStateVerification ?? null,
     windowsPrivateStateOptions: options.windowsPrivateStateOptions ?? {},
+    modeDataDir: options.modeDataDir,
+    runtimeDataDir: options.runtimeDataDir,
+    providerTempBase: options.providerTempBase,
     captureSnapshot: options.captureSnapshot ?? captureTurnSnapshot,
     buildEvidence: options.buildEvidence ?? buildTurnEvidence,
     privacyComplete: options.privacyComplete ?? privacyCoverageIsCurrentComplete,
@@ -638,6 +641,9 @@ async function reverifyProviderRoots(deps, execution = 'not_started') {
       platform: deps.platform,
       arch: deps.arch,
       env: deps.env,
+      dataDir: deps.modeDataDir,
+      runtimeDataDir: deps.runtimeDataDir,
+      tempBase: deps.providerTempBase,
       ...deps.windowsPrivateStateOptions
     }
   );
@@ -646,6 +652,19 @@ async function reverifyProviderRoots(deps, execution = 'not_started') {
     execution,
     requireEnsured: false
   });
+}
+
+function assertProviderPlatformAllowed(deps, verification = deps.windowsPrivateStateVerification) {
+  const policy = deps.platformPolicy({
+    platform: deps.platform,
+    arch: deps.arch,
+    env: deps.env,
+    verification
+  });
+  if (policy.allowed) return policy;
+  const error = new Error(`${policy.summary} ${policy.detail ?? ''}`.trim());
+  error.failureCode = policy.failureCode;
+  throw error;
 }
 
 async function issueProviderLanes({ root, input, mode, modeDataDir, evidence, reviewKey, lanes, deps }) {
@@ -681,6 +700,7 @@ async function issueProviderLanes({ root, input, mode, modeDataDir, evidence, re
       responseSchema: prepared.responseSchema
     }, { purpose: 'technical_review', summaryGuardPacket: null })
   }));
+  assertProviderPlatformAllowed(deps);
   const capabilities = await deps.issueCapabilities({ root, dataDir: modeDataDir, entries });
   return { mode, lanes, capabilities };
 }
@@ -704,6 +724,7 @@ async function executeProviders({
     const settlements = await Promise.allSettled(lanes.map((lane, index) => (
       deps.spendCapability({ root, dataDir: modeDataDir, capability: capabilities[index] }, async (approvedRequest) => {
         let executionVerification = await reverifyProviderRoots(deps, 'definite_non_execution');
+        assertProviderPlatformAllowed(deps);
         reviewStartedEmission ??= safeEmit(deps, {
           runtimeDataDir,
           repositoryRoot: root,
@@ -729,6 +750,9 @@ async function executeProviders({
             minConfidence: mode.min_confidence,
             timeoutMs: mode.timeout_ms,
             dataDir: modeDataDir,
+            runtimeDataDir,
+            providerTempBase: deps.providerTempBase,
+            windowsPrivateStateOptions: deps.windowsPrivateStateOptions,
             store: false,
             retainEvidence: false,
             summaryGuardPacket: null,
@@ -744,6 +768,9 @@ async function executeProviders({
                 platform: deps.platform,
                 arch: deps.arch,
                 env: deps.env,
+                dataDir: modeDataDir,
+                runtimeDataDir,
+                tempBase: deps.providerTempBase,
                 ...deps.windowsPrivateStateOptions
               }
             );
@@ -763,6 +790,9 @@ async function executeProviders({
               platform: deps.platform,
               arch: deps.arch,
               env: deps.env,
+              dataDir: modeDataDir,
+              runtimeDataDir,
+              tempBase: deps.providerTempBase,
               ...deps.windowsPrivateStateOptions
             }
           );
@@ -906,6 +936,8 @@ export async function runPreReviewWorker(rawInput, options = {}) {
   const deps = dependencies(options);
   const runtimeDataDir = input.runtime_data_dir ?? options.runtimeDataDir;
   const modeDataDir = input.mode_data_dir ?? options.modeDataDir;
+  deps.runtimeDataDir = runtimeDataDir;
+  deps.modeDataDir = modeDataDir;
   let root;
   try {
     root = await deps.resolveRoot(input.cwd);
@@ -914,6 +946,42 @@ export async function runPreReviewWorker(rawInput, options = {}) {
   }
   await assertStateOutsideRepository(root, resolveRuntimeDataDir(runtimeDataDir), 'runtime state');
   await assertStateOutsideRepository(root, resolveDataDir(modeDataDir), 'mode state');
+  if (deps.platform === 'win32'
+      && (deps.ensureWindowsPrivateState !== ensureWindowsPrivateStateRoots
+        || deps.windowsPrivateStateVerification)) {
+    try {
+      if (deps.windowsPrivateStateVerification === null) {
+        deps.windowsPrivateStateVerification = await deps.ensureWindowsPrivateState({
+          platform: deps.platform,
+          arch: deps.arch,
+          env: deps.env,
+          dataDir: modeDataDir,
+          runtimeDataDir,
+          tempBase: deps.providerTempBase,
+          ...deps.windowsPrivateStateOptions
+        });
+      } else {
+        await reverifyProviderRoots(deps, 'not_started');
+      }
+    } catch (error) {
+      return {
+        skipped: 'worker_error',
+        error,
+        root,
+        failure: boundWorkerFailure(error, 'private_state')
+      };
+    }
+  }
+  // Do not claim or settle the worker before Windows root assurance and the
+  // side-effect-free platform policy pass. The pre-review state itself may live
+  // under the unverified root. A starting owner intentionally fences relaunches;
+  // Stop's final-request path can take over because it has no active review key.
+  if (!deps.platformPolicy({
+    platform: deps.platform,
+    arch: deps.arch,
+    env: deps.env,
+    verification: deps.windowsPrivateStateVerification
+  }).allowed) return { skipped: 'platform_blocked', root };
   const directory = automaticTurnDirectory(runtimeDataDir, root, input.session_id, input.turn_id);
   const runtimeRoot = resolveRuntimeDataDir(runtimeDataDir);
   await deps.ensurePrivatePath(runtimeRoot, directory);
@@ -946,25 +1014,6 @@ export async function runPreReviewWorker(rawInput, options = {}) {
         || !validConsentTimestamp(mode.continuous_review_consented_at)) {
       return disable('continuous_disabled');
     }
-    if (deps.platform === 'win32'
-        && (deps.ensureWindowsPrivateState !== ensureWindowsPrivateStateRoots
-          || deps.windowsPrivateStateVerification)) {
-      deps.windowsPrivateStateVerification = deps.windowsPrivateStateVerification
-        ?? await deps.ensureWindowsPrivateState({
-          platform: deps.platform,
-          arch: deps.arch,
-          env: deps.env,
-          dataDir: modeDataDir,
-          runtimeDataDir,
-          ...deps.windowsPrivateStateOptions
-        });
-    }
-    if (!deps.platformPolicy({
-      platform: deps.platform,
-      arch: deps.arch,
-      env: deps.env,
-      verification: deps.windowsPrivateStateVerification
-    }).allowed) return disable('platform_blocked');
     phase = 'baseline_load';
     const baselineRecord = await deps.readJson(path.join(directory, 'baseline.json'));
     if (!baselineRecord?.snapshot || baselineRecord.mode_revision !== mode.config_revision) {

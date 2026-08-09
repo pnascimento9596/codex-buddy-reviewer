@@ -78,8 +78,7 @@ import {
   assertWindowsPrivateStateVerification,
   ensureWindowsPrivateStateRoots,
   isWindowsPlatformIntegrityFailure,
-  reverifyWindowsPrivateStateRoots,
-  WindowsPrivateStateVerificationError
+  reverifyWindowsPrivateStateRoots
 } from './windows-private-state-roots.mjs';
 
 const MAX_CONTINUATION_CHARS = 1_800;
@@ -108,7 +107,13 @@ function continuousReviewIsConsented(mode) {
 async function ensureLifecycleWindowsPrivateState(options) {
   const platform = options.platform ?? process.platform;
   if (platform !== 'win32') return null;
-  if (options.windowsPrivateStateVerification) return options.windowsPrivateStateVerification;
+  if (options.windowsPrivateStateVerification) {
+    return reverifyLifecycleWindowsPrivateState(
+      options.windowsPrivateStateVerification,
+      options,
+      'not_started'
+    );
+  }
   // The automatic hook path only builds DACL verification when a caller wires an
   // explicit ensure implementation (host integration). Until a real Windows
   // Codex host is observed (host e2e UNRUN), the default builder is not invoked
@@ -136,6 +141,9 @@ async function reverifyLifecycleWindowsPrivateState(verification, options, execu
       platform,
       arch: options.arch,
       env: options.env,
+      dataDir: options.modeDataDir,
+      runtimeDataDir: options.runtimeDataDir,
+      tempBase: options.providerTempBase,
       ...(options.windowsPrivateStateOptions ?? {})
     }
   );
@@ -152,6 +160,14 @@ function lifecyclePlatformPolicy(options, verification) {
     env: options.env,
     verification
   });
+}
+
+function assertLifecyclePlatformAllowed(options, verification) {
+  const policy = lifecyclePlatformPolicy(options, verification);
+  if (policy.allowed) return policy;
+  const error = new Error(`${policy.summary} ${policy.detail ?? ''}`.trim());
+  error.failureCode = policy.failureCode;
+  throw error;
 }
 
 function intentionalProviderCancellation(error) {
@@ -1107,6 +1123,7 @@ export async function reviewTurnStop(input, options = {}) {
         options,
         'not_started'
       );
+      assertLifecyclePlatformAllowed(options, windowsPrivateStateVerification);
       const entries = executableReviewers.map(({ reviewer, sourceIndex }) => {
         const packet = sourceIndex === 0 ? primaryPacket : null;
         const preparedRequest = prepareReviewRequest(evidence, { summaryGuardPacket: packet });
@@ -1233,6 +1250,7 @@ export async function reviewTurnStop(input, options = {}) {
               options,
               'definite_non_execution'
             );
+            assertLifecyclePlatformAllowed(options, executionVerification);
             reviewStartedEmission = safeEmit({
               runtimeDataDir: options.runtimeDataDir, repositoryRoot: root,
               sessionId: input.session_id, turnId: input.turn_id, reviewKey,
@@ -1248,6 +1266,9 @@ export async function reviewTurnStop(input, options = {}) {
               arch: options.arch,
               env: options.env,
               windowsPrivateStateVerification: executionVerification,
+              runtimeDataDir: options.runtimeDataDir,
+              providerTempBase: options.providerTempBase,
+              windowsPrivateStateOptions: options.windowsPrivateStateOptions,
               minConfidence: authorizedMode.min_confidence,
               timeoutMs: authorizedMode.timeout_ms,
               dataDir: options.modeDataDir,
@@ -1275,19 +1296,11 @@ export async function reviewTurnStop(input, options = {}) {
               }
             } catch (error) {
               if ((options.platform ?? process.platform) === 'win32' && lane.providerAttempted) {
-                const terminalVerification = await (options.reverifyWindowsPrivateState
-                  ?? reverifyWindowsPrivateStateRoots)(executionVerification, {
-                  platform: 'win32',
-                  arch: options.arch,
-                  env: options.env,
-                  ...(options.windowsPrivateStateOptions ?? {})
-                });
-                if (!terminalVerification?.ok) {
-                  throw new WindowsPrivateStateVerificationError(terminalVerification, {
-                    execution: 'containment',
-                    message: 'Windows private-state integrity failed while provider execution was active.'
-                  });
-                }
+                await reverifyLifecycleWindowsPrivateState(
+                  executionVerification,
+                  options,
+                  'containment'
+                );
               }
               throw error;
             }

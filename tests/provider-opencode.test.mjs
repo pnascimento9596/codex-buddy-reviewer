@@ -10,6 +10,7 @@ import {
   parseOpenCodeTransport,
   reviewWithOpenCode
 } from '../src/providers/opencode.mjs';
+import { providerTempParent } from '../src/providers/temp-path.mjs';
 import { REVIEW_RESULT_SCHEMA } from '../src/review-schema.mjs';
 
 function reviewResult(summary = 'No validated defect.') {
@@ -36,6 +37,54 @@ async function removeThenFailCleanup(target, options) {
   await rm(target, options);
   throw new Error('SECRET OPENCODE CLEANUP DIAGNOSTIC');
 }
+
+function completeWindowsVerificationForProviderTemp() {
+  return {
+    schema_version: '2', platform: 'win32', arch: 'x64', ok: true,
+    failure_code: null, message: null,
+    helper: {
+      path: '/fixture/missing-buddy-job-supervisor.exe', arch: 'x64',
+      sha256: 'a'.repeat(64), protocol_version: '2', verified: true
+    },
+    filesystem_acl_capable: true,
+    roots: [
+      { class: 'durable_data', path: '/fixture/Buddy/data', filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true },
+      { class: 'runtime_data', path: '/fixture/Buddy/runtime', filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true },
+      { class: 'provider_temp_parent', path: providerTempParent(), filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true }
+    ],
+    assured_paths: [], operation: 'ensure_and_verify'
+  };
+}
+
+test('OpenCode preserves provider-temp integrity failure even when preflight deadline expires', async () => {
+  let clockReads = 0;
+  let processCalls = 0;
+  await assert.rejects(reviewWithOpenCode({
+    root: '/fixture/repository',
+    prompt: 'bounded review packet',
+    model: 'anthropic/claude-opus-4-6',
+    effort: 'high',
+    timeoutMs: 5_000,
+    responseSchema: REVIEW_RESULT_SCHEMA,
+    platform: 'win32',
+    windowsPrivateStateVerification: completeWindowsVerificationForProviderTemp(),
+    monotonicNow: () => (clockReads++ === 0 ? 0 : 10_000),
+    run: async () => {
+      processCalls += 1;
+      throw new Error('provider process must not start');
+    }
+  }), (error) => {
+    assert.equal(error instanceof ProviderFailure, true);
+    assert.equal(error.platformIntegrityFailure, true);
+    assert.equal(error.providerExecution, 'definite_non_execution');
+    assert.equal(error.blockMutation, true);
+    assert.match(error.failureCode, /^windows_private_state_/u);
+    assert.notEqual(error.failureCode, 'deadline_exceeded');
+    assert.equal(error.run.failure_code, error.failureCode);
+    return true;
+  });
+  assert.equal(processCalls, 0);
+});
 
 test('OpenCode uses an empty private cwd, isolated config, denied tools, and stdin-only prompt transport', async () => {
   const prompt = 'bounded immutable evidence packet';

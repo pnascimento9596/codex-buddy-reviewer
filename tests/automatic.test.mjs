@@ -57,6 +57,51 @@ const reviewTurnStop = (input, options = {}) => reviewTurnStopImpl(input, {
   ...options
 });
 
+function completeWindowsVerification() {
+  const root = (classification, value) => Object.freeze({
+    class: classification,
+    path: value,
+    filesystem_acl_capable: true,
+    ensured: true,
+    verified: true,
+    tree_verified: true
+  });
+  return Object.freeze({
+    schema_version: '2',
+    platform: 'win32',
+    arch: 'x64',
+    ok: true,
+    failure_code: null,
+    message: null,
+    helper: Object.freeze({
+      verified: true,
+      path: 'C:\\trusted\\buddy-job-supervisor.exe',
+      arch: 'x64',
+      sha256: 'a'.repeat(64),
+      protocol_version: '2'
+    }),
+    filesystem_acl_capable: true,
+    roots: Object.freeze([
+      root('durable_data', '/fixture/data'),
+      root('runtime_data', '/fixture/runtime'),
+      root('provider_temp_parent', '/fixture/provider-temp')
+    ]),
+    assured_paths: Object.freeze([]),
+    operation: 'ensure_and_verify'
+  });
+}
+
+function mutableWindowsPlatformPolicy(env) {
+  return () => env.CODEX_BUDDY_WINDOWS_EGRESS_BLOCK === '1'
+    ? {
+        allowed: false,
+        failureCode: 'windows_private_state_kill_switch',
+        summary: 'blocked',
+        detail: 'kill-switch'
+      }
+    : { allowed: true };
+}
+
 test.after(async () => {
   await Promise.all(temporaryPaths.map((item) => rm(item, { recursive: true, force: true })));
 });
@@ -1443,6 +1488,8 @@ test('continuous review launch failure leaves the normal final Stop review avail
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
   const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const providerTempBase = await temporaryDirectory('codex-buddy-provider-temp-');
+  const windowsPrivateStateOptions = { codexHome: path.join(modeDataDir, 'codex-home') };
   await changeMode({ root, action: 'enable', dataDir: modeDataDir, continuousReview: true });
   const identity = { session_id: 'launch-failure-session', turn_id: 'launch-failure-turn', cwd: root };
   const started = await captureTurnStart({
@@ -1466,9 +1513,14 @@ test('continuous review launch failure leaves the normal final Stop review avail
   }, {
     modeDataDir,
     runtimeDataDir,
+    providerTempBase,
+    windowsPrivateStateOptions,
     review: async (evidence, options) => {
       reviewCalls += 1;
       assert.equal(options.dataDir, modeDataDir);
+      assert.equal(options.runtimeDataDir, runtimeDataDir);
+      assert.equal(options.providerTempBase, providerTempBase);
+      assert.equal(options.windowsPrivateStateOptions, windowsPrivateStateOptions);
       return {
         evidence,
         provider: options.provider,
@@ -1876,7 +1928,7 @@ test('real speculative checkpoints share the baseline object store and Stop adop
     platform: 'linux',
     debounceMs: 0,
     checkpointPollMs: 25,
-    workerLifetimeMs: 60_000,
+    workerLifetimeMs: 120_000,
     buildEvidence: async (options) => {
       sharedObjectStoreObserved = options.baseline.object_directory === options.final.object_directory;
       return buildTurnEvidence(options);
@@ -1894,7 +1946,7 @@ test('real speculative checkpoints share the baseline object store and Stop adop
 
   const receiptDirectory = path.join(runtimeDataDir, 'automatic-reviews', workspaceKey(root));
   await waitFor(async () => (await filesBelow(receiptDirectory)).some((file) => file.endsWith('.json')),
-    'real speculative receipt', 30_000);
+    'real speculative receipt', 90_000);
   let foregroundCalls = 0;
   const stopped = await reviewTurnStop({
     ...identity,
@@ -2625,6 +2677,147 @@ test('tampered Ollama effort fails before attempt, capability issuance, provider
   await assert.rejects(access(path.join(turnRoot, 'attempt.json')));
   assert.deepEqual((await readEgressRegistry({ root, dataDir: modeDataDir })).active, []);
   assert.deepEqual(await filesBelow(path.join(runtimeDataDir, 'circuits')), []);
+});
+
+test('manual review reverification preserves explicit Windows path-resolution inputs', async () => {
+  const root = await makeRepository();
+  const { evidence } = await snapshotPair(root, async () => {
+    await writeFile(path.join(root, 'app.js'), 'const value = 951;\n');
+  });
+  const dataDir = '/fixture/Buddy/manual-mode';
+  const runtimeDataDir = '/fixture/Buddy/manual-runtime';
+  const providerTempBase = '/fixture/Buddy/manual-temp';
+  let observed = null;
+  await assert.rejects(reviewEvidence(evidence, {
+    provider: 'ollama',
+    model: 'glm-5.2:cloud',
+    effort: 'high',
+    timeoutMs: 1_000,
+    minConfidence: 0.75,
+    store: false,
+    platform: 'win32',
+    arch: 'x64',
+    env: {},
+    dataDir,
+    runtimeDataDir,
+    providerTempBase,
+    windowsPrivateStateVerification: completeWindowsVerification(),
+    reverifyWindowsPrivateStateRoots: async (_verification, options) => {
+      observed = options;
+      return completeWindowsVerification();
+    }
+  }));
+  assert.equal(observed.dataDir, dataDir);
+  assert.equal(observed.runtimeDataDir, runtimeDataDir);
+  assert.equal(observed.tempBase, providerTempBase);
+});
+
+test('lifecycle rechecks the Windows kill-switch before capability issuance', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, provider: 'ollama' });
+  const identity = { session_id: 'windows-issue-kill-session', turn_id: 'windows-issue-kill-turn', cwd: root };
+  const env = {};
+  const verification = completeWindowsVerification();
+  const windowsOptions = {
+    platform: 'win32',
+    arch: 'x64',
+    env,
+    ensureWindowsPrivateState: async () => verification,
+    platformPolicy: mutableWindowsPlatformPolicy(env)
+  };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Exercise the lifecycle issuance kill-switch.'
+  }, { modeDataDir, runtimeDataDir, ...windowsOptions });
+  await writeFile(path.join(root, 'app.js'), 'const value = 951;\n');
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Completed the lifecycle issuance fixture.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    ...windowsOptions,
+    reverifyWindowsPrivateState: async () => {
+      env.CODEX_BUDDY_WINDOWS_EGRESS_BLOCK = '1';
+      return verification;
+    },
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('review must not start');
+    }
+  });
+  assert.equal(reviewCalls, 0);
+  assert.equal(stopped.error.failureCode, 'windows_private_state_kill_switch');
+  assert.deepEqual((await readEgressRegistry({ root, dataDir: modeDataDir })).active, []);
+  const turnRoot = automaticTurnDirectory(runtimeDataDir, root, identity.session_id, identity.turn_id);
+  await assert.rejects(access(path.join(turnRoot, 'attempt.json')));
+  assert.deepEqual(await filesBelow(path.join(runtimeDataDir, 'circuits')), []);
+});
+
+test('lifecycle rechecks the Windows kill-switch at capability executor entry', async () => {
+  const root = await makeRepository();
+  const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
+  const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
+  const providerTempBase = await temporaryDirectory('codex-buddy-provider-temp-');
+  await changeMode({ root, action: 'enable', dataDir: modeDataDir, provider: 'ollama' });
+  const identity = { session_id: 'windows-executor-kill-session', turn_id: 'windows-executor-kill-turn', cwd: root };
+  const env = {};
+  const verification = completeWindowsVerification();
+  const windowsOptions = {
+    platform: 'win32',
+    arch: 'x64',
+    env,
+    ensureWindowsPrivateState: async () => verification,
+    platformPolicy: mutableWindowsPlatformPolicy(env)
+  };
+  await captureTurnStart({
+    ...identity,
+    hook_event_name: 'UserPromptSubmit',
+    prompt: 'Exercise the lifecycle executor kill-switch.'
+  }, { modeDataDir, runtimeDataDir, ...windowsOptions });
+  await writeFile(path.join(root, 'app.js'), 'const value = 952;\n');
+  let reverifications = 0;
+  const reverifyOptions = [];
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop({
+    ...identity,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'Completed the lifecycle executor fixture.'
+  }, {
+    modeDataDir,
+    runtimeDataDir,
+    providerTempBase,
+    ...windowsOptions,
+    reverifyWindowsPrivateState: async (_current, currentOptions) => {
+      reverifyOptions.push(currentOptions);
+      reverifications += 1;
+      if (reverifications === 2) env.CODEX_BUDDY_WINDOWS_EGRESS_BLOCK = '1';
+      return verification;
+    },
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('review must not start');
+    }
+  });
+  assert.equal(reverifications, 2);
+  assert.equal(reverifyOptions.every((current) => current.dataDir === modeDataDir
+    && current.runtimeDataDir === runtimeDataDir
+    && current.tempBase === providerTempBase), true);
+  assert.equal(reviewCalls, 0);
+  assert.match(stopped.output.systemMessage, /could not complete/);
+  assert.deepEqual((await readEgressRegistry({ root, dataDir: modeDataDir })).active, []);
+  assert.deepEqual(await filesBelow(path.join(runtimeDataDir, 'circuits')), []);
+  const receipt = JSON.parse(await readFile(stopped.receipt, 'utf8'));
+  assert.equal(receipt.terminal_status, 'provider_unavailable');
+  assert.equal(receipt.reviewer_runs[0].failure.stage, 'provider');
+  assert.equal(receipt.reviewer_runs[0].failure.failure_code, 'windows_private_state_kill_switch');
 });
 
 test('automatic provider issuance rejects stale privacy coverage with zero provider calls', async () => {

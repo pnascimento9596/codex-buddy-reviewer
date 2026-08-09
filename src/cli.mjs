@@ -184,17 +184,29 @@ export async function runReview(options) {
   const platform = options.platform ?? process.platform;
   let windowsPrivateStateVerification = options.windowsPrivateStateVerification ?? null;
   if (!options.dryRun) {
-    if (platform === 'win32' && windowsPrivateStateVerification === null) {
-      windowsPrivateStateVerification = await (options.ensureWindowsPrivateStateRoots
-        ?? ensureWindowsPrivateStateRoots)({
-        platform,
-        arch: options.arch,
-        env: options.env,
-        dataDir: options.dataDir,
-        runtimeDataDir: options.runtimeDataDir,
-        tempBase: options.providerTempBase,
-        ...(options.windowsPrivateStateOptions ?? {})
-      });
+    if (platform === 'win32') {
+      windowsPrivateStateVerification = windowsPrivateStateVerification === null
+        ? await (options.ensureWindowsPrivateStateRoots ?? ensureWindowsPrivateStateRoots)({
+            platform,
+            arch: options.arch,
+            env: options.env,
+            dataDir: options.dataDir,
+            runtimeDataDir: options.runtimeDataDir,
+            tempBase: options.providerTempBase,
+            ...(options.windowsPrivateStateOptions ?? {})
+          })
+        : await (options.reverifyWindowsPrivateStateRoots ?? reverifyWindowsPrivateStateRoots)(
+            windowsPrivateStateVerification,
+            {
+              platform,
+              arch: options.arch,
+              env: options.env,
+              dataDir: options.dataDir,
+              runtimeDataDir: options.runtimeDataDir,
+              tempBase: options.providerTempBase,
+              ...(options.windowsPrivateStateOptions ?? {})
+            }
+          );
     }
     assertProviderEgressPlatformAllowed({
       platform,
@@ -293,6 +305,9 @@ export async function reviewEvidence(evidence, options) {
             platform,
             arch: options.arch,
             env: options.env,
+            dataDir: options.dataDir,
+            runtimeDataDir: options.runtimeDataDir,
+            tempBase: options.providerTempBase,
             ...(options.windowsPrivateStateOptions ?? {})
           }
         );

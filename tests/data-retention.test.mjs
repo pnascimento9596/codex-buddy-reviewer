@@ -28,7 +28,7 @@ import {
   cleanupProviderTempRun,
   createProviderTempRun
 } from '../src/providers/temp-state.mjs';
-import { opaqueKey, workspaceKey } from '../src/state.mjs';
+import { enumerateRuntimeDataDirs, opaqueKey, workspaceKey } from '../src/state.mjs';
 
 const temporaryPaths = [];
 test.after(async () => Promise.all(
@@ -40,6 +40,24 @@ async function temporaryDirectory(prefix) {
   temporaryPaths.push(directory);
   return directory;
 }
+
+test('Windows runtime inventory deduplicates case-only aliases before assurance', async () => {
+  const inventory = await enumerateRuntimeDataDirs({
+    platform: 'win32',
+    runtimeDataDir: '/fixture/Buddy/Runtime',
+    dataDir: '/fixture/Buddy/Data',
+    codexHome: '/fixture/Codex',
+    env: {
+      PLUGIN_DATA: '/fixture/buddy/runtime',
+      CLAUDE_PLUGIN_DATA: '/fixture/BUDDY/RUNTIME'
+    },
+    readdirImpl: async () => []
+  });
+  assert.equal(inventory.filter(({ origin }) => [
+    'runtime_data_dir', 'PLUGIN_DATA', 'CLAUDE_PLUGIN_DATA'
+  ].includes(origin)).length, 1);
+  assert.equal(inventory[0].origin, 'runtime_data_dir');
+});
 
 async function writeEmptyFiles(directory, count, prefix) {
   const batchSize = 128;

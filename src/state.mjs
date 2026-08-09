@@ -45,23 +45,25 @@ export async function enumerateRuntimeDataDirs({
   env = process.env,
   home = os.homedir(),
   pluginName = BUDDY_PLUGIN_PACKAGE_NAME,
+  platform = process.platform,
   readdirImpl = readdir,
   lstatImpl = lstat
 } = {}) {
   const roots = [];
   const seen = new Set();
-  const add = (candidate) => {
+  const add = (candidate, origin) => {
     if (typeof candidate !== 'string' || !candidate.trim()) return;
     const resolved = path.resolve(candidate.trim());
-    if (seen.has(resolved)) return;
-    seen.add(resolved);
-    roots.push(resolved);
+    const identity = platform === 'win32' ? resolved.toLowerCase() : resolved;
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    roots.push(Object.freeze({ path: resolved, origin }));
   };
 
-  add(runtimeDataDir);
+  add(runtimeDataDir, 'runtime_data_dir');
   for (const key of ['PLUGIN_DATA', 'CLAUDE_PLUGIN_DATA']) {
     const value = env[key];
-    if (typeof value === 'string' && value.trim()) add(value);
+    if (typeof value === 'string' && value.trim()) add(value, key);
   }
 
   const pluginsDataRoot = path.join(resolveBuddyCodexHome(codexHome, env, home), 'plugins', 'data');
@@ -80,13 +82,13 @@ export async function enumerateRuntimeDataDirs({
       // Discovery never follows a swapped root. Symlinked plugin-data entries are
       // ignored so status/purge cannot be pointed at an arbitrary filesystem tree.
       if (details.isSymbolicLink() || !details.isDirectory()) continue;
-      add(candidate);
+      add(candidate, 'discovered_plugin_data_sibling');
     }
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
 
-  add(resolveDataDir(dataDir, env, home));
+  add(resolveDataDir(dataDir, env, home), 'legacy_fallback');
   return Object.freeze([...roots]);
 }
 

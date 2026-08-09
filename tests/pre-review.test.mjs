@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { ProviderFailure } from '../src/provider-contract.mjs';
 import { runPreReviewWorker, startTurnPreReview } from '../src/pre-review.mjs';
 
 const NONCE = 'a'.repeat(48);
@@ -359,7 +360,7 @@ test('ordinary speculative provider failure increments its exact circuit', async
 
 function goodWindowsVerification() {
   return Object.freeze({
-    schema_version: '1',
+    schema_version: '2',
     platform: 'win32',
     arch: 'x64',
     ok: true,
@@ -376,17 +377,18 @@ function goodWindowsVerification() {
     roots: Object.freeze([
       Object.freeze({
         class: 'durable_data', path: 'C:\\Buddy\\data',
-        filesystem_acl_capable: true, ensured: true, verified: true
+        filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
       }),
       Object.freeze({
         class: 'runtime_data', path: 'C:\\Buddy\\runtime',
-        filesystem_acl_capable: true, ensured: true, verified: true
+        filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
       }),
       Object.freeze({
         class: 'provider_temp_parent', path: 'C:\\Buddy\\temp',
-        filesystem_acl_capable: true, ensured: true, verified: true
+        filesystem_acl_capable: true, ensured: true, verified: true, tree_verified: true
       })
     ]),
+    assured_paths: Object.freeze([]),
     operation: 'ensure_and_verify'
   });
 }
@@ -399,6 +401,175 @@ function failedWindowsVerification() {
     message: 'A Windows private-state root failed current-user DACL verification.'
   });
 }
+
+test('speculative worker verifies Windows roots before reading continuous-review consent', async () => {
+  const calls = [];
+  const seed = await harness({
+    options: {
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
+      ensureWindowsPrivateState: async () => {
+        calls.push('ensure');
+        return goodWindowsVerification();
+      },
+      platformPolicy: () => {
+        calls.push('policy');
+        return { allowed: true };
+      },
+      readMode: async () => {
+        calls.push('read_mode');
+        return mode('/fixture/root', { continuous_review_enabled: false });
+      }
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.skipped, 'continuous_disabled');
+  assert.deepEqual(calls, ['ensure', 'policy', 'read_mode']);
+  assert.equal(seed.metrics().captureCalls, 0);
+  assert.equal(seed.metrics().capabilityIssues, 0);
+  assert.equal(seed.metrics().reviewCalls, 0);
+});
+
+test('Windows platform refusal leaves the unclaimed starting owner fenced for Stop takeover', async () => {
+  const seed = await harness({
+    options: {
+      platform: 'win32',
+      arch: 'x64',
+      env: { CODEX_BUDDY_WINDOWS_EGRESS_BLOCK: '1' },
+      ensureWindowsPrivateState: async () => goodWindowsVerification(),
+      platformPolicy: () => ({
+        allowed: false,
+        failureCode: 'windows_private_state_kill_switch',
+        summary: 'blocked',
+        detail: 'kill-switch'
+      })
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.skipped, 'platform_blocked');
+  assert.equal(seed.state().worker_state, 'starting');
+  assert.equal(seed.state().worker_nonce, NONCE);
+  assert.equal(seed.metrics().captureCalls, 0);
+  assert.equal(seed.metrics().capabilityIssues, 0);
+  assert.equal(seed.metrics().reviewCalls, 0);
+});
+
+test('Windows kill-switch engaged at capability issuance blocks before issue', async () => {
+  const env = {};
+  const seed = await harness({
+    options: {
+      platform: 'win32',
+      arch: 'x64',
+      env,
+      ensureWindowsPrivateState: async () => goodWindowsVerification(),
+      reverifyWindowsPrivateState: async () => {
+        env.CODEX_BUDDY_WINDOWS_EGRESS_BLOCK = '1';
+        return goodWindowsVerification();
+      },
+      platformPolicy: ({ env: currentEnv }) => currentEnv.CODEX_BUDDY_WINDOWS_EGRESS_BLOCK === '1'
+        ? {
+            allowed: false,
+            failureCode: 'windows_private_state_kill_switch',
+            summary: 'blocked',
+            detail: 'kill-switch'
+          }
+        : { allowed: true }
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.skipped, 'worker_error');
+  assert.equal(result.failure.code, 'windows_private_state_kill_switch');
+  assert.equal(seed.metrics().capabilityIssues, 0);
+  assert.equal(seed.metrics().reviewCalls, 0);
+  assert.equal(seed.events.some((event) => event.type === 'review_started'), false);
+});
+
+test('Windows kill-switch engaged at executor entry blocks a spent capability before review', async () => {
+  const env = {};
+  let reverifications = 0;
+  const reverifyOptions = [];
+  const modeDataDir = '/fixture/Buddy/mode';
+  const runtimeDataDir = '/fixture/Buddy/runtime';
+  const providerTempBase = '/fixture/Buddy/temp';
+  const seed = await harness({
+    options: {
+      platform: 'win32',
+      arch: 'x64',
+      env,
+      modeDataDir,
+      runtimeDataDir,
+      providerTempBase,
+      ensureWindowsPrivateState: async () => goodWindowsVerification(),
+      reverifyWindowsPrivateState: async (_verification, currentOptions) => {
+        reverifyOptions.push(currentOptions);
+        reverifications += 1;
+        if (reverifications === 2) env.CODEX_BUDDY_WINDOWS_EGRESS_BLOCK = '1';
+        return goodWindowsVerification();
+      },
+      platformPolicy: ({ env: currentEnv }) => currentEnv.CODEX_BUDDY_WINDOWS_EGRESS_BLOCK === '1'
+        ? {
+            allowed: false,
+            failureCode: 'windows_private_state_kill_switch',
+            summary: 'blocked',
+            detail: 'kill-switch'
+          }
+        : { allowed: true },
+      spendCapability: async (_options, executor) => ({
+        value: await executor(Object.freeze({ approved: true })),
+        audit: { schema_version: '1' }
+      })
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
+  assert.equal(reverifications, 2);
+  const expectedModeDataDir = seed.input.mode_data_dir ?? modeDataDir;
+  const expectedRuntimeDataDir = seed.input.runtime_data_dir ?? runtimeDataDir;
+  assert.equal(reverifyOptions.every((current) => current.dataDir === expectedModeDataDir
+    && current.runtimeDataDir === expectedRuntimeDataDir
+    && current.tempBase === providerTempBase), true);
+  assert.equal(seed.metrics().capabilityIssues, 1);
+  assert.equal(seed.metrics().reviewCalls, 0);
+  assert.deepEqual(seed.circuitRecords, []);
+  assert.equal(seed.events.some((event) => event.type === 'review_started'), false);
+  const receipt = seed.writes.find(({ file }) => file.includes(`${path.sep}automatic-reviews${path.sep}`));
+  assert.equal(receipt.value.reviewer_runs[0].failure.failure_code, 'windows_private_state_kill_switch');
+});
+
+test('provider-temp DACL failure is platform integrity and never charges provider quality', async () => {
+  const cause = Object.assign(new Error('provider temp parent failed'), {
+    failureCode: 'windows_private_state_wide_acl',
+    platformIntegrityFailure: true,
+    providerExecution: 'definite_non_execution',
+    blockMutation: true
+  });
+  const failure = new ProviderFailure({
+    provider: 'grok',
+    model: 'grok-4.5',
+    stage: 'preflight',
+    failureCode: 'isolation_failed',
+    durationMs: 1,
+    cause,
+    safeMessage: 'The provider isolation boundary failed closed.'
+  });
+  const seed = await harness({
+    review: async () => {
+      throw failure;
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
+  assert.equal(failure.failureCode, 'windows_private_state_wide_acl');
+  assert.equal(failure.run.failure_code, 'windows_private_state_wide_acl');
+  assert.equal(failure.platformIntegrityFailure, true);
+  assert.equal(failure.providerExecution, 'definite_non_execution');
+  assert.equal(failure.blockMutation, true);
+  assert.deepEqual(seed.circuitRecords, []);
+  const receipt = seed.writes.find(({ file }) => file.includes(`${path.sep}automatic-reviews${path.sep}`));
+  assert.equal(receipt.value.reviewer_runs[0].failure.stage, 'platform_integrity');
+  assert.equal(receipt.value.reviewer_runs[0].failure.failure_code, 'windows_private_state_wide_acl');
+});
 
 test('Windows verification failure before capability issue refuses cleanly with no capability', async () => {
   const seed = await harness({

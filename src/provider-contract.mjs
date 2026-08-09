@@ -86,20 +86,33 @@ function safeUsage(value) {
 
 export class ProviderFailure extends Error {
   constructor({ provider, model, stage, failureCode, durationMs, cause, safeMessage }) {
-    const fallback = FAILURE_MESSAGE[failureCode] ?? 'The provider failed closed.';
+    const platformIntegrityFailure = cause?.platformIntegrityFailure === true;
+    const specificFailureCode = platformIntegrityFailure
+      && typeof cause?.failureCode === 'string'
+      && /^[a-z][a-z0-9_]{0,63}$/u.test(cause.failureCode)
+      ? cause.failureCode
+      : failureCode;
+    const fallback = FAILURE_MESSAGE[specificFailureCode]
+      ?? FAILURE_MESSAGE[failureCode]
+      ?? 'The provider failed closed.';
     super(safeFailureMessage(safeMessage, fallback), cause ? { cause } : undefined);
     this.name = 'ProviderFailure';
     this.provider = metadataLabel(provider, 32);
     this.model = metadataLabel(model, 200);
     this.stage = stage;
-    this.failureCode = failureCode;
+    this.failureCode = specificFailureCode;
+    if (platformIntegrityFailure) {
+      this.platformIntegrityFailure = true;
+      this.providerExecution = cause.providerExecution ?? 'definite_non_execution';
+      this.blockMutation = cause.blockMutation !== false;
+    }
     this.run = Object.freeze({
       schema_version: RUN_SCHEMA_VERSION,
       ok: false,
       provider: this.provider,
       model: this.model,
       stage,
-      failure_code: failureCode,
+      failure_code: specificFailureCode,
       duration_ms: duration(durationMs),
       stdout_bytes: null,
       stderr_bytes: null,

@@ -409,7 +409,7 @@ export async function reviewWithOpenCode({
         tempRoot = tempRun.directory;
         checkPreflightRemaining();
       } catch (error) {
-        checkPreflightRemaining();
+        if (error?.platformIntegrityFailure !== true) checkPreflightRemaining();
         throw error;
       }
       checkPreflightRemaining();
