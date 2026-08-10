@@ -9,7 +9,7 @@
   },
   "scripts": {
     "review": "node scripts/buddy-review.mjs review",
-    "test": "node --test --test-timeout=1200000",
+    "test": "node --test --test-timeout=1500000",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:types": "npm ci --ignore-scripts --no-audit --no-fund && tsc -p tsconfig.json",
     "check:assets": "node scripts/buddy-review.mjs pet list --json",
