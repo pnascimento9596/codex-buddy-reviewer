@@ -2,6 +2,32 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
+## 0.6.0-rc.1 - 2026-08-10
+
+First v0.6 release candidate. Windows x64 live review moves from a blanket release gate to an explicit verified-private-state boundary.
+
+### Added
+
+- **Windows x64 private-state DACL enforcement.** The packaged, hash-pinned native helper now provides capability protocol 2 DACL ensure/verify operations. Live review requires protected current-user-owned leaves with only the current user, SYSTEM, and Administrators allowed full access on an ACL-capable volume.
+- **Assured runtime-root coverage.** Schema-v2 verification covers the active durable/runtime/provider-temp roots plus every enumerated Buddy runtime path, using canonical set identity and live re-verification.
+- **Authorization TOCTOU closure.** Windows private roots are verified before consent or snapshot reads, the emergency kill switch is rechecked at capability issuance and executor entry, and provider-temp DACL failures retain typed platform-integrity metadata without charging provider-quality circuits.
+
+### Security
+
+- Legacy receipt replay keeps the structural validation shipped in v0.5.1; malformed completion/receipt pairs remain rejected.
+- Windows x64 provider egress is enabled only when all helper, architecture, filesystem, live-root, and kill-switch checks pass. There is no provider/model substitution or direct-process fallback.
+- ARM64 Windows remains unavailable until separately reviewed helper bytes ship. Protection does not claim resistance to Administrators, SYSTEM, or malicious same-user processes.
+
+### Evidence and limitations
+
+- The final Windows-remediation tree received direct Claude and direct Ollama/GLM exact-tree review across all sealed concerns, and protected Windows Node 22/24 CI exercises the packaged helper and DACL protocol.
+- Native Windows Codex host e2e and live local-model execution remain **UNRUN** after a bounded hosted-runner viability exercise; this RC does not convert infrastructure setup into a live-host claim.
+- macOS native-host RC acceptance and immutable publication verification remain separate Phase 6 gates.
+
+### Release status
+
+- Prepared for publication only from the exact protected `main` head through `.github/workflows/release.yml` with `version: 0.6.0-rc.1` and `publish: true` under owner standing authorization. Do not treat this changelog entry alone as dispatch authorization.
+
 ## 0.5.1 - 2026-08-08
 
 Security fix for a receipt-replay validation bypass found in the published v0.5.0 stable release. The Windows live-egress gate is re-engaged in this build.
