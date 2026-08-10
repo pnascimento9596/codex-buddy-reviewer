@@ -245,6 +245,13 @@ Windows egress even after a future gate lift.
 > v0.6.0-rc.1 promotion head after the Phase 2 remediation and the Phase 4
 > full re-seal pass.
 
+> **v0.6.0-rc.1 promotion-candidate disposition (2026-08-09):** H01-H06 and
+> the deferred null-environment kill-switch bypass are merged through protected
+> CI. The production constant is deliberately `true` in this candidate so the
+> Phase 4 full re-seal reviews the exact lifted configuration rather than a
+> synthetic pure-policy path. No RC publication is allowed unless that sealed
+> review completes without an RC-blocking finding.
+
 Distinct fail-closed results identify non-ACL filesystems, unavailable helper
 architecture (including unavailable ARM64 packaging), unavailable helper,
 protocol mismatch, kill-switch engagement, and useful root verification

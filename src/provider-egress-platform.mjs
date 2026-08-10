@@ -39,7 +39,7 @@ export function evaluateProviderEgressPlatformPolicy(input = {}) {
   if (platform !== 'win32') return SUPPORTED;
   const arch = input.arch ?? process.arch;
   const verification = input.verification ?? null;
-  const killSwitch = input.killSwitch ?? readWindowsEgressKillSwitch(input.env);
+  const killSwitch = input.killSwitch === true || readWindowsEgressKillSwitch(input.env);
   const gateLifted = input.gateLifted === true;
 
   if (killSwitch) {
