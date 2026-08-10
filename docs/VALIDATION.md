@@ -4,11 +4,18 @@ This document separates validation evidence into five explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current protected `main` is the v0.5.1 security-fix candidate: H07
-receipt-replay validation plus the re-engaged Windows egress gate, on top of
-the lane-h Windows DACL epic (PRs #79–#83). The immutable published v0.5.0
-source remains `d23890eb8e7f6cc92ce7b02a31240871b6e3e6b0`. Frozen Layers B–E are
-unchanged historical publication evidence.
+Current promotion work prepares `v0.6.0-rc.1` from protected main after the
+lane-h/lane-i Windows DACL remediation, replay fix, exact-tree two-family seal,
+and bounded native-Windows viability disposition. The immutable published
+v0.5.1 source remains `c1af3da4ce34f8ba43196bbeee8065053398324d`.
+Frozen Layers B–E are unchanged historical publication evidence.
+
+### v0.6.0-rc.1 candidate evidence
+
+- Windows-remediation final tree `1a995b50eeb2df2637fb2b90b1cbe4211c734af6` received clean current-tree clearance from direct Claude and direct Ollama/GLM across concerns C1–C4; final seal manifest SHA-256 `197ef5f587ac770cbbca98e51ba57793930e29e58ea9424428487a2862a696d0` is retained externally.
+- Protected-main validation run `31363656621` passed at remediation merge `d8228facae2eb48bb3df6f4256cf445c6341282d`.
+- Phase 5 Windows evidence disposition merged through PR #90 as `8b69066e3dafa309044021b723a2643f5b9e524b`; protected-main run `31371658178` passed every required lane.
+- Windows x64 live local-model/Codex host e2e remains UNRUN after bounded branch-only viability attempts. Protected Windows Node 22/24 integration tests remain the authoritative packaged-helper and DACL evidence. ARM64 remains blocked.
 
 ### 0.5.1 candidate local validation (pre-merge head)
 

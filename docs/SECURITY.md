@@ -6,9 +6,9 @@ Untrusted inputs include source code, diffs, filenames, hook JSON, CLI values, G
 
 ## Current RC security status
 
-A sealed whole-repository Deep Security Scan of the pre-fix `v0.5.0-rc.1` head found 20 findings: 17 medium and 3 low. The validated clusters covered credential syntax gaps, denied-content fragment and live Git metadata coverage, and lossy invalid UTF-8 Git pathname handling. Provider-free reproductions proved affected content in prepared external-review prompts or falsely complete evidence decisions.
+`v0.6.0-rc.1` promotion follows the remediated v0.5 privacy boundary plus the Windows x64 current-user-only DACL epic. The final Windows-remediation tree received direct Claude and direct Ollama/GLM exact-tree review across ancestor/root coverage, authorization ordering, kill-switch TOCTOU, and provider-temporary integrity concerns. Protected Windows Node 22/24 CI exercises the packaged helper and DACL protocol.
 
-The current working tree implements structural remediations and focused regression coverage for those families. The sections below document the intended security contract and the controls that currently exist. They do not claim final closure. Promotion to stable remains blocked until a fresh exact-final-tree sealed scan, complete cross-platform CI, and the host acceptance gates pass. A public RC source snapshot remains explicitly pre-final and does not claim those gates have closed.
+This remains an RC rather than a universal host-acceptance claim. Native Windows Codex host e2e and completed live Windows local-model review remain UNRUN; ARM64 remains blocked. The sections below define the enforced boundary and known limitations without claiming protection against Administrators, SYSTEM, or a malicious same-user process.
 
 ## Consent and activation
 
