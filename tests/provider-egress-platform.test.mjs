@@ -207,6 +207,18 @@ test('Windows kill-switch re-blocks an otherwise allowed verified configuration'
   assert.equal(policy.failureCode, 'windows_private_state_kill_switch');
 });
 
+test('an explicit false hint cannot override the Windows environment kill-switch', () => {
+  const policy = providerEgressPlatformPolicy({
+    platform: 'win32',
+    arch: 'x64',
+    verification: goodVerification(),
+    killSwitch: false,
+    env: { CODEX_BUDDY_WINDOWS_EGRESS_BLOCK: '1' }
+  });
+  assert.equal(policy.allowed, false);
+  assert.equal(policy.failureCode, 'windows_private_state_kill_switch');
+});
+
 test('POSIX policy remains unchanged and ignores the Windows kill-switch', () => {
   const policy = providerEgressPlatformPolicy({
     platform: 'darwin',

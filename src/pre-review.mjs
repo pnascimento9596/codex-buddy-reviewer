@@ -724,7 +724,7 @@ async function executeProviders({
     const settlements = await Promise.allSettled(lanes.map((lane, index) => (
       deps.spendCapability({ root, dataDir: modeDataDir, capability: capabilities[index] }, async (approvedRequest) => {
         let executionVerification = await reverifyProviderRoots(deps, 'definite_non_execution');
-        assertProviderPlatformAllowed(deps);
+        assertProviderPlatformAllowed(deps, executionVerification);
         reviewStartedEmission ??= safeEmit(deps, {
           runtimeDataDir,
           repositoryRoot: root,

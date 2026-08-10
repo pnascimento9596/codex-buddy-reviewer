@@ -719,6 +719,58 @@ test('dual speculative reviewers emit one start event at the dispatch boundary',
   assert.equal(seed.events.filter((event) => event.type === 'review_started').length, 1);
 });
 
+test('concurrent Windows lanes assert against their own reverified proof', async () => {
+  const initial = goodWindowsVerification();
+  const firstLane = goodWindowsVerification();
+  const secondLane = goodWindowsVerification();
+  const pendingExecutionVerifications = [];
+  const assertedExecutionVerifications = [];
+  let reverifyCalls = 0;
+  const seed = await harness({
+    mode: {
+      secondary_provider: 'claude',
+      secondary_model: 'claude-opus-4-8',
+      secondary_effort: 'high'
+    },
+    review: async (reviewOptions) => {
+      const { run: _run, ...reviewed } = reviewResult();
+      return { ...reviewed, provider: reviewOptions.provider, model: reviewOptions.model };
+    },
+    options: {
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
+      ensureWindowsPrivateState: async () => initial,
+      reverifyWindowsPrivateState: async (previous) => {
+        reverifyCalls += 1;
+        if (reverifyCalls === 1) return initial;
+        if (reverifyCalls === 2 || reverifyCalls === 3) {
+          const proof = reverifyCalls === 2 ? firstLane : secondLane;
+          return new Promise((resolve) => {
+            pendingExecutionVerifications.push({ proof, resolve });
+            if (pendingExecutionVerifications.length === 2) {
+              for (const pending of pendingExecutionVerifications) pending.resolve(pending.proof);
+            }
+          });
+        }
+        return previous;
+      },
+      platformPolicy: ({ verification }) => {
+        if (verification === firstLane || verification === secondLane) {
+          assertedExecutionVerifications.push(verification);
+        }
+        return { allowed: true };
+      }
+    }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
+  assert.deepEqual(
+    new Set(assertedExecutionVerifications),
+    new Set([firstLane, secondLane])
+  );
+});
+
 test('mode revocation before capability execution emits no start event', async () => {
   const seed = await harness({
     options: {
