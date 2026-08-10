@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "id": "clean-extract-local",
+  "category": "clean",
+  "description": "A behavior-preserving local extraction should not produce a defect finding.",
+  "live_eligible": true,
+  "egress_expected": true,
+  "evidence": {
+    "schema_version": "1",
+    "review_id": "eval-clean-extract-local",
+    "captured_at": "2026-07-18T00:00:00.000Z",
+    "repository_root": "eval-fixture",
+    "head": "1111111111111111111111111111111111111111",
+    "scope": "turn",
+    "base": "0000000000000000000000000000000000000000",
+    "changed_paths": ["src/format.js"],
+    "excluded_paths": [],
+    "sensitive_change_count": 0,
+    "ignored_change_count": 0,
+    "path_evidence": [
+      {
+        "path": "src/format.js",
+        "disposition": "complete",
+        "patch_bytes": 250,
+        "transmitted": true,
+        "hunk_ranges": [{ "start": 1, "end": 4, "side": "new" }]
+      }
+    ],
+    "incomplete_paths": [],
+    "hunk_ranges": { "src/format.js": [{ "start": 1, "end": 4, "side": "new" }] },
+    "status": "deterministic eval fixture",
+    "patch": "diff --git a/src/format.js b/src/format.js\nindex 1111111..2222222 100644\n--- a/src/format.js\n+++ b/src/format.js\n@@ -1,3 +1,4 @@\n export function label(value) {\n-  return String(value).trim();\n+  const text = String(value);\n+  return text.trim();\n }\n",
+    "patch_hash": "d58ce2f59695a8e421055f3240f935540964df3fe389328af89c52334bd1a4af",
+    "patch_bytes": 250,
+    "truncated": false,
+    "line_counts": { "src/format.js": 4 },
+    "old_line_counts": { "src/format.js": 3 }
+  },
+  "expected": {
+    "allowed_statuses": ["no_findings"],
+    "min_findings": 0,
+    "max_findings": 0,
+    "provider_call": "required",
+    "required_anchors": []
+  }
+}

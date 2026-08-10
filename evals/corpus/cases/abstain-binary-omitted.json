@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "id": "abstain-binary-omitted",
+  "category": "abstain",
+  "description": "An omitted binary change has no complete transmitted evidence and must abstain without a provider call.",
+  "live_eligible": true,
+  "egress_expected": false,
+  "evidence": {
+    "schema_version": "1",
+    "review_id": "eval-abstain-binary-omitted",
+    "captured_at": "2026-07-18T00:00:00.000Z",
+    "repository_root": "eval-fixture",
+    "head": "3333333333333333333333333333333333333333",
+    "scope": "turn",
+    "base": "2222222222222222222222222222222222222222",
+    "changed_paths": ["assets/icon.bin"],
+    "excluded_paths": [],
+    "sensitive_change_count": 0,
+    "ignored_change_count": 0,
+    "path_evidence": [
+      {
+        "path": "assets/icon.bin",
+        "disposition": "binary_omitted",
+        "patch_bytes": 0,
+        "transmitted": false,
+        "hunk_ranges": []
+      }
+    ],
+    "incomplete_paths": ["assets/icon.bin"],
+    "hunk_ranges": { "assets/icon.bin": [] },
+    "status": "deterministic eval fixture",
+    "patch": "",
+    "patch_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "patch_bytes": 0,
+    "truncated": false,
+    "line_counts": { "assets/icon.bin": null },
+    "old_line_counts": { "assets/icon.bin": null }
+  },
+  "expected": {
+    "allowed_statuses": ["abstain"],
+    "min_findings": 0,
+    "max_findings": 0,
+    "provider_call": "forbidden",
+    "required_anchors": []
+  }
+}
