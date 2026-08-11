@@ -8,7 +8,7 @@ import { loadPetCatalog, resolveCodexHome } from './pet-catalog.mjs';
 import { resolveExternalExecutable } from './executable.mjs';
 import { modeFile, resolveRepositoryRoot, reviewersForMode } from './mode.mjs';
 import { validatePresentationProfile } from './presentation-state.mjs';
-import { supportedProviderIds } from './provider-registry.mjs';
+import { operatorSupportedProviderIds, supportedProviderIds } from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
 import { assessProviderModelIdentifier } from './secret-scan.mjs';
 import {
@@ -24,6 +24,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const TRANSACTION_ID_PATTERN = /^[0-9]+-[0-9a-f-]{36}$/;
 const OPAQUE_KEY_PATTERN = /^[0-9a-f]{24}$/;
 const EGRESS_PROVIDERS = new Set(supportedProviderIds());
+const OPERATOR_PROVIDERS = new Set(operatorSupportedProviderIds());
 const EGRESS_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const EGRESS_STATES = new Set(['issued', 'consumed']);
 const EGRESS_RECORD_FIELDS = [
@@ -729,7 +730,7 @@ export async function runDoctor(options = {}) {
           model: reviewer.model,
           effort: reviewer.effort
         })),
-        supported_providers: supportedProviderIds()
+        supported_providers: operatorSupportedProviderIds()
       }));
     } catch (error) {
       checks.push(check('mode_state', 'fail', 'Workspace mode state is invalid.', { detail: error.message }));

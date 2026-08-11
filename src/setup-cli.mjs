@@ -1,4 +1,7 @@
 import { applySetupPlan, createSetupPlan, rollbackSetupPlan } from './setup.mjs';
+import { operatorSupportedProviderIds } from './provider-registry.mjs';
+
+const OPERATOR_PROVIDERS = operatorSupportedProviderIds();
 
 export const SETUP_HELP = `Codex Buddy Reviewer setup
 
@@ -11,7 +14,7 @@ Options:
   --cwd <path>                 Git workspace (default: current directory)
   --codex-home <path>          Codex home containing the pets directory
   --pet-id <buddy-id>          Plan only: pet package (default: buddy-byte)
-  --provider <adapter>         Plan only: primary connection (grok, ollama, claude, or opencode)
+  --provider <adapter>         Plan only: primary connection (claude, ollama, or opencode)
   --model <id>                 Plan only: primary reviewer model
   --effort <level>             Plan only: primary reviewer reasoning effort
   --also-provider <adapter>    Plan only: add a second independent reviewer connection
@@ -100,13 +103,11 @@ export function parseSetupArgs(argv) {
     const unsupported = immutablePlanIdentity.find(([, value]) => value !== undefined);
     if (unsupported) throw new Error(`${unsupported[0]} is only valid for setup apply or rollback`);
   }
-  if (options.provider !== undefined
-      && !['grok', 'ollama', 'claude', 'opencode'].includes(options.provider)) {
-    throw new Error('--provider must be grok, ollama, claude, or opencode');
+  if (options.provider !== undefined && !OPERATOR_PROVIDERS.includes(options.provider)) {
+    throw new Error(`--provider must be one of ${OPERATOR_PROVIDERS.join(', ')}`);
   }
-  if (options.secondaryProvider !== undefined
-      && !['grok', 'ollama', 'claude', 'opencode'].includes(options.secondaryProvider)) {
-    throw new Error('--also-provider must be grok, ollama, claude, or opencode');
+  if (options.secondaryProvider !== undefined && !OPERATOR_PROVIDERS.includes(options.secondaryProvider)) {
+    throw new Error(`--also-provider must be one of ${OPERATOR_PROVIDERS.join(', ')}`);
   }
   if (options.singleReviewer && (
     options.secondaryProvider !== undefined

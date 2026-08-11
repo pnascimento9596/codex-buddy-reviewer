@@ -1,6 +1,6 @@
 interface:
   display_name: "Buddy Review"
-  short_description: "Independent Grok or GLM review of local changes"
-  default_prompt: "Use $review to independently review my current changes with Grok."
+  short_description: "Independent Claude or Ollama review of local changes"
+  default_prompt: "Use $review with an explicitly selected Claude or Ollama connection to independently review my current changes."
 policy:
   allow_implicit_invocation: false

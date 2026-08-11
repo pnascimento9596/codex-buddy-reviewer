@@ -11,7 +11,7 @@
     {
       "name": "codex-buddy-reviewer",
       "source": "./",
-      "description": "Turn existing Claude, Grok, Ollama, and OpenCode connections into one or two attributed review seats after Codex finishes a coding turn."
+      "description": "Turn existing Claude, Ollama, and OpenCode connections into one or two attributed review seats after Codex finishes a coding turn."
     }
   ]
 }

@@ -170,16 +170,16 @@ test('secondary Ollama rejects unsupported effort before mode persistence', asyn
 test('mode CLI parses primary and secondary connections and documents clearing', async () => {
   assert.deepEqual(parseModeArgs([
     'enable',
-    '--provider', 'grok',
-    '--model', 'grok-4.5',
+    '--provider', 'ollama',
+    '--model', 'glm-5.2:cloud',
     '--also-provider', 'claude',
     '--also-model', 'claude-opus-4-8',
     '--also-effort', 'high'
   ]), {
     action: 'enable',
     json: false,
-    provider: 'grok',
-    model: 'grok-4.5',
+    provider: 'ollama',
+    model: 'glm-5.2:cloud',
     secondaryProvider: 'claude',
     secondaryModel: 'claude-opus-4-8',
     secondaryEffort: 'high'
@@ -192,11 +192,13 @@ test('mode CLI parses primary and secondary connections and documents clearing',
     /cannot be combined/
   );
   assert.throws(
-    () => parseModeArgs(['enable', '--single-reviewer', '--also-provider', 'grok']),
+    () => parseModeArgs(['enable', '--single-reviewer', '--also-provider', 'ollama']),
     /cannot be combined/
   );
-  assert.throws(() => parseModeArgs(['enable', '--provider', 'kimi']), /claude, or opencode/);
-  assert.throws(() => parseModeArgs(['enable', '--also-provider', 'kimi']), /claude, or opencode/);
+  assert.throws(() => parseModeArgs(['enable', '--provider', 'kimi']), /claude, ollama, opencode/);
+  assert.throws(() => parseModeArgs(['enable', '--also-provider', 'kimi']), /claude, ollama, opencode/);
+  assert.throws(() => parseModeArgs(['enable', '--provider', 'grok']), /claude, ollama, opencode/);
+  assert.throws(() => parseModeArgs(['enable', '--also-provider', 'grok']), /claude, ollama, opencode/);
 
   const output = await runModeCommand(['--help']);
   assert.match(output.help, /Primary connection/);
@@ -245,8 +247,8 @@ test('human mode summary surfaces secondary reviewer and continuous-review state
     provider: 'claude',
     model: 'claude-opus-4-8',
     effort: 'high',
-    secondary_provider: 'grok',
-    secondary_model: 'grok-4.5',
+    secondary_provider: 'ollama',
+    secondary_model: 'glm-5.2:cloud',
     secondary_effort: 'high',
     min_confidence: 0.75,
     max_patch_bytes: 262144,
@@ -258,7 +260,7 @@ test('human mode summary surfaces secondary reviewer and continuous-review state
   });
   assert.match(
     dualContinuous,
-    /Reviewer: claude\/claude-opus-4-8 \+ grok\/grok-4\.5 · advisory · workspace-scoped · continuous-review ON/
+    /Reviewer: claude\/claude-opus-4-8 \+ ollama\/glm-5\.2:cloud · advisory · workspace-scoped · continuous-review ON/
   );
   assert.match(dualContinuous, /next Codex turn captures a private start snapshot/);
 

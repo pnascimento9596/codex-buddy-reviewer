@@ -1,6 +1,10 @@
 import { runDoctor } from './doctor.mjs';
 import { reviewersForMode } from './mode.mjs';
-import { approveProviderReviewRequest, dispatchProviderReview } from './provider-registry.mjs';
+import {
+  approveProviderReviewRequest,
+  dispatchProviderReview,
+  operatorSupportedProviderIds
+} from './provider-registry.mjs';
 import { parseReviewerOutput } from './result.mjs';
 import { runProcess } from './process.mjs';
 import {
@@ -16,6 +20,7 @@ const HEALTH_SCHEMA = Object.freeze({
   properties: { status: { const: 'ok' } }
 });
 const HEALTH_PROMPT = 'Return only {"status":"ok"}. Do not use tools or external context.';
+const OPERATOR_PROVIDERS = new Set(operatorSupportedProviderIds());
 const SAFE_FAILURE_CODES = new Set([
   'auth_unavailable',
   'binary_missing',
@@ -110,6 +115,23 @@ export async function explicitProviderCheck(
       configured_count: 0,
       passed_count: 0,
       reviewer_checks: []
+    };
+  }
+  const unavailable = reviewers.filter((reviewer) => !OPERATOR_PROVIDERS.has(reviewer.provider));
+  if (unavailable.length > 0) {
+    return {
+      status: 'fail',
+      summary: 'Configured reviewer connections include an unavailable operator provider; no provider was contacted.',
+      detail: 'The current operator lane supports Claude, Ollama, and OpenCode connections only.',
+      configured_count: reviewers.length,
+      passed_count: 0,
+      reviewer_checks: reviewers.map((reviewer, index) => ({
+        role: index === 0 ? 'primary' : 'secondary',
+        provider: reviewer.provider,
+        model: reviewer.model,
+        status: 'fail',
+        failure_code: 'health_check_failed'
+      }))
     };
   }
   const platform = dependencies.platform ?? process.platform;

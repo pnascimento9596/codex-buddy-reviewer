@@ -10,7 +10,7 @@ import {
   dispatchProviderReview,
   getProviderDefinition,
   inspectApprovedProviderReviewRequest,
-  supportedProviderIds,
+  operatorSupportedProviderIds,
   validateProviderEffort
 } from './provider-registry.mjs';
 import {
@@ -136,7 +136,7 @@ export function parseArgs(argv) {
   if (!options.provider) {
     throw new Error('--provider is required; choose an explicit reviewer connection');
   }
-  if (!supportedProviderIds().includes(options.provider)) {
+  if (!operatorSupportedProviderIds().includes(options.provider)) {
     throw new Error('--provider must be claude, ollama, or opencode');
   }
   if (!['working-tree', 'branch'].includes(options.scope)) throw new Error('--scope must be working-tree or branch');
