@@ -256,7 +256,7 @@ test('Windows process containment diagnostic uses CI helper overrides but labels
   assert.match(check(result, 'process_containment').detail, /not an OS sandbox/);
   assert.equal(check(result, 'provider_egress_privacy').status, 'warn');
   assert.equal(check(result, 'provider_egress_privacy').failure_code, 'windows_private_state_acl_unavailable');
-  assert.match(check(result, 'provider_egress_privacy').detail, /current-user-only DACLs|private-state verification failed|filesystem ACL probe failed|private-state filesystem ACL probe failed|helper pin, protocol-2/);
+  assert.match(check(result, 'provider_egress_privacy').detail, /current-user-only DACLs|private-state verification failed|filesystem ACL probe failed|private-state filesystem ACL probe failed|helper pin, protocol-2|CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1/);
 });
 
 test('Windows process containment fails for an enabled mode and warns for a disabled mode when unverified', async () => {
@@ -587,7 +587,7 @@ test('Windows provider health check reports the privacy blocker without approvin
   assert.equal(result.configured_count, 1);
   assert.equal(result.passed_count, 0);
   assert.match(result.summary, /disabled on Windows|private-state verification failed|private-state verification/);
-  assert.match(result.detail, /current-user-only DACLs|private-state verification failed|filesystem ACL probe failed|private-state filesystem ACL probe failed|helper pin, protocol-2/);
+  assert.match(result.detail, /current-user-only DACLs|private-state verification failed|filesystem ACL probe failed|private-state filesystem ACL probe failed|helper pin, protocol-2|CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1/);
   assert.equal(result.reviewer_checks[0].failure_code, 'windows_private_state_acl_unavailable');
 });
 
