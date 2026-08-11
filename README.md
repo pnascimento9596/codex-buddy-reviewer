@@ -414,10 +414,13 @@ The public source branch and installable artifact are separate trust boundaries.
 
 ## Manual one-shot review
 
-The manual path uses the configured primary connection; set it explicitly when a different adapter is required:
+The manual path requires an explicit reviewer connection; it never silently chooses or changes a provider:
 
 ```bash
-node scripts/buddy-review.mjs review --cwd "/path/to/repository"
+node scripts/buddy-review.mjs review \
+  --cwd "/path/to/repository" \
+  --provider ollama \
+  --model glm-5.2:cloud
 ```
 
 Choose any supported adapter:

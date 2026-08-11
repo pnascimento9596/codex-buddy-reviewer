@@ -56,7 +56,7 @@ Usage:
   buddy-review.mjs data [status|purge] [options]
 
 Options:
-  --provider <id>              Connection: claude, ollama, or opencode (default: ollama)
+  --provider <id>              Explicit reviewer connection: claude, ollama, or opencode (required)
   --model <id>                 Provider model (uses the selected connection default)
   --effort <level>             Reviewer reasoning effort (default: high)
   --scope <working-tree|branch> Review scope (default: working-tree)
@@ -79,7 +79,6 @@ export function parseArgs(argv) {
   const args = [...argv];
   if (args[0] === 'review') args.shift();
   const options = {
-    provider: 'ollama',
     scope: 'working-tree',
     effort: 'high',
     minConfidence: 0.75,
@@ -133,6 +132,9 @@ export function parseArgs(argv) {
     throw new Error('--retain-evidence requires explicit --store');
   }
 
+  if (!options.provider) {
+    throw new Error('--provider is required; choose an explicit reviewer connection');
+  }
   if (!supportedProviderIds().includes(options.provider)) {
     throw new Error('--provider must be claude, ollama, or opencode');
   }
