@@ -96,7 +96,7 @@ Before starting the host interaction, record:
 
 Also record the intended primary and optional secondary reviewer configuration
 in the private operator notes. A representative dual-review profile can use a
-direct Claude or Grok subscription as one lane and an OpenCode or Ollama
+direct Claude subscription as one lane and an OpenCode or Ollama
 connection as the other. Host acceptance does not authorize new connections or
 prove account eligibility; configure and health-check those connections before
 the timed host run.

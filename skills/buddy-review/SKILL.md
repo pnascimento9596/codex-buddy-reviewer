@@ -95,11 +95,10 @@ Headless renderer actions are `renderer register`, `next`, `ack`, `status`, `unr
 
 Only pass these flags when the user explicitly requests them:
 
-- `--provider grok --model grok-4.5`
 - `--provider ollama --model glm-5.2:cloud`
 - `--provider claude --model claude-opus-4-8`
 - `--provider opencode --model openai/gpt-5.6`
-- `--also-provider <grok|ollama|claude|opencode>` with optional `--also-model <id>` and `--also-effort <level>`
+- `--also-provider <ollama|claude|opencode>` with optional `--also-model <id>` and `--also-effort <level>`
 - `--single-reviewer` to clear the configured secondary connection
 - `--continuous-review` to authorize bounded intermediate evidence and enable at most two speculative generations per turn; the no-action toggle is the documented exception that always appends this positive flag
 - `--no-continuous-review` to use final-only Stop review
@@ -108,9 +107,9 @@ Only pass these flags when the user explicitly requests them:
 - `--max-patch-bytes <integer>`
 - `--timeout-seconds <1..1800>`
 
-The supported adapter IDs are exactly `claude`, `grok`, `ollama`, and `opencode`. Claude Pro or Max uses only the direct Claude adapter with Claude Code. Grok or SuperGrok can use the direct Grok adapter; an exact configured OpenCode xAI route is also allowed. Ollama local and Ollama Cloud can use the direct Ollama adapter, while an exact configured OpenCode Ollama Cloud route is also allowed. ChatGPT Plus or Pro uses `opencode` with an OpenCode ChatGPT OAuth connection. Kimi or Moonshot is allowed only through `opencode` with the exact API-backed `provider/model` identifier already configured in the user's OpenCode connection. These routed connections are not native Buddy adapters. Direct `codex` and direct `kimi` adapters are unsupported because strict no-tools and no-inherited-context isolation has not been proven for those subscription routes. OpenCode projects only the selected provider auth entry; never copy, print, or request the user's auth store or ambient credentials.
+The currently used adapter IDs for this release lane are `claude`, `ollama`, and `opencode`. Claude Pro or Max uses only the direct Claude adapter with Claude Code. Ollama local and Ollama Cloud can use the direct Ollama adapter, while an exact configured OpenCode Ollama Cloud route is also allowed. ChatGPT Plus or Pro uses `opencode` with an OpenCode ChatGPT OAuth connection. Kimi or Moonshot is allowed only through `opencode` with the exact API-backed `provider/model` identifier already configured in the user's OpenCode connection. These routed connections are not native Buddy adapters. Direct `codex` and direct `kimi` adapters are unsupported because strict no-tools and no-inherited-context isolation has not been proven for those subscription routes. OpenCode projects only the selected provider auth entry; never copy, print, or request the user's auth store or ambient credentials.
 
-Claude, Grok, and OpenCode accept effort values `low`, `medium`, `high`, `xhigh`, and `max`. Ollama accepts only `low`, `medium`, and `high`. Reject an unsupported provider/effort combination rather than changing it or contacting the model.
+Claude and OpenCode accept effort values `low`, `medium`, `high`, `xhigh`, and `max`. Ollama accepts only `low`, `medium`, and `high`. Reject an unsupported provider/effort combination rather than changing it or contacting the model.
 
 Never interpolate unvalidated free-form text into the command. Provider and model values must come from the closed adapter choices above or an explicit user-supplied OpenCode `provider/model` token accepted by the CLI. Reject unknown actions or flags. `--also-provider`, `--also-model`, and `--also-effort` must describe one complete secondary reviewer and cannot be combined with `--single-reviewer`. `--continuous-review` and `--no-continuous-review` cannot be combined. Do not modify Codex configuration, arbitrary pet files, global instruction files, or the reviewed repository. Pet-file writes are allowed only through the catalog/setup CLI above, only after an explicit request, and only for allowlisted `buddy-*` packages and private registry/backups.
 

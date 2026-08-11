@@ -63,7 +63,7 @@ pet surface on Claude Code; pet install commands no-op or document host limits.
 
 When the configured reviewer uses the same model family as the implementing
 host (Claude Code host + `claude` adapter), docs should warn that independence
-is reduced. Default recommendation: use Ollama, Grok, or OpenCode as the
+is reduced. Default recommendation: use Ollama or OpenCode as the
 reviewer when the implementer is Claude Code.
 
 ## Reviewer recursion

@@ -41,7 +41,7 @@ Useful non-core ideas for later include a `doctor` command, guided setup, local 
 - Inspected release state: `v1.3.0` on 2026-07-17
 - License observed during inspection: Apache-2.0
 
-It was the strongest public fork candidate found because it already demonstrated Codex lifecycle hooks, reviewer orchestration, state handling, and a broad test suite. Buddy did not fork it because the desired product required a different core contract: exact private baseline/final trees, provider-neutral Grok/GLM adapters, strict structured results, grounded optional comments, deterministic per-review receipts, fail-open continuation, and excluded-name privacy.
+It was the strongest public fork candidate found because it already demonstrated Codex lifecycle hooks, reviewer orchestration, state handling, and a broad test suite. Buddy did not fork it because the desired product required a different core contract: exact private baseline/final trees, provider-neutral reviewer adapters, strict structured results, grounded optional comments, deterministic per-review receipts, fail-open continuation, and excluded-name privacy.
 
 Patterns examined but not copied unchanged included bounded hook input, nested-session suppression, hook wiring, atomic state, hook trust readiness, unread-result delivery, Stop gates, and process orchestration. Buddy's current files are original implementations based on independently derived requirements and official contracts.
 
