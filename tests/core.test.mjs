@@ -1275,25 +1275,27 @@ test('reviewer parser leaves a missing required findings array invalid', () => {
 });
 
 test('CLI arguments default safely and require an explicit branch base', () => {
-  const defaults = parseArgs(['review']);
-  assert.equal(defaults.provider, 'grok');
+  assert.equal(parseArgs(['--help']).help, true);
+  assert.throws(() => parseArgs(['review']), /--provider is required/);
+  const defaults = parseArgs(['review', '--provider', 'ollama']);
+  assert.equal(defaults.provider, 'ollama');
   assert.equal(defaults.scope, 'working-tree');
   assert.equal(defaults.minConfidence, 0.75);
   assert.equal(defaults.store, false);
-  assert.equal(parseArgs(['review', '--store']).store, true);
-  assert.equal(parseArgs(['review', '--no-store']).store, false);
-  assert.equal(parseArgs(['review', '--store', '--retain-evidence']).retainEvidence, true);
-  assert.throws(() => parseArgs(['review', '--retain-evidence']), /requires explicit --store/);
-  assert.throws(() => parseArgs(['review', '--store', '--no-store']), /cannot be combined/);
-  assert.throws(() => parseArgs(['review', '--scope', 'branch']), /--base is required/);
-  assert.equal(parseArgs(['review', '--scope', 'branch', '--base', 'origin/main']).base, 'origin/main');
-  assert.throws(() => parseArgs(['review', '--model', 'grok 4.5']), /Invalid Buddy mode model/);
+  assert.equal(parseArgs(['review', '--provider', 'ollama', '--store']).store, true);
+  assert.equal(parseArgs(['review', '--provider', 'ollama', '--no-store']).store, false);
+  assert.equal(parseArgs(['review', '--provider', 'ollama', '--store', '--retain-evidence']).retainEvidence, true);
+  assert.throws(() => parseArgs(['review', '--provider', 'ollama', '--retain-evidence']), /requires explicit --store/);
+  assert.throws(() => parseArgs(['review', '--provider', 'ollama', '--store', '--no-store']), /cannot be combined/);
+  assert.throws(() => parseArgs(['review', '--provider', 'ollama', '--scope', 'branch']), /--base is required/);
+  assert.equal(parseArgs(['review', '--provider', 'ollama', '--scope', 'branch', '--base', 'origin/main']).base, 'origin/main');
+  assert.throws(() => parseArgs(['review', '--provider', 'ollama', '--model', 'grok 4.5']), /Invalid Buddy mode model/);
   assert.throws(
-    () => parseArgs(['review', '--model', ['xai-', 'A9_bC7-dE5_fG3-hJ1_kL8'].join('')]),
+    () => parseArgs(['review', '--provider', 'ollama', '--model', ['xai-', 'A9_bC7-dE5_fG3-hJ1_kL8'].join('')]),
     /Invalid Buddy mode model/
   );
-  assert.throws(() => parseArgs(['review', '--effort', 'ultra']), /Invalid Buddy reasoning effort/);
-  assert.throws(() => parseArgs(['review', '--timeout-seconds', '1801']), /Invalid Buddy timeout/);
+  assert.throws(() => parseArgs(['review', '--provider', 'ollama', '--effort', 'ultra']), /Invalid Buddy reasoning effort/);
+  assert.throws(() => parseArgs(['review', '--provider', 'ollama', '--timeout-seconds', '1801']), /Invalid Buddy timeout/);
 });
 
 test('manual live review blocks Windows before repository evidence collection', async () => {

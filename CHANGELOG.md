@@ -2,6 +2,21 @@
 
 All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
+## 0.6.0 - 2026-08-11
+
+Stable v0.6 release candidate prepared from the exact protected `main` promotion head. Publication remains guarded by the protected release workflow and its final host-evidence, attestation, and anonymous-verification gates.
+
+### Stable posture
+
+- Windows x64 live provider egress requires the packaged protocol-2 helper, complete private-state verification, and explicit `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`; the unset default remains fail-closed.
+- `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` remains an unconditional kill switch. ARM64, non-ACL volumes, stale/incomplete verification, and native Windows Codex host e2e remain blocked or unrun as documented.
+- The two authorized Lane J Windows viability attempts consumed zero provider calls, doctor calls, live turns, and inferences; the final disposition is **NOT OBSERVED**, not provider failure.
+- Current public guidance uses Claude, Ollama, and OpenCode operator connections. No Grok review is part of this release lane.
+
+### Release status
+
+- Prepared for one protected `version: 0.6.0`, `publish: true` dispatch only after every readiness gate passes. Do not treat this changelog entry alone as dispatch authorization.
+
 ## 0.6.0-rc.1 - 2026-08-10
 
 First v0.6 release candidate. Windows x64 live review moves from a blanket release gate to an explicit verified-private-state boundary.

@@ -56,7 +56,7 @@ Usage:
   buddy-review.mjs data [status|purge] [options]
 
 Options:
-  --provider <id>              Connection: claude, grok, ollama, or opencode (default: grok)
+  --provider <id>              Explicit reviewer connection: claude, ollama, or opencode (required)
   --model <id>                 Provider model (uses the selected connection default)
   --effort <level>             Reviewer reasoning effort (default: high)
   --scope <working-tree|branch> Review scope (default: working-tree)
@@ -79,7 +79,6 @@ export function parseArgs(argv) {
   const args = [...argv];
   if (args[0] === 'review') args.shift();
   const options = {
-    provider: 'grok',
     scope: 'working-tree',
     effort: 'high',
     minConfidence: 0.75,
@@ -128,13 +127,17 @@ export function parseArgs(argv) {
     }
   }
 
+  if (options.help) return options;
   if (storeRequested && noStoreRequested) throw new Error('--store and --no-store cannot be combined');
   if (options.retainEvidence && !options.store) {
     throw new Error('--retain-evidence requires explicit --store');
   }
 
+  if (!options.provider) {
+    throw new Error('--provider is required; choose an explicit reviewer connection');
+  }
   if (!supportedProviderIds().includes(options.provider)) {
-    throw new Error('--provider must be claude, grok, ollama, or opencode');
+    throw new Error('--provider must be claude, ollama, or opencode');
   }
   if (!['working-tree', 'branch'].includes(options.scope)) throw new Error('--scope must be working-tree or branch');
   if (options.scope === 'branch' && !options.base) throw new Error('--base is required for branch scope');
