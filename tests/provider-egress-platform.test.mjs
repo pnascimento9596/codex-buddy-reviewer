@@ -3,7 +3,9 @@ import test from 'node:test';
 
 import {
   readWindowsEgressKillSwitch,
+  readWindowsEgressEnable,
   WINDOWS_PROVIDER_EGRESS_KILL_SWITCH,
+  WINDOWS_PROVIDER_EGRESS_ENABLE,
   WINDOWS_PROVIDER_EGRESS_GATE_LIFTED,
   evaluateProviderEgressPlatformPolicy,
   providerEgressPlatformPolicy
@@ -57,16 +59,31 @@ function badVerification(failureCode, message = 'verification failed') {
   });
 }
 
-test('production Windows provider egress gate is deliberately lifted for the RC re-seal', () => {
+test('production Windows provider egress capability requires explicit opt-in', () => {
   assert.equal(WINDOWS_PROVIDER_EGRESS_GATE_LIFTED, true);
+  const policy = providerEgressPlatformPolicy({
+    platform: 'win32',
+    arch: 'x64',
+    verification: goodVerification(),
+    env: { [WINDOWS_PROVIDER_EGRESS_ENABLE]: '1' }
+  });
+  assert.equal(policy.allowed, true);
+  assert.equal(policy.failureCode, null);
+});
+
+test('Windows provider egress is off by default and points at the enablement documentation', () => {
+  assert.equal(readWindowsEgressEnable({}), false);
   const policy = providerEgressPlatformPolicy({
     platform: 'win32',
     arch: 'x64',
     verification: goodVerification(),
     env: {}
   });
-  assert.equal(policy.allowed, true);
-  assert.equal(policy.failureCode, null);
+  assert.equal(policy.allowed, false);
+  assert.equal(policy.failureCode, 'windows_private_state_acl_unavailable');
+  assert.match(policy.summary, /explicitly enabled/u);
+  assert.match(policy.detail, new RegExp(`${WINDOWS_PROVIDER_EGRESS_ENABLE}=1`, 'u'));
+  assert.match(policy.detail, /documentation/u);
 });
 
 test('production Windows provider egress gate fails closed without verification', () => {

@@ -15,7 +15,7 @@ First v0.6 release candidate. Windows x64 live review moves from a blanket relea
 ### Security
 
 - Legacy receipt replay keeps the structural validation shipped in v0.5.1; malformed completion/receipt pairs remain rejected.
-- Windows x64 provider egress is enabled only when all helper, architecture, filesystem, live-root, and kill-switch checks pass. There is no provider/model substitution or direct-process fallback.
+- Windows x64 provider egress is enabled only when all helper, architecture, filesystem, live-root, and kill-switch checks pass **and** the operator explicitly sets `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`. The unset default remains fail-closed. There is no provider/model substitution or direct-process fallback.
 - ARM64 Windows remains unavailable until separately reviewed helper bytes ship. Protection does not claim resistance to Administrators, SYSTEM, or malicious same-user processes.
 
 ### Evidence and limitations

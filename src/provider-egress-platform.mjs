@@ -7,12 +7,13 @@ import { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 export const WINDOWS_PROVIDER_EGRESS_FAILURE_CODE = 'windows_private_state_acl_unavailable';
 export { WINDOWS_PROVIDER_EGRESS_GATE_LIFTED } from './windows-egress-gate.mjs';
 export const WINDOWS_PROVIDER_EGRESS_KILL_SWITCH = 'CODEX_BUDDY_WINDOWS_EGRESS_BLOCK';
+export const WINDOWS_PROVIDER_EGRESS_ENABLE = 'CODEX_BUDDY_WINDOWS_EGRESS_ENABLE';
 
 const WINDOWS_BLOCKER = Object.freeze({
   allowed: false,
   failureCode: WINDOWS_PROVIDER_EGRESS_FAILURE_CODE,
-  summary: 'Live reviewer contact is disabled on Windows in this RC.',
-  detail: 'Buddy does not yet create and verify current-user-only DACLs for durable review state and provider temporary roots. No evidence snapshot or provider prompt will be created for live review.'
+  summary: 'Live reviewer contact is disabled on Windows until explicitly enabled.',
+  detail: `${WINDOWS_PROVIDER_EGRESS_ENABLE}=1 is required after private-state verification. Read the Windows live-egress documentation before enabling it.`
 });
 
 const SUPPORTED = Object.freeze({
@@ -29,6 +30,11 @@ function blocked(failureCode, summary, detail) {
 export function readWindowsEgressKillSwitch(env = process.env) {
   const source = env ?? process.env;
   return source[WINDOWS_PROVIDER_EGRESS_KILL_SWITCH] === '1';
+}
+
+export function readWindowsEgressEnable(env = process.env) {
+  const source = env ?? process.env;
+  return source[WINDOWS_PROVIDER_EGRESS_ENABLE] === '1';
 }
 
 export function evaluateProviderEgressPlatformPolicy(input = {}) {
@@ -84,7 +90,7 @@ export function evaluateProviderEgressPlatformPolicy(input = {}) {
 export function providerEgressPlatformPolicy(input = {}) {
   return evaluateProviderEgressPlatformPolicy({
     ...input,
-    gateLifted: WINDOWS_PROVIDER_EGRESS_GATE_LIFTED
+    gateLifted: WINDOWS_PROVIDER_EGRESS_GATE_LIFTED && readWindowsEgressEnable(input.env)
   });
 }
 
