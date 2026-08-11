@@ -14,7 +14,7 @@
   <p>
     <a href="#status"><img alt="Version v0.6.0-rc.1" src="https://img.shields.io/badge/version-v0.6.0--rc.1-7c3aed" /></a>
     <a href="#quick-start"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&amp;logoColor=white" /></a>
-    <a href="#connection-support"><img alt="Four reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-4-0891b2" /></a>
+    <a href="#connection-support"><img alt="Three reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-3-0891b2" /></a>
     <a href="#pets"><img alt="Five public pets" src="https://img.shields.io/badge/public_pets-5-f59e0b" /></a>
     <a href="#license"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-2563eb" /></a>
     <a href="#status"><img alt="Release candidate" src="https://img.shields.io/badge/release_gates-release_candidate-f59e0b" /></a>
@@ -27,9 +27,9 @@
 
 Keep Codex as the main coding agent, then let one or two separately configured reviewer connections inspect privacy-filtered repository changes while the turn is still running. Buddy validates and attributes their findings, preserves useful disagreement, reports partial failures honestly, and ends with one compact review paragraph beside a persistent animated Codex pet.
 
-> Keep Codex and GPT-5.6 Sol as your main implementer, then use one or two authenticated connections through Buddy's four adapters: Claude, Grok, Ollama, or OpenCode. Models are available only through those adapters and their configured connections. The same pattern works with Claude Max, ChatGPT Pro through OpenCode, Kimi through OpenCode, local Ollama, or any supported mix already configured on your machine.
+> Keep Codex and GPT-5.6 Sol as your main implementer, then use one or two authenticated connections through Buddy's three currently used adapters: Claude, Ollama, or OpenCode. Models are available only through those adapters and their configured connections. The same pattern works with Claude Max, ChatGPT Pro through OpenCode, Kimi through OpenCode, local Ollama, or any supported mix already configured on your machine.
 
-Buddy never asks you to paste tokens into its configuration. Authentication remains owned by Claude Code, Grok CLI, Ollama, or OpenCode.
+Buddy never asks you to paste tokens into its configuration. Authentication remains owned by Claude Code, Ollama, or OpenCode.
 
 Buddy has no hosted account, central review database, or cross-session reviewer memory. It keeps only bounded local recovery, receipt, and settings state. After an authorized request reaches a reviewer connection, that provider's own service and retention policies apply.
 
@@ -39,7 +39,7 @@ Run the first-party `/pet` command once to keep the selected companion open. Inv
 
 Release candidate: `v0.6.0-rc.1`, prepared for publication only from the exact protected `main` head through the guarded release workflow. Stable `v0.5.1` remains the latest published release until that workflow completes.
 
-This RC lifts Windows x64 live provider egress only after the packaged protocol-2 helper verifies current-user-only private-state DACLs on an ACL-capable volume. ARM64, non-ACL volumes, failed verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` remain fail-closed. Native Windows Codex host acceptance remains explicitly UNRUN. See the [validation record](docs/VALIDATION.md) and [RC release note](docs/releases/v0.6.0-rc.1.md).
+This RC keeps Windows x64 live provider egress fail-closed unless the packaged protocol-2 helper verifies current-user-only private-state DACLs on an ACL-capable volume **and** the operator explicitly sets `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`. The unset default, ARM64, non-ACL volumes, failed verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` remain blocked. Native Windows Codex host acceptance remains explicitly UNRUN. See the [validation record](docs/VALIDATION.md) and [RC release note](docs/releases/v0.6.0-rc.1.md).
 
 ## What Buddy does
 
@@ -80,7 +80,7 @@ One common configuration looks like this:
 ```text
 Main coding agent: Codex using ChatGPT Pro
 Reviewer 1: Claude Code using Claude Max
-Reviewer 2: Grok CLI using Grok 4.5
+Reviewer 2: Ollama using an Ollama Cloud model
 Result: two concurrent, independently attributed background reviews and one compact final paragraph
 ```
 
@@ -101,7 +101,7 @@ flowchart LR
     B --> C["Stable repository checkpoints<br/>while implementation continues"]
     C --> G["Privacy and approval gate"]
     G --> R1["Reviewer 1<br/>GLM 5.2 on Ollama Cloud"]
-    G --> R2["Reviewer 2<br/>Grok 4.5 through SuperGrok"]
+    G --> R2["Reviewer 2<br/>Ollama Cloud model"]
     R1 --> V["Local validation and attribution"]
     R2 --> V
     V --> F["Exact final match or final fallback"]
@@ -113,7 +113,7 @@ Use each connection for the job it is best at:
 | Task | Recommended seat | Why |
 |---|---|---|
 | Main implementation | Codex with GPT-5.6 Sol or your preferred coding model | Keeps the primary task focused on building and validating the change |
-| Adversarial correctness review | Grok 4.5, Claude Opus, or another strong independent model | Adds a genuinely different reasoning path after implementation |
+| Adversarial correctness review | Claude Opus, Ollama GLM, or another strong independent model | Adds a genuinely different reasoning path after implementation |
 | Broad maintainability and optimization review | GLM 5.2 on Ollama Cloud, a GPT model routed through OpenCode, Kimi or Moonshot routed through OpenCode, or local Ollama | Turns spare connection capacity into a second engineering perspective |
 | Private or offline review | A capable local Ollama model | Keeps the provider call on the local machine, subject to local model quality |
 
@@ -124,9 +124,9 @@ Provider independence matters more than brand count. Two seats are most useful w
 | Buddy adapter | Subscription or connection route | Structured output boundary | RC status |
 |---|---|---|---|
 | `claude` | Claude Code authenticated with Claude Max, Pro, or an Anthropic-supported credential | Claude JSON Schema output plus strict local validation | Implemented in RC |
-| `grok` | Grok CLI authenticated with xAI or SuperGrok access | Schema-bound output after a closed isolated configuration preflight | Implemented in RC |
+
 | `ollama` | Local Ollama or Ollama Cloud after normal Ollama sign-in | Full JSON Schema for local models; JSON mode plus strict local validation for `:cloud` models | Implemented in RC |
-| `opencode` | OpenCode OAuth or API connections, including OpenAI, xAI, OpenCode Go, Moonshot AI, and other configured providers | Deny-all ephemeral agent, isolated state, JSONL transport rejection on any tool event, strict local validation | Implemented in RC |
+| `opencode` | OpenCode OAuth or API connections, including OpenAI, OpenCode Go, Moonshot AI, and other configured providers | Deny-all ephemeral agent, isolated state, JSONL transport rejection on any tool event, strict local validation | Implemented in RC |
 | direct Codex CLI | ChatGPT Plus or Pro through Codex CLI | A strict no-tools and no-inherited-instructions boundary is not yet proven | Not enabled |
 | direct Kimi CLI | Kimi membership through Kimi CLI | Noninteractive auto-permission behavior is not yet safely disabled | Not enabled |
 
@@ -135,15 +135,15 @@ Authenticate outside Buddy, then confirm the exact model identifier before enabl
 | Connection | Normal sign-in | Read-only verification |
 |---|---|---|
 | Claude Code | `claude auth login` through the [official Claude Code flow](https://docs.anthropic.com/en/docs/claude-code/getting-started) | `claude auth status` |
-| Grok CLI | `grok login --oauth` through the [official Grok Build flow](https://docs.x.ai/build/overview) | `grok models` |
+
 | Ollama | `ollama signin` through [Ollama Cloud](https://docs.ollama.com/cloud) | `ollama list` and `ollama show <model>` |
 | OpenCode | Open OpenCode, use `/connect`, and choose the provider described in the [OpenCode provider guide](https://opencode.ai/docs/providers) | `opencode models [provider]` |
 
-The four implemented adapters can make live reviewer calls on supported POSIX hosts. On Windows x64, provider contact proceeds only after the packaged helper verifies the complete private-state boundary; ARM64, non-ACL volumes, stale or incomplete verification, and the emergency kill switch remain blocked. Read-only status, pet management, configuration, local dry runs, and offline validation remain available when live egress is blocked.
+The three currently used adapters can make live reviewer calls on supported POSIX hosts. On Windows x64, provider contact proceeds only after the packaged helper verifies the complete private-state boundary **and** `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1` is explicitly set; the unset default remains fail-closed. ARM64, non-ACL volumes, stale or incomplete verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` remain blocked. Read-only status, pet management, configuration, local dry runs, and offline validation remain available when live egress is blocked.
 
-ChatGPT Plus or Pro is supported through OpenCode's ChatGPT OAuth connection. SuperGrok can use Buddy's direct Grok CLI adapter or a configured OpenCode xAI connection. Kimi or Moonshot models are supported only when the exact provider/model and API-backed connection are already configured and listed by OpenCode. Ollama Cloud can use Buddy's direct Ollama adapter or a configured OpenCode connection. These routed connections are not native Buddy adapters. Claude Pro or Max must use Buddy's direct `claude` adapter with Claude Code; this project does not route those subscriptions through OpenCode.
+ChatGPT Plus or Pro is supported through OpenCode's ChatGPT OAuth connection. Kimi or Moonshot models are supported only when the exact provider/model and API-backed connection are already configured and listed by OpenCode. Ollama Cloud can use Buddy's direct Ollama adapter or a configured OpenCode connection. These routed connections are not native Buddy adapters. Claude Pro or Max must use Buddy's direct `claude` adapter with Claude Code; this project does not route those subscriptions through OpenCode.
 
-Reviewer effort is validated before capability spend or provider dispatch. Claude, Grok, and OpenCode accept `low`, `medium`, `high`, `xhigh`, and `max`. Ollama accepts `low`, `medium`, and `high` only because its adapter maps effort to Ollama's thinking control. Unsupported combinations fail before mode persistence or model contact.
+Reviewer effort is validated before capability spend or provider dispatch. Claude and OpenCode accept `low`, `medium`, `high`, `xhigh`, and `max`. Ollama accepts `low`, `medium`, and `high` only because its adapter maps effort to Ollama's thinking control. Unsupported combinations fail before mode persistence or model contact.
 
 Check the model identifiers visible to your local OpenCode installation before configuring a routed model:
 
@@ -160,7 +160,7 @@ Prerequisites:
 - Node.js 22 or newer
 - Codex with plugin support
 - At least one supported reviewer CLI installed and authenticated through its own normal login flow
-- Windows x64 live review requires the packaged protocol-2 helper, verified private-state DACLs, and an ACL-capable volume; ARM64 and failed verification remain blocked
+- Windows x64 live review requires the packaged protocol-2 helper, verified private-state DACLs, an ACL-capable volume, and explicit `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`; the unset default, ARM64, and failed verification remain blocked
 
 After protected publication completes, install the published `v0.6.0-rc.1` release through Codex's Git marketplace support:
 
@@ -197,7 +197,7 @@ Start a fresh Codex task after installation or upgrade. Review and explicitly tr
 2. Open Settings, choose Pets, select Refresh, and pick the installed companion.
 3. Run the first-party `/pet` command once. Codex persists the open pet, its position, size, and appearance.
 4. Install and authenticate the reviewer CLI or CLIs you intend to use through each provider's normal sign-in flow. Buddy does not collect or store those credentials.
-5. Type `$codex-buddy-reviewer:buddy-review configure Claude Opus 4.8 as primary and Grok 4.5 as secondary`, adjusting the provider and model names to match your connections.
+5. Type `$codex-buddy-reviewer:buddy-review configure Claude Opus 4.8 as primary and Ollama GLM 5.2 as secondary`, adjusting the provider and model names to match your connections.
 6. Type `$codex-buddy-reviewer:buddy-review run local doctor checks` and review the read-only connection and platform status. A provider health check is separate because it makes a small authorized model call.
 7. Type `$codex-buddy-reviewer:buddy-review` and send it to enable automatic review for the current Git workspace. The no-argument toggle otherwise uses Buddy's documented default Ollama Cloud configuration, so configure first unless that is what you want.
 8. Work normally. The no-argument skill invocation explicitly authorizes continuous review when it toggles the workspace ON. The native pet shows Codex task animation while Buddy tracks exact Git state and prepares a compact review through the transcript and local event stream.
@@ -210,7 +210,7 @@ Marketplace users do not need to locate the plugin directory or run relative Nod
 $codex-buddy-reviewer:buddy-review
 $codex-buddy-reviewer:buddy-review pet list
 $codex-buddy-reviewer:buddy-review pet install buddy-byte
-$codex-buddy-reviewer:buddy-review configure Claude Opus 4.8 as primary and Grok 4.5 as secondary
+$codex-buddy-reviewer:buddy-review configure Claude Opus 4.8 as primary and Ollama GLM 5.2 as secondary
 $codex-buddy-reviewer:buddy-review show status
 $codex-buddy-reviewer:buddy-review run local doctor checks
 $codex-buddy-reviewer:buddy-review show local data status
@@ -223,15 +223,15 @@ The raw `node scripts/buddy-review.mjs` examples below are for a full source che
 
 ## Configure one or two reviewers
 
-Enable Claude and Grok as a pair:
+Enable Claude and Ollama as a pair:
 
 ```bash
 node scripts/buddy-review.mjs mode enable \
   --cwd "/path/to/repository" \
   --provider claude \
   --model claude-opus-4-8 \
-  --also-provider grok \
-  --also-model grok-4.5 \
+  --also-provider ollama \
+  --also-model glm-5.2:cloud \
   --continuous-review
 ```
 
@@ -285,7 +285,7 @@ node scripts/buddy-review.mjs setup plan \
   --cwd "/path/to/repository" \
   --pet-id buddy-byte \
   --provider claude \
-  --also-provider grok \
+  --also-provider ollama \
   --continuous-review
 ```
 
@@ -416,7 +416,7 @@ The public source branch and installable artifact are separate trust boundaries.
 
 ## Manual one-shot review
 
-The manual path defaults to Grok:
+The manual path uses the configured primary connection; set it explicitly when a different adapter is required:
 
 ```bash
 node scripts/buddy-review.mjs review --cwd "/path/to/repository"
