@@ -18,6 +18,6 @@ Path filtering reduces accidental disclosure; it is not a general-purpose secret
 
 ## Provider boundary
 
-Grok runs for one turn in plan mode with memory, subagents, web search, repository reads, shell access, and writes disabled. GLM is invoked through `ollama run` with history disabled. Neither provider may edit the repository through this plugin.
+The selected reviewer adapter runs for one turn with its documented isolation boundary; Ollama uses `ollama run` with history disabled. No provider may edit the repository through this plugin.
 
 Automatic mode uses the same provider and validator boundary but derives evidence from private start/final turn snapshots. The worker summary is used only for local final presentation and is not sent to the reviewer.

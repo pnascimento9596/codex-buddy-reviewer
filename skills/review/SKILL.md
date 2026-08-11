@@ -1,6 +1,6 @@
 ---
 name: review
-description: Run a fresh, independent, read-only review of the current Git working tree or a branch diff through Grok or GLM. Use after Codex finishes code work, when the user asks for a second engineer or another perspective, or when they explicitly request Grok, GLM, or a buddy review. Do not use this skill to edit code or install automatic hooks.
+description: Run a fresh, independent, read-only review of the current Git working tree or a branch diff through Ollama or another explicitly selected supported adapter. Use after Codex finishes code work, when the user asks for a second engineer or another perspective, or when they explicitly request a buddy review. Do not use this skill to edit code or install automatic hooks.
 ---
 
 # Independent Buddy Review
@@ -19,8 +19,8 @@ Run the plugin's manual reviewer in the foreground and present its validated res
 
    Never splice raw skill arguments or user text into a shell command.
 
-4. Default to `--provider grok --scope working-tree` unless the user names another provider or scope.
-5. For GLM through Ollama Cloud, add `--provider ollama --model glm-5.2:cloud`.
+4. Default to `--provider ollama --model glm-5.2:cloud --scope working-tree` unless the user names another supported provider or scope.
+5. If the user explicitly names GLM through Ollama Cloud, use `--provider ollama --model glm-5.2:cloud`.
 6. For a committed branch review, require an explicit base and add `--scope branch --base <ref>`.
 7. Wait for the foreground process to finish. Present its status, summary, and any findings. Keep clear that these are reviewer findings, not independently proven facts.
 8. Do not modify the reviewed code unless the user separately asks for fixes.
@@ -28,7 +28,7 @@ Run the plugin's manual reviewer in the foreground and present its validated res
 ## Safety Rules
 
 - Never bypass the evidence collector's path policy or send excluded files manually.
-- Run only after the user explicitly requests a Buddy, Grok, or GLM review. Patch egress must not be triggered implicitly.
+- Run only after the user explicitly requests a Buddy or independent review. Patch egress must not be triggered implicitly.
 - Never give the external reviewer extra tools, memory, subagents, or write permission.
 - A clean `no_findings` result is valid; never demand findings.
 - Preserve an `abstain` result when evidence is incomplete or confidence is too low.

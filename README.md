@@ -124,7 +124,6 @@ Provider independence matters more than brand count. Two seats are most useful w
 | Buddy adapter | Subscription or connection route | Structured output boundary | RC status |
 |---|---|---|---|
 | `claude` | Claude Code authenticated with Claude Max, Pro, or an Anthropic-supported credential | Claude JSON Schema output plus strict local validation | Implemented in RC |
-
 | `ollama` | Local Ollama or Ollama Cloud after normal Ollama sign-in | Full JSON Schema for local models; JSON mode plus strict local validation for `:cloud` models | Implemented in RC |
 | `opencode` | OpenCode OAuth or API connections, including OpenAI, OpenCode Go, Moonshot AI, and other configured providers | Deny-all ephemeral agent, isolated state, JSONL transport rejection on any tool event, strict local validation | Implemented in RC |
 | direct Codex CLI | ChatGPT Plus or Pro through Codex CLI | A strict no-tools and no-inherited-instructions boundary is not yet proven | Not enabled |
@@ -135,7 +134,6 @@ Authenticate outside Buddy, then confirm the exact model identifier before enabl
 | Connection | Normal sign-in | Read-only verification |
 |---|---|---|
 | Claude Code | `claude auth login` through the [official Claude Code flow](https://docs.anthropic.com/en/docs/claude-code/getting-started) | `claude auth status` |
-
 | Ollama | `ollama signin` through [Ollama Cloud](https://docs.ollama.com/cloud) | `ollama list` and `ollama show <model>` |
 | OpenCode | Open OpenCode, use `/connect`, and choose the provider described in the [OpenCode provider guide](https://opencode.ai/docs/providers) | `opencode models [provider]` |
 

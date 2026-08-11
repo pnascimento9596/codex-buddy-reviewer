@@ -50,3 +50,9 @@ No reviewer credential was placed in Actions. The model was local-only (`OLLAMA_
 The existing protected Windows matrix remains the authoritative DACL/private-state evidence: packaged-byte protocol checks, fresh root ensure/verify, junction leaf and ancestor refusal, wrong-owner refusal, schema-v1 proof rejection, assured-path verification, kill-switch issuance/executor blocks, provider-temp platform-integrity classification without provider-circuit charge, and multi-root purge/tombstone behavior. Phase 5 did not independently turn those protected tests into a live Codex host claim.
 
 Under the owner brief’s Phase 5e fallback, this limitation does not block `v0.6.0-rc.1`. It must remain visible in the RC note, readiness ledger, current-state report, and Lane J promotion criteria.
+
+## Lane J bounded recheck
+
+Lane J used the two authorized branch-only attempts `31510839580` and `31511573245` as the final Windows live-egress experiment. Both failed before provider setup: the first exposed a null PowerShell clean-status probe, and the second exposed a branch-parent assertion in the retry workflow. Both therefore recorded zero doctor calls, zero live turns, and zero provider inferences. The result is **NOT OBSERVED**, not a provider failure and not live-host proof.
+
+The terminating fallback is explicit opt-in through `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`. The default remains disabled after private-state verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` remains an unconditional kill switch. No third Windows attempt was made.

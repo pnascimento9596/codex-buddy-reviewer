@@ -17,6 +17,13 @@ Frozen Layers B–E are unchanged historical publication evidence.
 - Phase 5 Windows evidence disposition merged through PR #90 as `8b69066e3dafa309044021b723a2643f5b9e524b`; protected-main run `31371658178` passed every required lane.
 - Windows x64 live local-model/Codex host e2e remains UNRUN after bounded branch-only viability attempts. Protected Windows Node 22/24 integration tests remain the authoritative packaged-helper and DACL evidence. ARM64 remains blocked.
 
+### Lane J current reconciliation
+
+- Windows runs `31510839580` and `31511573245` both failed before provider setup; doctor calls, live turns, and provider inferences were all zero. The final disposition is **NOT OBSERVED** after the two-run bound.
+- The opt-in fallback is `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`; the unset default remains fail-closed after private-state verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` still overrides it.
+- PR #91 merged normally as `9efd4037dcf691590232869ce7031755157f72a2`; PR #94 merged normally as `80f378cb7b8d4353b4a6b7745b4d3ebcf421a15` after the automatic-test seam split and documentation reconciliation. PR #95 is the opt-in source change and remains subject to exact-head protected CI before it can be treated as current main evidence.
+- Browser governance was captured externally in the Lane J evidence bundle as `phase-3-browser-governance.md`; it is machine-captured and human-unreviewed. The GitHub Security Log was intentionally not opened.
+
 ### 0.5.1 candidate local validation (pre-merge head)
 
 Authoritative serial local `node --test` on the 0.5.1 candidate head recorded
