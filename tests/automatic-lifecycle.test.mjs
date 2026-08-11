@@ -413,6 +413,46 @@ test('dual reviewers start concurrently and preserve configured presentation ord
   assert.deepEqual(receipt.reviewer_runs.map((run) => run.status), ['succeeded', 'succeeded']);
 });
 
+test('automatic stop fails closed for a stored legacy provider before approval or dispatch', async () => {
+  const fixture = await prepareDualReviewerTurn({ turnId: 'legacy-provider-stop', value: 204 });
+  const file = modeFile(fixture.root, fixture.modeDataDir);
+  const storedMode = JSON.parse(await readFile(file, 'utf8'));
+  await writeFile(file, JSON.stringify({
+    ...storedMode,
+    provider: 'grok',
+    model: 'grok-4.5',
+    secondary_provider: null,
+    secondary_model: null,
+    secondary_effort: null
+  }));
+  let reviewCalls = 0;
+  const stopped = await reviewTurnStop(fixture.stopInput, {
+    modeDataDir: fixture.modeDataDir,
+    runtimeDataDir: fixture.runtimeDataDir,
+    review: async () => {
+      reviewCalls += 1;
+      throw new Error('legacy provider must not dispatch');
+    }
+  });
+  assert.equal(reviewCalls, 0);
+  assert.equal(stopped.result.status, 'abstain');
+  const receipt = JSON.parse(await readFile(stopped.receipt, 'utf8'));
+  assert.equal(receipt.provider, 'none');
+  assert.equal(receipt.model, 'none');
+  assert.deepEqual(receipt.reviewer_runs, []);
+  assert.deepEqual((await readEgressRegistry({
+    root: fixture.root,
+    dataDir: fixture.modeDataDir
+  })).active, []);
+  const turnRoot = automaticTurnDirectory(
+    fixture.runtimeDataDir,
+    fixture.root,
+    fixture.stopInput.session_id,
+    fixture.stopInput.turn_id
+  );
+  await assert.rejects(access(path.join(turnRoot, 'attempt.json')));
+});
+
 test('one invalid reviewer and one success complete with attributed audit records', async () => {
   const fixture = await prepareDualReviewerTurn({ turnId: 'dual-partial', value: 202 });
   const stopped = await reviewTurnStop(fixture.stopInput, {
@@ -1610,8 +1650,8 @@ test('summary consent provider mismatch omits summary and preserves technical re
     root,
     dataDir: modeDataDir,
     action: 'enable',
-    provider: 'grok',
-    model: 'glm-5.2:cloud',
+    provider: 'claude',
+    model: 'claude-opus-4-8',
     confirmSummaryEgress: true
   });
   const identity = { session_id: 'guard-mismatch-session', turn_id: 'guard-mismatch-turn', cwd: root };
@@ -2358,7 +2398,7 @@ test('automatic review abstains without egress when mode changes during a turn',
   await captureTurnStart({ ...identity, hook_event_name: 'UserPromptSubmit', prompt: 'Change it' }, {
     modeDataDir, runtimeDataDir
   });
-  await changeMode({ root, action: 'enable', provider: 'grok', dataDir: modeDataDir });
+  await changeMode({ root, action: 'enable', provider: 'claude', model: 'claude-opus-4-8', dataDir: modeDataDir });
   await writeFile(path.join(root, 'app.js'), 'const value = 8;\n');
   let calls = 0;
   const stopped = await reviewTurnStop({
@@ -2442,9 +2482,9 @@ test('provider circuit state is isolated by the exact configured model', async (
   const root = await makeRepository();
   const modeDataDir = await temporaryDirectory('codex-buddy-mode-');
   const runtimeDataDir = await temporaryDirectory('codex-buddy-runtime-');
-  const modelA = 'grok-circuit-a';
-  const modelB = 'grok-circuit-b';
-  await changeMode({ root, action: 'enable', provider: 'grok', model: modelA, dataDir: modeDataDir });
+  const modelA = 'ollama-circuit-a';
+  const modelB = 'ollama-circuit-b';
+  await changeMode({ root, action: 'enable', provider: 'ollama', model: modelA, dataDir: modeDataDir });
   let failedCalls = 0;
   const failingReview = async () => {
     failedCalls += 1;
@@ -2466,13 +2506,13 @@ test('provider circuit state is isolated by the exact configured model', async (
   }
   assert.equal(failedCalls, 3);
 
-  await changeMode({ root, action: 'enable', provider: 'grok', model: modelB, dataDir: modeDataDir });
+  await changeMode({ root, action: 'enable', provider: 'ollama', model: modelB, dataDir: modeDataDir });
   let modelBCalls = 0;
   const modelBResult = await runChangedTurn('model-b-success', 30, async (evidence) => {
     modelBCalls += 1;
     return {
       evidence,
-      provider: 'grok',
+      provider: 'ollama',
       model: modelB,
       result: {
         schema_version: '1', status: 'no_findings', summary: 'Model B completed.', findings: [], comments: []
@@ -2482,7 +2522,7 @@ test('provider circuit state is isolated by the exact configured model', async (
   assert.equal(modelBCalls, 1);
   assert.equal(modelBResult.result.status, 'no_findings');
 
-  await changeMode({ root, action: 'enable', provider: 'grok', model: modelA, dataDir: modeDataDir });
+  await changeMode({ root, action: 'enable', provider: 'ollama', model: modelA, dataDir: modeDataDir });
   const modelAStillOpen = await runChangedTurn('model-a-still-open', 31, async () => {
     throw new Error('model A circuit must remain open');
   });

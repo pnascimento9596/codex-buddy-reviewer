@@ -718,11 +718,20 @@ export async function runDoctor(options = {}) {
   if (root) {
     try {
       mode = await readModeStateReadOnly(root, options.dataDir);
-      checks.push(check('mode_state', mode.state.enabled ? 'pass' : 'warn', mode.state.enabled
-        ? `Workspace review mode is enabled with ${mode.reviewers.length} configured reviewer connection(s).`
-        : mode.exists
-          ? `Workspace review mode is disabled with ${mode.reviewers.length} configured reviewer connection(s).`
-          : 'Workspace review mode is disabled and has no stored reviewer configuration.', {
+      const unavailableReviewers = mode.reviewers.filter(
+        (reviewer) => !operatorSupportedProviderIds().includes(reviewer.provider)
+      );
+      const modeStatus = unavailableReviewers.length > 0
+        ? mode.state.enabled ? 'fail' : 'warn'
+        : mode.state.enabled ? 'pass' : 'warn';
+      const modeSummary = unavailableReviewers.length > 0
+        ? `Workspace review mode contains unavailable operator provider connection(s): ${unavailableReviewers.map((reviewer) => reviewer.provider).join(', ')}; provider execution will fail closed.`
+        : mode.state.enabled
+          ? `Workspace review mode is enabled with ${mode.reviewers.length} configured reviewer connection(s).`
+          : mode.exists
+            ? `Workspace review mode is disabled with ${mode.reviewers.length} configured reviewer connection(s).`
+            : 'Workspace review mode is disabled and has no stored reviewer configuration.';
+      checks.push(check('mode_state', modeStatus, modeSummary, {
         configured_reviewer_count: mode.reviewers.length,
         configured_reviewers: mode.reviewers.map((reviewer, index) => ({
           role: index === 0 ? 'primary' : 'secondary',
@@ -730,7 +739,10 @@ export async function runDoctor(options = {}) {
           model: reviewer.model,
           effort: reviewer.effort
         })),
-        supported_providers: operatorSupportedProviderIds()
+        supported_providers: operatorSupportedProviderIds(),
+        ...(unavailableReviewers.length > 0 ? {
+          unavailable_operator_providers: unavailableReviewers.map((reviewer) => reviewer.provider)
+        } : {})
       }));
     } catch (error) {
       checks.push(check('mode_state', 'fail', 'Workspace mode state is invalid.', { detail: error.message }));

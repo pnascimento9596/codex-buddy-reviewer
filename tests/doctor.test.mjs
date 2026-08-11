@@ -425,6 +425,35 @@ test('doctor enumerates the three operator-supported adapters and both configure
   assert.equal(check(result, 'provider').status, 'unknown');
 });
 
+test('default doctor marks an enabled legacy provider mode unhealthy without contacting it', async () => {
+  const root = await temporaryDirectory('codex-buddy-doctor-legacy-provider-');
+  const canonicalRoot = await realpath(root);
+  const dataDir = path.join(root, 'state');
+  await writeModeFixture(canonicalRoot, dataDir, true, {
+    provider: 'grok',
+    model: 'grok-4.5'
+  });
+  let providerCalls = 0;
+  const result = await runDoctor({
+    root,
+    resolveRoot: async (value) => value,
+    codexHome: path.join(root, 'codex'),
+    dataDir,
+    pluginRoot: repositoryRoot,
+    platform: 'linux',
+    providerCheck: async () => {
+      providerCalls += 1;
+      return { status: 'pass', summary: 'must not run' };
+    }
+  });
+  const state = check(result, 'mode_state');
+  assert.equal(providerCalls, 0);
+  assert.equal(state.status, 'fail');
+  assert.deepEqual(state.unavailable_operator_providers, ['grok']);
+  assert.match(state.summary, /unavailable operator provider/);
+  assert.deepEqual(state.supported_providers, ['claude', 'ollama', 'opencode']);
+});
+
 test('doctor rejects credential-shaped stored model identifiers without echoing them', async () => {
   const root = await temporaryDirectory('codex-buddy-doctor-model-guard-');
   const canonicalRoot = await realpath(root);

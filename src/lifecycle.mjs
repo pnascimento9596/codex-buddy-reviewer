@@ -27,7 +27,10 @@ import {
 } from './mode.mjs';
 import { appendOutboxEvent } from './outbox.mjs';
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
-import { approveProviderReviewRequest } from './provider-registry.mjs';
+import {
+  approveProviderReviewRequest,
+  operatorSupportedProviderIds
+} from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
 import { DEADLINE_STALL_MAX_EXTENSION_MS } from './process.mjs';
 import { aggregateReviewOutcomes, ReviewAggregationError } from './review-aggregate.mjs';
@@ -80,6 +83,8 @@ import {
   isWindowsPlatformIntegrityFailure,
   reverifyWindowsPrivateStateRoots
 } from './windows-private-state-roots.mjs';
+
+const OPERATOR_PROVIDERS = new Set(operatorSupportedProviderIds());
 
 const MAX_CONTINUATION_CHARS = 1_800;
 const STOP_LEASE_HELD = Symbol('Buddy stop lease held');
@@ -1115,6 +1120,17 @@ export async function reviewTurnStop(input, options = {}) {
         comments: []
       }
     });
+    const unavailableProviderResult = () => ({
+      provider: 'none',
+      model: 'none',
+      result: {
+        schema_version: REVIEW_SCHEMA_VERSION,
+        status: 'abstain',
+        summary: 'Buddy configuration contains an unavailable reviewer connection; no provider was called.',
+        findings: [],
+        comments: []
+      }
+    });
     const modeStillAuthorized = (authorizedMode) => authorizedMode.enabled
       && authorizedMode.config_revision === baselineRecord.mode_revision;
     const issueForPackets = async (authorizedMode, executableReviewers, primaryPacket, consent) => {
@@ -1186,6 +1202,9 @@ export async function reviewTurnStop(input, options = {}) {
       async (authorizedMode) => {
         if (!modeStillAuthorized(authorizedMode)) return { local: changedModeResult() };
         const authorizedReviewers = reviewersForMode(authorizedMode);
+        if (authorizedReviewers.some((reviewer) => !OPERATOR_PROVIDERS.has(reviewer.provider))) {
+          return { local: unavailableProviderResult() };
+        }
         const openStates = await Promise.all(authorizedReviewers.map((reviewer) => providerCircuitIsOpen({
           runtimeDataDir: options.runtimeDataDir,
           root,

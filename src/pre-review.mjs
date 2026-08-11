@@ -27,7 +27,10 @@ import {
   updatePreReviewWorker
 } from './pre-review-state.mjs';
 import { privacyCoverageIsCurrentComplete } from './privacy-inventory.mjs';
-import { approveProviderReviewRequest } from './provider-registry.mjs';
+import {
+  approveProviderReviewRequest,
+  operatorSupportedProviderIds
+} from './provider-registry.mjs';
 import { providerEgressPlatformPolicy } from './provider-egress-platform.mjs';
 import {
   providerCircuitIsOpen,
@@ -53,6 +56,8 @@ import {
 } from './state.mjs';
 import { readSummaryClaimGuardConsent } from './summary-claim-guard.mjs';
 import { buildTurnEvidence, captureTurnSnapshot, turnSnapshotDigest } from './turn-snapshot.mjs';
+
+const OPERATOR_PROVIDERS = new Set(operatorSupportedProviderIds());
 
 const INPUT_KEYS = Object.freeze([
   'cwd',
@@ -1176,6 +1181,17 @@ export async function runPreReviewWorker(rawInput, options = {}) {
         return { skipped: 'non_reviewable_final', reviewKey, root, directory };
       }
       assertWorkerLifetime(workerDeadline, lifetimeController.signal, deps.now);
+      const configuredReviewers = reviewersForMode(mode);
+      if (configuredReviewers.some((reviewer) => !OPERATOR_PROVIDERS.has(reviewer.provider))) {
+        const diagnostic = boundWorkerFailure(
+          Object.assign(new Error('configured reviewer provider is unavailable'), {
+            failureCode: 'provider_unavailable'
+          }),
+          'authorization'
+        );
+        await deps.finishWorker(directory, input.worker_nonce, 'failed', null, diagnostic);
+        return { skipped: 'unsupported_provider', reviewKey, root, directory, failure: diagnostic };
+      }
       phase = 'reviewing';
       const launched = await deps.incrementLaunch(
         directory,
@@ -1207,7 +1223,7 @@ export async function runPreReviewWorker(rawInput, options = {}) {
         await deps.finishWorker(directory, input.worker_nonce, 'failed', null, diagnostic);
         return { skipped: 'prior_attempt_incomplete', reviewKey, root, directory, failure: diagnostic };
       }
-      const reviewers = reviewersForMode(mode);
+      const reviewers = configuredReviewers;
       let terminal;
       const controller = new AbortController();
       const expireProvider = () => {
@@ -1242,6 +1258,9 @@ export async function runPreReviewWorker(rawInput, options = {}) {
               return null;
             }
             const lockedReviewers = reviewersForMode(lockedMode);
+            if (lockedReviewers.some((reviewer) => !OPERATOR_PROVIDERS.has(reviewer.provider))) {
+              return { mode: lockedMode, reviewers: lockedReviewers, unavailable: true };
+            }
             const openStates = await Promise.all(lockedReviewers.map((reviewer) => deps.circuitIsOpen({
               runtimeDataDir,
               root,
@@ -1261,6 +1280,16 @@ export async function runPreReviewWorker(rawInput, options = {}) {
             return { mode: lockedMode, reviewers: lockedReviewers, openStates, issued };
           });
           if (!authorization) return { disabled: true };
+          if (authorization.unavailable) {
+            const diagnostic = boundWorkerFailure(
+              Object.assign(new Error('configured reviewer provider is unavailable'), {
+                failureCode: 'provider_unavailable'
+              }),
+              'authorization'
+            );
+            await deps.finishWorker(directory, input.worker_nonce, 'failed', null, diagnostic);
+            return { skipped: 'unsupported_provider', reviewKey, root, directory, failure: diagnostic };
+          }
           if (!authorization.issued) {
             const outcomes = authorization.reviewers.map(circuitOpenOutcome);
             const reviewerRuns = outcomes.map((outcome, sourceIndex) => ({
