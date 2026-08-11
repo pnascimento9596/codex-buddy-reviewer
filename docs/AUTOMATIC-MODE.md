@@ -128,7 +128,7 @@ Example dual-reviewer configuration:
 node scripts/buddy-review.mjs mode enable \
   --cwd "/path/to/repository" \
   --provider claude --model claude-opus-4-8 --effort high \
-  --also-provider grok --also-model grok-4.5 --also-effort high \
+  --also-provider ollama --also-model glm-5.2:cloud --also-effort high \
   --continuous-review
 ```
 
@@ -147,7 +147,6 @@ Both lanes receive the same exact technical evidence and run concurrently for a 
 | Subscription or connection | Buddy configuration | Boundary |
 |---|---|---|
 | Claude Max | `--provider claude --model claude-opus-4-8` | direct authenticated Claude Code CLI |
-| Grok or SuperGrok | `--provider grok --model grok-4.5` | direct authenticated Grok CLI; a configured OpenCode xAI route is also possible |
 | Ollama local | `--provider ollama --model <local-model>` | direct local Ollama CLI |
 | Ollama Cloud | `--provider ollama --model <cloud-model>:cloud` | direct authenticated Ollama CLI |
 | ChatGPT Plus or Pro | `--provider opencode --model openai/<model>` | OpenCode ChatGPT OAuth connection |
@@ -155,7 +154,7 @@ Both lanes receive the same exact technical evidence and run concurrently for a 
 | Ollama Cloud through OpenCode | `--provider opencode --model <configured-ollama-provider>/<model>` | selected OpenCode Ollama Cloud connection; direct `ollama` remains available |
 | Other configured OpenCode provider | `--provider opencode --model <provider>/<model>` | selected configured OpenCode provider entry only |
 
-The implemented adapter IDs are exactly `claude`, `grok`, `ollama`, and `opencode`. ChatGPT OAuth, Kimi/Moonshot API-backed models, SuperGrok, Ollama Cloud, and other third-party connections can be selected only when their exact provider/model is already configured in OpenCode; they are routed connections, not additional Buddy adapters. Direct Codex CLI and direct Kimi CLI are not supported because their strict no-tools and no-inherited-context boundaries have not been proven. Claude Pro or Max must use Buddy's direct `claude` adapter with Claude Code and must not be routed through OpenCode. OpenCode receives only the selected provider authentication entry inside a disposable deny-all environment. Buddy never asks the user to paste tokens into its configuration.
+The current operator-supported review choices documented for this release lane are `claude`, `ollama`, and `opencode`. ChatGPT OAuth, Kimi/Moonshot API-backed models, Ollama Cloud, and other third-party connections can be selected only when their exact provider/model is already configured in OpenCode; they are routed connections, not additional native Buddy adapters. Direct Codex CLI and direct Kimi CLI are not supported as Buddy adapters because their strict no-tools and no-inherited-context boundaries have not been proven. Claude Pro or Max must use Buddy's direct `claude` adapter with Claude Code and must not be routed through OpenCode. OpenCode receives only the selected provider authentication entry inside a disposable deny-all environment. Buddy never asks the user to paste tokens into its configuration.
 
 ## Failure semantics
 

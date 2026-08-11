@@ -1,7 +1,7 @@
 # Reviewer Evaluation
 
 Buddy separates deterministic fixture validation from live model evaluation. CI
-does not contact Grok, Ollama Cloud, or any other provider.
+does not contact Ollama Cloud or any other provider.
 
 ## Deterministic corpus
 
@@ -74,9 +74,7 @@ this prevents a late overwrite failure after evidence egress. Results record
 provider/model identity and hashes of diagnostics rather than raw provider
 stderr.
 
-Grok uses the same contract with `--provider grok` and an explicitly selected
-model. Its existing fail-closed isolation preflight remains in force. Do not
-weaken provider isolation to obtain an evaluation result.
+
 
 After a live run, score the artifact using the offline command above. A failed
 provider attempt is recorded once and never retried. No live provider was called
