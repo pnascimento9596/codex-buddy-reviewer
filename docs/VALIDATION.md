@@ -4,24 +4,26 @@ This document separates validation evidence into five explicitly labeled layers.
 
 ## Layer A - current evidence at exact protected main
 
-Current promotion work prepares `v0.6.0-rc.1` from protected main after the
+Current promotion work prepares stable `v0.6.0` from protected main after the
 lane-h/lane-i Windows DACL remediation, replay fix, exact-tree two-family seal,
 and bounded native-Windows viability disposition. The immutable published
 v0.5.1 source remains `c1af3da4ce34f8ba43196bbeee8065053398324d`.
 Frozen Layers B–E are unchanged historical publication evidence.
 
-### v0.6.0-rc.1 candidate evidence
+### v0.6.0 candidate evidence
 
 - Windows-remediation final tree `1a995b50eeb2df2637fb2b90b1cbe4211c734af6` received clean current-tree clearance from direct Claude and direct Ollama/GLM across concerns C1–C4; final seal manifest SHA-256 `197ef5f587ac770cbbca98e51ba57793930e29e58ea9424428487a2862a696d0` is retained externally.
 - Protected-main validation run `31363656621` passed at remediation merge `d8228facae2eb48bb3df6f4256cf445c6341282d`.
 - Phase 5 Windows evidence disposition merged through PR #90 as `8b69066e3dafa309044021b723a2643f5b9e524b`; protected-main run `31371658178` passed every required lane.
+- Lane J opt-in implementation merged through PR #95 as `40ecc13eab234d054c4a6c1c11f0e7752d58c3ba`; protected-main run `31518823351` passed every required lane.
+- Lane J documentation/provider-guidance reconciliation merged through PR #96 as `257c62cb59578ba3a7bbd13e625f7ae7bc806bcb`; protected-main validation is the current release gate.
 - Windows x64 live local-model/Codex host e2e remains UNRUN after bounded branch-only viability attempts. Protected Windows Node 22/24 integration tests remain the authoritative packaged-helper and DACL evidence. ARM64 remains blocked.
 
 ### Lane J current reconciliation
 
 - Windows runs `31510839580` and `31511573245` both failed before provider setup; doctor calls, live turns, and provider inferences were all zero. The final disposition is **NOT OBSERVED** after the two-run bound.
 - The opt-in fallback is `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`; the unset default remains fail-closed after private-state verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` still overrides it.
-- PR #91 merged normally as `9efd4037dcf691590232869ce7031755157f72a2`; PR #94 merged normally as `80f378cb7b8d4353b4a6b7745b4d3ebcf421a15` after the automatic-test seam split and documentation reconciliation. PR #95 is the opt-in source change and remains subject to exact-head protected CI before it can be treated as current main evidence.
+- PR #91 merged normally as `9efd4037dcf691590232869ce7031755157f72a2`; PR #94 merged normally as `80f378cb7b8d4353b4a6b7745b4d3ebcf421a15` after the automatic-test seam split and documentation reconciliation. PR #95 merged as `40ecc13eab234d054c4a6c1c11f0e7752d58c3ba`; PR #96 merged as `257c62cb59578ba3a7bbd13e625f7ae7bc806bcb`.
 - Browser governance was captured externally in the Lane J evidence bundle as `phase-3-browser-governance.md`; it is machine-captured and human-unreviewed. The GitHub Security Log was intentionally not opened.
 
 ### 0.5.1 candidate local validation (pre-merge head)

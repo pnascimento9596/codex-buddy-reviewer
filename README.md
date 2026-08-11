@@ -12,12 +12,12 @@
     <a href="CONTRIBUTING.md">Contributing</a>
   </p>
   <p>
-    <a href="#status"><img alt="Version v0.6.0-rc.1" src="https://img.shields.io/badge/version-v0.6.0--rc.1-7c3aed" /></a>
+    <a href="#status"><img alt="Version v0.6.0" src="https://img.shields.io/badge/version-v0.6.0-7c3aed" /></a>
     <a href="#quick-start"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&amp;logoColor=white" /></a>
     <a href="#connection-support"><img alt="Three reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-3-0891b2" /></a>
     <a href="#pets"><img alt="Five public pets" src="https://img.shields.io/badge/public_pets-5-f59e0b" /></a>
     <a href="#license"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-2563eb" /></a>
-    <a href="#status"><img alt="Release candidate" src="https://img.shields.io/badge/release_gates-release_candidate-f59e0b" /></a>
+    <a href="#status"><img alt="Stable release candidate" src="https://img.shields.io/badge/release_gates-stable_candidate-f59e0b" /></a>
   </p>
 </div>
 
@@ -37,9 +37,9 @@ Run the first-party `/pet` command once to keep the selected companion open. Inv
 
 ## Status
 
-Release candidate: `v0.6.0-rc.1`, prepared for publication only from the exact protected `main` head through the guarded release workflow. Stable `v0.5.1` remains the latest published release until that workflow completes.
+Stable release candidate: `v0.6.0`, prepared for publication only from the exact protected `main` head through the guarded release workflow. Stable `v0.5.1` remains the latest published release until that workflow completes.
 
-This RC keeps Windows x64 live provider egress fail-closed unless the packaged protocol-2 helper verifies current-user-only private-state DACLs on an ACL-capable volume **and** the operator explicitly sets `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`. The unset default, ARM64, non-ACL volumes, failed verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` remain blocked. Native Windows Codex host acceptance remains explicitly UNRUN. See the [validation record](docs/VALIDATION.md) and [RC release note](docs/releases/v0.6.0-rc.1.md).
+This release keeps Windows x64 live provider egress fail-closed unless the packaged protocol-2 helper verifies current-user-only private-state DACLs on an ACL-capable volume **and** the operator explicitly sets `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`. The unset default, ARM64, non-ACL volumes, failed verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` remain blocked. Native Windows Codex host acceptance remains explicitly UNRUN. See the [validation record](docs/VALIDATION.md) and [release note](docs/releases/v0.6.0.md).
 
 ## What Buddy does
 
@@ -59,13 +59,13 @@ This RC keeps Windows x64 live provider egress fail-closed unless the packaged p
 
 An internal sealed whole-repository Deep Security Scan of the pre-fix RC head found 20 findings: 17 medium and 3 low. They clustered around credential syntax gaps, denied-content fragment and live Git metadata coverage, and lossy handling of invalid UTF-8 Git pathnames. Provider-free reproductions proved that affected bytes could enter a prepared external-review prompt or that review evidence could be reported falsely complete.
 
-Those finding families were remediated with regression coverage and independent review fixes through the v0.5 series. For `v0.6.0-rc.1` the current posture is:
+Those finding families were remediated with regression coverage and independent review fixes through the v0.5 series. For `v0.6.0` the current posture is:
 
-1. Exact protected `main` head passes the complete local suite, plugin and skill validators, and public-boundary verification.
-2. Direct Claude and direct Ollama/GLM family seals cover the final Windows-remediation tree; version-only promotion surfaces remain locally and mechanically validated.
-3. GitHub Actions Ubuntu, macOS, Windows x64, Node 22/24 matrix green at that head; deterministic rebuild, verify, extract, and install of the exact artifact.
-4. Positive artifact contains the reviewed, hash-pinned Windows x64 Job Object helper (packaged under `bin/win32-x64/`).
-5. Windows x64 live provider egress is enabled only through verified private roots and keeps an emergency kill switch. Native Windows host e2e is UNRUN and remains a promotion limitation.
+1. The exact stable candidate head must pass the complete local suite, plugin and skill validators, and public-boundary verification.
+2. Direct Claude and direct Ollama/GLM family seals cover the final Windows-remediation tree; version-only promotion surfaces are validated locally and mechanically.
+3. GitHub Actions must pass the Ubuntu, macOS, Windows x64, Node 22/24 matrix at the exact candidate head; deterministic rebuild, verify, extract, and install of the exact artifact are required.
+4. The positive artifact must contain the reviewed, hash-pinned Windows x64 Job Object helper (packaged under `bin/win32-x64/`).
+5. Windows x64 live provider egress is enabled only through verified private roots and explicit opt-in, with an emergency kill switch. Native Windows host e2e is UNRUN and remains a promotion limitation.
 
 Five-pet host evidence for Byte, Mochi, Orbit, Bella, and Lupo is carried as machine-captured artifact-bound host-e2e bundles (human-unreviewed label) rather than a separate multi-session human pet tour. Speculative adoption is proven on published rc.6 host-e2e. Stop-path multi-minute host enforcement remains a documented limitation.
 
@@ -160,21 +160,21 @@ Prerequisites:
 - At least one supported reviewer CLI installed and authenticated through its own normal login flow
 - Windows x64 live review requires the packaged protocol-2 helper, verified private-state DACLs, an ACL-capable volume, and explicit `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`; the unset default, ARM64, and failed verification remain blocked
 
-After protected publication completes, install the published `v0.6.0-rc.1` release through Codex's Git marketplace support:
+After protected publication completes, install the published `v0.6.0` release through Codex's Git marketplace support:
 
 ```bash
-codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.6.0-rc.1
+codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.6.0
 codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
 codex plugin list
 ```
 
-`v0.6.0-rc.1` adds the Windows x64 DACL/private-state boundary, assured runtime-root coverage, kill-switch TOCTOU closure, typed provider-temp integrity failures, and replay validation already shipped in 0.5.1. Install the immutable tag, not the moving `main` branch.
+`v0.6.0` adds the Windows x64 DACL/private-state boundary, assured runtime-root coverage, kill-switch TOCTOU closure, typed provider-temp integrity failures, and replay validation already shipped in 0.5.1. Install the immutable tag, not the moving `main` branch.
 
-This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.6.0-rc.1`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
+This repository includes a Claude Code marketplace manifest under `.claude-plugin/` for packaging layout compatibility. Claude Code is **not** a supported Buddy host in `v0.6.0`: hooks and skills currently implement the Codex plugin lifecycle only. Use the Codex CLI marketplace install path above.
 
 The public default branch remains the contributor-friendly source repository. A release version tag is intended to resolve to a separate parentless distribution commit whose tree contains only the byte-verified positive artifact, including its `release-manifest.json`. It does not point at the full development checkout or inherit its objects and history. Install a pinned release tag, never a moving source branch.
 
-The public `v0.6.0-rc.1` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only prerelease. Stable `v0.5.1` remains available. During development, use a pinned immutable tag rather than moving `main`.
+The public `v0.6.0` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only stable release. Stable `v0.5.1` remains available until that workflow completes. During development, use a pinned immutable tag rather than moving `main`.
 
 ```mermaid
 flowchart TD
@@ -491,7 +491,7 @@ npm run release:build -- --output /tmp/codex-buddy-public-rc3
 npm run release:verify -- --input /tmp/codex-buddy-public-rc3
 npm run release:distribution -- \
   --artifact /tmp/codex-buddy-public-rc3 \
-  --output /tmp/codex-buddy-v0.6.0-rc.1-distribution \
+  --output /tmp/codex-buddy-v0.6.0-distribution \
   --policy-root .
 ```
 

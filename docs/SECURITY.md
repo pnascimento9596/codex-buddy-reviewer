@@ -4,11 +4,11 @@
 
 Untrusted inputs include source code, diffs, filenames, hook JSON, CLI values, Git output, provider stdout/stderr, worker summaries, and model-generated findings. Authentication state and repository contents are sensitive local inputs. The remote model provider is outside the local trust boundary.
 
-## Current RC security status
+## Current v0.6.0 security status
 
-`v0.6.0-rc.1` promotion follows the remediated v0.5 privacy boundary plus the Windows x64 current-user-only DACL epic. The final Windows-remediation tree received direct Claude and direct Ollama/GLM exact-tree review across ancestor/root coverage, authorization ordering, kill-switch TOCTOU, and provider-temporary integrity concerns. Protected Windows Node 22/24 CI exercises the packaged helper and DACL protocol.
+`v0.6.0` promotion follows the remediated v0.5 privacy boundary plus the Windows x64 current-user-only DACL epic. The final Windows-remediation tree received direct Claude and direct Ollama/GLM exact-tree review across ancestor/root coverage, authorization ordering, kill-switch TOCTOU, and provider-temporary integrity concerns. Protected Windows Node 22/24 CI exercises the packaged helper and DACL protocol. Lane J additionally records the explicit Windows runtime opt-in and current public review-provider guidance.
 
-This remains an RC rather than a universal host-acceptance claim. Native Windows Codex host e2e and completed live Windows local-model review remain UNRUN; ARM64 remains blocked. The sections below define the enforced boundary and known limitations without claiming protection against Administrators, SYSTEM, or a malicious same-user process.
+This promotion does not claim universal host acceptance. Native Windows Codex host e2e and completed live Windows local-model review remain UNRUN; ARM64 remains blocked. The sections below define the enforced boundary and known limitations without claiming protection against Administrators, SYSTEM, or a malicious same-user process.
 
 ## Consent and activation
 

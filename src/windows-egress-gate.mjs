@@ -8,8 +8,8 @@
 // CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1 still forces fail-closed without a release.
 // CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1 is the explicit runtime opt-in.
 //
-// v0.6.0-rc.1 promotion candidate: H01-H06 remediation and the deferred
-// kill-switch default fix are merged. This deliberate lift is the exact
-// configuration reviewed by the Phase 4 full re-seal; no RC may publish unless
-// that re-seal passes without an RC-blocking finding.
+// v0.6.0 stable promotion: H01-H06 remediation and the deferred kill-switch
+// default fix are merged. This deliberate lift is the exact configuration
+// reviewed by the Phase 4 full re-seal; stable publication still requires the
+// protected release workflow's complete verification gates.
 export const WINDOWS_PROVIDER_EGRESS_GATE_LIFTED = true;

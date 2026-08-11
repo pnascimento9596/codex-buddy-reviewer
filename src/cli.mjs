@@ -56,7 +56,7 @@ Usage:
   buddy-review.mjs data [status|purge] [options]
 
 Options:
-  --provider <id>              Connection: claude, grok, ollama, or opencode (default: grok)
+  --provider <id>              Connection: claude, ollama, or opencode (default: ollama)
   --model <id>                 Provider model (uses the selected connection default)
   --effort <level>             Reviewer reasoning effort (default: high)
   --scope <working-tree|branch> Review scope (default: working-tree)
@@ -79,7 +79,7 @@ export function parseArgs(argv) {
   const args = [...argv];
   if (args[0] === 'review') args.shift();
   const options = {
-    provider: 'grok',
+    provider: 'ollama',
     scope: 'working-tree',
     effort: 'high',
     minConfidence: 0.75,
@@ -134,7 +134,7 @@ export function parseArgs(argv) {
   }
 
   if (!supportedProviderIds().includes(options.provider)) {
-    throw new Error('--provider must be claude, grok, ollama, or opencode');
+    throw new Error('--provider must be claude, ollama, or opencode');
   }
   if (!['working-tree', 'branch'].includes(options.scope)) throw new Error('--scope must be working-tree or branch');
   if (options.scope === 'branch' && !options.base) throw new Error('--base is required for branch scope');
