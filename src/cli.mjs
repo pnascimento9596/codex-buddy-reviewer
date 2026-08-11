@@ -127,6 +127,7 @@ export function parseArgs(argv) {
     }
   }
 
+  if (options.help) return options;
   if (storeRequested && noStoreRequested) throw new Error('--store and --no-store cannot be combined');
   if (options.retainEvidence && !options.store) {
     throw new Error('--retain-evidence requires explicit --store');

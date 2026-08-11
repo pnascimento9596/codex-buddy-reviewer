@@ -1275,6 +1275,7 @@ test('reviewer parser leaves a missing required findings array invalid', () => {
 });
 
 test('CLI arguments default safely and require an explicit branch base', () => {
+  assert.equal(parseArgs(['--help']).help, true);
   assert.throws(() => parseArgs(['review']), /--provider is required/);
   const defaults = parseArgs(['review', '--provider', 'ollama']);
   assert.equal(defaults.provider, 'ollama');
