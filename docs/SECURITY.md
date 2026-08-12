@@ -6,7 +6,7 @@ Untrusted inputs include source code, diffs, filenames, hook JSON, CLI values, G
 
 ## Current v0.6.0 security status
 
-`v0.6.0` promotion follows the remediated v0.5 privacy boundary plus the Windows x64 current-user-only DACL epic. The final Windows-remediation tree received direct Claude and direct Ollama/GLM exact-tree review across ancestor/root coverage, authorization ordering, kill-switch TOCTOU, and provider-temporary integrity concerns. Protected Windows Node 22/24 CI exercises the packaged helper and DACL protocol. Lane J additionally records the explicit Windows runtime opt-in and current public review-provider guidance.
+Published `v0.6.0` follows the remediated v0.5 privacy boundary plus the Windows x64 current-user-only DACL epic. The final Windows-remediation tree received direct Claude and direct Ollama/GLM exact-tree review across ancestor/root coverage, authorization ordering, kill-switch TOCTOU, and provider-temporary integrity concerns. Protected Windows Node 22/24 CI exercises the packaged helper and DACL protocol. Lane J additionally records the explicit Windows runtime opt-in and current public review-provider guidance.
 
 This promotion does not claim universal host acceptance. Native Windows Codex host e2e and completed live Windows local-model review remain UNRUN; ARM64 remains blocked. The sections below define the enforced boundary and known limitations without claiming protection against Administrators, SYSTEM, or a malicious same-user process.
 
@@ -110,4 +110,4 @@ Repository code and the positive public artifact are distributed under Apache-2.
 
 ## Reporting
 
-While the repository remains private, report security concerns privately to the owner through GitHub. Private vulnerability reporting is enabled as part of the public visibility transition. Once enabled, use it rather than a public issue for sensitive reports. Never attach real credentials, proprietary patches, or retained evidence.
+For sensitive security or privacy concerns, use GitHub private vulnerability reporting rather than a public issue. Never attach real credentials, proprietary patches, or retained evidence.

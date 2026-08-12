@@ -23,7 +23,7 @@ Rust is a future option only for a protocol-compatible replacement of the narrow
 
 Module decomposition is more urgent than adding a language. The largest modules should be split along existing pure validation, state-transition, storage, and orchestration seams after v0.5 behavior is frozen. This reduces blast radius while preserving the current runtime and security contracts.
 
-## Automatic v0.5 path
+## Automatic review path in v0.6.0
 
 ```mermaid
 flowchart TD

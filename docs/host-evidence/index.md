@@ -256,7 +256,7 @@ Failed to load pet: load ambient pet
 
 The v2 packages use 1536x2288 atlases and `spriteVersionNumber: 2`; working legacy packages use 1536x1872 atlases without that field. A reversible Byte probe removing only `spriteVersionNumber` remained undiscoverable, and the original manifest was restored byte-for-byte. P1 issue [#38](https://github.com/pnascimento9596/codex-buddy-reviewer/issues/38) tracks the host/package compatibility contract.
 
-**Disposition:** terminal graphics support passed in Kitty, but the five released-pet host gate failed. Byte, Mochi, Orbit, `buddy-bella`, and `buddy-lupo` could not honestly be cycled or captured because the tested host did not list them. Stable promotion remains blocked pending a corrected package/host contract and a repeated five-pet real-host run.
+**Historical rc.3 disposition:** terminal graphics support passed in Kitty, but the five released-pet host gate failed at that time. Byte, Mochi, Orbit, `buddy-bella`, and `buddy-lupo` could not honestly be cycled or captured because the tested host did not list them. The corrected package/host contract and later exact-artifact bundle are recorded in the post-fix and published-rc.4 sections below; this historical entry is not current stable-release status.
 
 See [`pet-terminal-limitation.txt`](pet-terminal-limitation.txt) for the compact visible-host record.
 

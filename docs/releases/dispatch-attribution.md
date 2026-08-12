@@ -110,3 +110,16 @@ attribution out-of-artifact.
   - Release metadata: prerelease=true; operator purge-once-more language added via notes-only `gh release edit` after publish (assets and tag object unchanged — verified by before/after asset SHA-256 and tag ref equality). Prior tags rc.1–rc.5 unchanged via `ls-remote`.
   - Exactly one release dispatch this lane; zero provider inference calls during Phase 1–2.
 
+### 2026-08-12 — v0.6.0 stable publish
+
+- **Phase A (external pre-dispatch):** H `41b0fadbbbc85fcf3dca02192d002a4139dee504`; inputs `version=0.6.0`, `publish=true`, protected ref `main`; actor `pnascimento9596` (`198005926`); owner lane authority scoped to exactly one stable publication dispatch from H plus post-publication verification; no commit was added to protected `main` between H capture and dispatch.
+- **Phase B (this entry):**
+  - Actual source SHA / event SHA: `41b0fadbbbc85fcf3dca02192d002a4139dee504` (equals H).
+  - Release run: `31596604260`, attempt **1**, `workflow_dispatch`, completed `success` at `2026-08-12T12:54:45Z`; actor and triggering actor `pnascimento9596`.
+  - Required jobs all completed successfully: owner authorization, credential scan, Ubuntu Node 22/24, macOS Node 22, Windows Node 22/24, validation gate, public artifact build, attestation, and artifact-only publication.
+  - `public-release` deployments, all bound to H and approved separately by integer deployment identity: `5869549258` (build), `5869558664` (attestation), `5869562672` (publication). Pending deployments were empty after completion.
+  - Published identity: annotated tag object `91b2b7569a8c00f0b6eba3b2893a9976bc03eb0f`; peeled parentless distribution commit `d359351b7e8bf91b91c27359ba90e9e7015c2efb`; GitHub Release `v0.6.0`, non-draft, non-prerelease, published `2026-08-12T12:54:43Z`.
+  - Asset SHA-256 values: tarball `1ebcced1a3a9d9ef3225310d3aed1a56a7137aaf6712ebf927a8b7e628858679`; distribution bundle `a61b4e35dd52a786253ca02d3572857d7fca5341b91960c49cb19d7c850bbefe`; tarball sidecar `97b187f54e6a9d2e73505cd60c6992626935a006e011d5dd1070e869ae71cb11`; bundle sidecar `26c84ed477347184c13f5cfb31793a0f64cbd2e27fe444d5b95687bd0ad0384e`; receipt `eb0cfa2a9d7fe0803ae87d91a6b80373499339a06186d578d34a73a8c00ee41e`.
+  - Anonymous Git transport resolved both `refs/tags/v0.6.0` and its peeled reference. Published asset extraction, checksum validation, public-plugin verification, distribution-bundle verification, and attestation subject/source binding passed.
+  - Exactly one `publish=true` dispatch occurred for this stable lane; no provider inference call was made by the publication workflow.
+
