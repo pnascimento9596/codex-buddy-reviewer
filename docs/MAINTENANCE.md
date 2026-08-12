@@ -34,17 +34,11 @@ paths, provider/model identifiers, and local inventory details.
 
 ## Updating the plugin
 
-Review the target tag before changing the installation. Use a new immutable
-release tag and let the marketplace manage the cache:
-
-```bash
-codex plugin marketplace upgrade codex-buddy-reviewer --json
-codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
-codex plugin list --json
-```
-
-If the marketplace source itself must move to a specific release tag, replace
-it deliberately rather than pointing it at `main`:
+Review the target tag before changing the installation. `marketplace upgrade`
+refreshes the currently configured Git marketplace snapshot; it does **not**
+move a marketplace from one immutable tag to another. For every new release,
+replace the marketplace source deliberately with the target tag rather than
+pointing it at `main`:
 
 ```bash
 codex plugin remove codex-buddy-reviewer@codex-buddy-reviewer --json
@@ -52,6 +46,10 @@ codex plugin marketplace remove codex-buddy-reviewer --json
 codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref vX.Y.Z --json
 codex plugin add codex-buddy-reviewer@codex-buddy-reviewer --json
 ```
+
+Use `codex plugin marketplace upgrade codex-buddy-reviewer --json` only when
+you intentionally want to refresh the currently pinned tag. It is not a
+substitute for the target-tag replacement sequence above.
 
 After every update:
 
