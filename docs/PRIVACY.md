@@ -1,6 +1,6 @@
 # Privacy
 
-Codex Buddy Reviewer is a local Codex plugin. It has no hosted Buddy service, telemetry endpoint, Buddy account system, central review database, or cross-session reviewer memory.
+Codex Buddy Reviewer is a local Codex plugin. The current stable release is `v0.6.0`, published from protected source `41b0fadbbbc85fcf3dca02192d002a4139dee504`. It has no hosted Buddy service, telemetry endpoint, Buddy account system, central review database, or cross-session reviewer memory.
 
 ## Credential custody
 

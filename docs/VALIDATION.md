@@ -2,12 +2,15 @@
 
 This document separates validation evidence into five explicitly labeled layers. Current evidence must not overwrite frozen publication evidence, and unresolved gates remain unresolved until a fresh run proves otherwise.
 
-## Layer A - current evidence at exact protected main
+## Layer A - stable publication and post-publication evidence
 
-Current promotion work prepares stable `v0.6.0` from protected main after the
+The published stable `v0.6.0` artifact is bound to protected source
+`41b0fadbbbc85fcf3dca02192d002a4139dee504` after the
 lane-h/lane-i Windows DACL remediation, replay fix, exact-tree two-family seal,
 and bounded native-Windows viability disposition. The immutable published
 v0.5.1 source remains `c1af3da4ce34f8ba43196bbeee8065053398324d`.
+Subsequent documentation-only post-publication changes do not alter the
+published artifact, tag, or source binding.
 Frozen Layers B–E are unchanged historical publication evidence.
 
 ### v0.6.0 candidate evidence
@@ -16,7 +19,7 @@ Frozen Layers B–E are unchanged historical publication evidence.
 - Protected-main validation run `31363656621` passed at remediation merge `d8228facae2eb48bb3df6f4256cf445c6341282d`.
 - Phase 5 Windows evidence disposition merged through PR #90 as `8b69066e3dafa309044021b723a2643f5b9e524b`; protected-main run `31371658178` passed every required lane.
 - Lane J opt-in implementation merged through PR #95 as `40ecc13eab234d054c4a6c1c11f0e7752d58c3ba`; protected-main run `31518823351` passed every required lane.
-- Lane J documentation/provider-guidance reconciliation merged through PR #96 as `257c62cb59578ba3a7bbd13e625f7ae7bc806bcb`; protected-main validation is the current release gate.
+- Lane J documentation/provider-guidance reconciliation merged through PR #96 as `257c62cb59578ba3a7bbd13e625f7ae7bc806bcb`; subsequent provider-surface correction PR #98 merged to protected main as `41b0fadbbbc85fcf3dca02192d002a4139dee504`.
 - Windows x64 live local-model/Codex host e2e remains UNRUN after bounded branch-only viability attempts. Protected Windows Node 22/24 integration tests remain the authoritative packaged-helper and DACL evidence. ARM64 remains blocked.
 
 ### Lane J current reconciliation
@@ -24,6 +27,8 @@ Frozen Layers B–E are unchanged historical publication evidence.
 - Windows runs `31510839580` and `31511573245` both failed before provider setup; doctor calls, live turns, and provider inferences were all zero. The final disposition is **NOT OBSERVED** after the two-run bound.
 - The opt-in fallback is `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`; the unset default remains fail-closed after private-state verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` still overrides it.
 - PR #91 merged normally as `9efd4037dcf691590232869ce7031755157f72a2`; PR #94 merged normally as `80f378cb7b8d4353b4a6b7745b4d3ebcf421a15` after the automatic-test seam split and documentation reconciliation. PR #95 merged as `40ecc13eab234d054c4a6c1c11f0e7752d58c3ba`; PR #96 merged as `257c62cb59578ba3a7bbd13e625f7ae7bc806bcb`.
+- PR #98 merged normally as `41b0fadbbbc85fcf3dca02192d002a4139dee504`; protected validation run `31549558861` passed.
+- Stable publication run `31596604260` completed successfully from this exact SHA. The annotated `v0.6.0` tag, parentless distribution commit, assets, checksums, anonymous downloads, and GitHub attestations were independently verified after publication. See `docs/releases/dispatch-attribution.md` and the external Lane J publication ledger.
 - Browser governance was captured externally in the Lane J evidence bundle as `phase-3-browser-governance.md`; it is machine-captured and human-unreviewed. The GitHub Security Log was intentionally not opened.
 
 ### 0.5.1 candidate local validation (pre-merge head)
@@ -69,12 +74,12 @@ The two prior frozen historical slices were byte-compared before this edit: Laye
 | PR #48, post-fix host evidence | `30992257722` | `9896aa3ebee7f99b239266ae764d98ae37637764` | success |
 | PR #50, #37 first-enable baseline UX | `31007708098` (flake family; later green on same family) | `065c4704e7c5e37ff979b2a2daea67acf0163a16` | success after authorized flake handling on sibling heads |
 | PR #51, rc.4 candidate | `31011169822` attempt 2 | `b56224fb8e37ca02e071cda41702af4ef20f1ebb` | success |
-| Frozen rc.4 evidence (this PR) | (post-merge) | (merge SHA) | pending |
+| Frozen rc.4 evidence (historical) | (see published rc.4 section below) | published rc.4 source | historical |
 
 ### Post-rc.3 host and supersession evidence
 
 - Speculative adoption observed on a real Codex 0.146 host after PRs #44/#46: ready key `5a646cf08ad7402bf40ba41ccce08faa7efb73b356953406b4dfce8265cfd489` exact-matched completed key; outbox had no `review_started` after `turn_finished`. Evidence: `docs/host-evidence/speculative-adoption-2026-08-05.txt`.
-- Five-pet selectability observed on fixed packages (terminal-content method; ScreenCaptureKit/TCC blocked pixels). Artifact-bound host-e2e bundle against a published archive remains open for stable.
+- Five-pet selectability was observed on fixed packages (terminal-content method; ScreenCaptureKit/TCC blocked pixels). The later exact-artifact host-e2e bundle is machine-validated and human-unreviewed; transient visual states are not claimed as screenshot-proven.
 - **Supersession invariant:** a prior real-host turn with mismatched ready/completed identity correctly refused adoption (stale-key / non-matching speculative receipt rejected; no false Stop adoption). Exact-final or failed fallback remains the safe path when identities diverge.
 - **Prior-lane provider overrun (honest):** host-verify budget was 4 live review turns; verification used 5+ after the second #36 root cause appeared mid-run (1 doctor + 2 exact-final + mismatched-key turn + gate-closing adoption). Cause recorded; not silently normalized to budget.
 
@@ -347,15 +352,15 @@ Attestation certificates bind to attempt 1 (when the attest job completed). Publ
 
 The external scratch clone, downloaded assets, extracted artifact, and generated attestation JSON were removed after the evidence was recorded.
 
-## Layer F - unresolved gates
+## Layer F - unresolved limitations after stable publication
 
-The following gates remain unresolved for stable promotion after published rc.4 and artifact-bound host-e2e:
+The following limitations remain after stable publication:
 
-- Windows current-user-only DACL creation and verification for durable Buddy state and provider temporary roots.
-- Live Windows provider egress after the DACL gate is implemented and verified.
+- Native Windows Codex host e2e and completed live Windows local-model review remain UNRUN; protected Windows Node 22/24 CI covers the packaged x64 helper and DACL protocol, not a real Codex desktop session.
+- Live Windows provider egress remains bounded by the packaged helper, ACL-capable volume, current-user-only private-state verification, explicit `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`, and the kill switch; no live Windows provider inference was observed in Lane J.
 - Repository-owned Codex validator wiring: skill/plugin validators pass on this host, but the repository still has no package-script entry point in the ordinary npm chain.
-- Owner-only browser governance: OAuth app inventory, fine-grained PAT inventory, 2FA/email visibility, and admin-bypass decision for `public-release` (each later release dispatch needs its own Security Log window, including rc.4).
+- Owner-only browser governance: OAuth app inventory, fine-grained PAT inventory, 2FA/email visibility, and administrator-bypass policy remain outside repository/API proof. Dispatch and protected-deployment attribution for run `31596604260` are recorded separately; the GitHub Security Log was not used as a substitute.
 - Optional: fresh exact-head whole-repository deep security scan at the final promotion head if owner policy requires it.
-- Stable `v0.5.0` promotion remains an explicit owner decision after the remaining gates above close.
+- Stable `v0.6.0` is published; these limitations do not get relabeled as passes by publication.
 
 Closed on published rc.4 (see `docs/host-evidence/index.md` rc.4 section and readiness ledger): published-artifact speculative receipt adoption; five-pet host-e2e v2 bundle against the published archive; first-enable baseline UX #37; #36/#38 root causes.

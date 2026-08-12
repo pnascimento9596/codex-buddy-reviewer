@@ -1,10 +1,10 @@
 # Changelog
 
-All notable changes to Codex Buddy Reviewer are documented here. Release candidates remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
+All notable changes to Codex Buddy Reviewer are documented here. Releases remain evidence-bound to exact source, automated validation, independent review, and protected publication. Adoption-scale human host observations are intentionally deferred until real users or pull requests make them useful.
 
-## 0.6.0 - 2026-08-11
+## 0.6.0 - 2026-08-12
 
-Stable v0.6 release candidate prepared from the exact protected `main` promotion head. Publication remains guarded by the protected release workflow and its final host-evidence, attestation, and anonymous-verification gates.
+Stable v0.6.0 published from exact protected source `41b0fadbbbc85fcf3dca02192d002a4139dee504` by protected workflow run `31596604260`. Anonymous assets, checksum sidecars, distribution bundle, tag, and provenance were independently verified after publication.
 
 ### Stable posture
 
@@ -13,9 +13,14 @@ Stable v0.6 release candidate prepared from the exact protected `main` promotion
 - The two authorized Lane J Windows viability attempts consumed zero provider calls, doctor calls, live turns, and inferences; the final disposition is **NOT OBSERVED**, not provider failure.
 - Current public guidance uses Claude, Ollama, and OpenCode operator connections. No Grok review is part of this release lane.
 
-### Release status
+### Publication identity
 
-- Prepared for one protected `version: 0.6.0`, `publish: true` dispatch only after every readiness gate passes. Do not treat this changelog entry alone as dispatch authorization.
+- Release: https://github.com/pnascimento9596/codex-buddy-reviewer/releases/tag/v0.6.0
+- Annotated tag object: `91b2b7569a8c00f0b6eba3b2893a9976bc03eb0f`
+- Parentless distribution commit: `d359351b7e8bf91b91c27359ba90e9e7015c2efb`
+- Tarball SHA-256: `1ebcced1a3a9d9ef3225310d3aed1a56a7137aaf6712ebf927a8b7e628858679`
+- Distribution bundle SHA-256: `a61b4e35dd52a786253ca02d3572857d7fca5341b91960c49cb19d7c850bbefe`
+- Publication remains governed by protected CI and the immutable artifact/provenance contract; this entry is not dispatch authorization for a future release.
 
 ## 0.6.0-rc.1 - 2026-08-10
 

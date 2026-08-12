@@ -4,6 +4,8 @@
   <p>Keep Codex building while one or two independent reviewer connections get ready in the background.</p>
   <p>
     <a href="#quick-start">Quick start</a> ·
+    <a href="https://github.com/pnascimento9596/codex-buddy-reviewer/blob/main/docs/DAILY-USE.md">Daily use</a> ·
+    <a href="https://github.com/pnascimento9596/codex-buddy-reviewer/blob/main/docs/MAINTENANCE.md">Maintenance</a> ·
     <a href="#connection-support">Connections</a> ·
     <a href="#review-lifecycle">How it works</a> ·
     <a href="docs/PRIVACY.md">Privacy</a> ·
@@ -17,7 +19,7 @@
     <a href="#connection-support"><img alt="Three reviewer adapters" src="https://img.shields.io/badge/reviewer_adapters-3-0891b2" /></a>
     <a href="#pets"><img alt="Five public pets" src="https://img.shields.io/badge/public_pets-5-f59e0b" /></a>
     <a href="#license"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-2563eb" /></a>
-    <a href="#status"><img alt="Stable release candidate" src="https://img.shields.io/badge/release_gates-stable_candidate-f59e0b" /></a>
+    <a href="#status"><img alt="Stable release" src="https://img.shields.io/badge/release_gates-stable-16a34a" /></a>
   </p>
 </div>
 
@@ -37,7 +39,7 @@ Run the first-party `/pet` command once to keep the selected companion open. Inv
 
 ## Status
 
-Stable release candidate: `v0.6.0`, prepared for publication only from the exact protected `main` head through the guarded release workflow. Stable `v0.5.1` remains the latest published release until that workflow completes.
+Stable release: [`v0.6.0`](https://github.com/pnascimento9596/codex-buddy-reviewer/releases/tag/v0.6.0), published by the protected workflow from source `41b0fadbbbc85fcf3dca02192d002a4139dee504`. Stable `v0.5.1` remains available as the rollback target; it is no longer the current release.
 
 This release keeps Windows x64 live provider egress fail-closed unless the packaged protocol-2 helper verifies current-user-only private-state DACLs on an ACL-capable volume **and** the operator explicitly sets `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`. The unset default, ARM64, non-ACL volumes, failed verification, and `CODEX_BUDDY_WINDOWS_EGRESS_BLOCK=1` remain blocked. Native Windows Codex host acceptance remains explicitly UNRUN. See the [validation record](docs/VALIDATION.md) and [release note](docs/releases/v0.6.0.md).
 
@@ -55,19 +57,19 @@ This release keeps Windows x64 live provider egress fail-closed unless the packa
 - Uses bounded crash-recovery receipts plus content-free tombstones so an expired or interrupted review can never authorize the same provider call again.
 - Shows `Code review and suggestions are in progress.` in the local event stream when the final exact result is not ready yet. A renderer can display that text, while the native pet continues to show only host-owned animation and task state.
 
-## Release gates
+## Release posture
 
 An internal sealed whole-repository Deep Security Scan of the pre-fix RC head found 20 findings: 17 medium and 3 low. They clustered around credential syntax gaps, denied-content fragment and live Git metadata coverage, and lossy handling of invalid UTF-8 Git pathnames. Provider-free reproductions proved that affected bytes could enter a prepared external-review prompt or that review evidence could be reported falsely complete.
 
-Those finding families were remediated with regression coverage and independent review fixes through the v0.5 series. For `v0.6.0` the current posture is:
+Those finding families were remediated with regression coverage and independent review fixes through the v0.5 series. The published `v0.6.0` artifact passed the required promotion gates at the exact source above. Its current posture is:
 
-1. The exact stable candidate head must pass the complete local suite, plugin and skill validators, and public-boundary verification.
-2. Direct Claude and direct Ollama/GLM family seals cover the final Windows-remediation tree; version-only promotion surfaces are validated locally and mechanically.
-3. GitHub Actions must pass the Ubuntu, macOS, Windows x64, Node 22/24 matrix at the exact candidate head; deterministic rebuild, verify, extract, and install of the exact artifact are required.
-4. The positive artifact must contain the reviewed, hash-pinned Windows x64 Job Object helper (packaged under `bin/win32-x64/`).
-5. Windows x64 live provider egress is enabled only through verified private roots and explicit opt-in, with an emergency kill switch. Native Windows host e2e is UNRUN and remains a promotion limitation.
+1. The exact source head passed the complete local suite, plugin and skill validators, and public-boundary verification.
+2. Direct Claude and direct Ollama/GLM family seals covered the final Windows-remediation tree; version-only promotion surfaces were validated locally and mechanically.
+3. Protected GitHub Actions passed the Ubuntu, macOS, Windows x64, Node 22/24 matrix, deterministic rebuild, artifact verification, extraction, installation, attestation, and publication checks.
+4. The positive artifact contains the reviewed, hash-pinned Windows x64 Job Object helper under `bin/win32-x64/`.
+5. Windows x64 live provider egress remains fail-closed by default and requires verified private roots plus explicit `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`; the two bounded viability attempts were **NOT OBSERVED**. Native Windows Codex host e2e remains UNRUN.
 
-Five-pet host evidence for Byte, Mochi, Orbit, Bella, and Lupo is carried as machine-captured artifact-bound host-e2e bundles (human-unreviewed label) rather than a separate multi-session human pet tour. Speculative adoption is proven on published rc.6 host-e2e. Stop-path multi-minute host enforcement remains a documented limitation.
+Five-pet host evidence for Byte, Mochi, Orbit, Bella, and Lupo is carried as an exact-artifact machine-captured host-e2e bundle with a human-unreviewed label. Transient visual worker/review states were not retained and are not claimed as screenshot-proven. Stop-path multi-minute host enforcement remains a documented limitation.
 
 The automatic path preserves the main agent's result when Buddy cannot review, and manual review reports a failure instead of inventing an all-clear. Privacy policy, authorization, provider isolation, and result validation are designed to fail closed.
 
@@ -121,11 +123,11 @@ Provider independence matters more than brand count. Two seats are most useful w
 
 ## Connection support
 
-| Buddy adapter | Subscription or connection route | Structured output boundary | RC status |
+| Buddy adapter | Subscription or connection route | Structured output boundary | v0.6.0 status |
 |---|---|---|---|
-| `claude` | Claude Code authenticated with Claude Max, Pro, or an Anthropic-supported credential | Claude JSON Schema output plus strict local validation | Implemented in RC |
-| `ollama` | Local Ollama or Ollama Cloud after normal Ollama sign-in | Full JSON Schema for local models; JSON mode plus strict local validation for `:cloud` models | Implemented in RC |
-| `opencode` | OpenCode OAuth or API connections, including OpenAI, OpenCode Go, Moonshot AI, and other configured providers | Deny-all ephemeral agent, isolated state, JSONL transport rejection on any tool event, strict local validation | Implemented in RC |
+| `claude` | Claude Code authenticated with Claude Max, Pro, or an Anthropic-supported credential | Claude JSON Schema output plus strict local validation | Supported |
+| `ollama` | Local Ollama or Ollama Cloud after normal Ollama sign-in | Full JSON Schema for local models; JSON mode plus strict local validation for `:cloud` models | Supported |
+| `opencode` | OpenCode OAuth or API connections, including OpenAI, OpenCode Go, Moonshot AI, and other configured providers | Deny-all ephemeral agent, isolated state, JSONL transport rejection on any tool event, strict local validation | Supported |
 | direct Codex CLI | ChatGPT Plus or Pro through Codex CLI | A strict no-tools and no-inherited-instructions boundary is not yet proven | Not enabled |
 | direct Kimi CLI | Kimi membership through Kimi CLI | Noninteractive auto-permission behavior is not yet safely disabled | Not enabled |
 
@@ -160,7 +162,7 @@ Prerequisites:
 - At least one supported reviewer CLI installed and authenticated through its own normal login flow
 - Windows x64 live review requires the packaged protocol-2 helper, verified private-state DACLs, an ACL-capable volume, and explicit `CODEX_BUDDY_WINDOWS_EGRESS_ENABLE=1`; the unset default, ARM64, and failed verification remain blocked
 
-After protected publication completes, install the published `v0.6.0` release through Codex's Git marketplace support:
+Install the published `v0.6.0` release through Codex's Git marketplace support:
 
 ```bash
 codex plugin marketplace add pnascimento9596/codex-buddy-reviewer --ref v0.6.0
@@ -174,7 +176,7 @@ This repository includes a Claude Code marketplace manifest under `.claude-plugi
 
 The public default branch remains the contributor-friendly source repository. A release version tag is intended to resolve to a separate parentless distribution commit whose tree contains only the byte-verified positive artifact, including its `release-manifest.json`. It does not point at the full development checkout or inherit its objects and history. Install a pinned release tag, never a moving source branch.
 
-The public `v0.6.0` tag is created only after the protected release workflow rebuilds, verifies, attests, and publishes the artifact-only stable release. Stable `v0.5.1` remains available until that workflow completes. During development, use a pinned immutable tag rather than moving `main`.
+The public `v0.6.0` tag was created by the protected release workflow after it rebuilt, verified, attested, and published the artifact-only stable release. Stable `v0.5.1` remains available as a rollback target. Always install an immutable tag rather than moving `main`.
 
 ```mermaid
 flowchart TD
@@ -364,7 +366,7 @@ The packet is terminal-sanitized, capped at 4,000 characters, screened for high-
 
 ## What leaves the machine
 
-When the current RC checks authorize a request, each reviewer receives:
+When the current release checks authorize a request, each reviewer receives:
 
 - the bounded, locally screened patch evidence;
 - allowlisted relative path names and changed-line metadata;
@@ -385,7 +387,7 @@ Buddy does not create a persistent reviewer chat and does not carry model conver
 
 The privacy kernel blocks common credential paths and formats, scans otherwise allowed text for high-confidence secrets, and detects exact or bounded normalized fragments copied from registered denied endpoints and live Git metadata. Namespaced secret keys, Bearer and Basic authorization values, connection credentials, wrapped and short denied fragments, and registered live sources have focused regression coverage. Invalid UTF-8 Git pathnames fail closed before provider approval. It is conservative endpoint protection, not universal semantic DLP or file-event history. Short or low-entropy secrets, unknown generic formats, nested encodings, YAML block scalars, XML, archives, and uncommon assignment syntaxes are not exhaustively classified. Decoded transformations and files created and removed entirely between captures may be unavailable.
 
-These are intended boundaries, not a final release claim. The remediated exact tree still requires a fresh sealed scan before provider egress is promoted from experimental.
+These are enforced boundaries and documented limitations, not a promise of universal host security. The protected `v0.6.0` release gates passed; Windows live egress still requires the separate private-state and explicit-opt-in checks above, and native Windows Codex host acceptance remains unrun.
 
 ## Pets
 

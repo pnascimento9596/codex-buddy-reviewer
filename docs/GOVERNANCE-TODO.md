@@ -27,7 +27,7 @@ Attempting `gh api /user/security-log` on `2026-08-02` returned verbatim:
 
 The authenticated `/user` endpoint exposed the account profile for login `pnascimento9596` and numeric ID `198005926`, but did not expose a complete security log, OAuth-application inventory, fine-grained-token inventory, or authoritative token/session provenance.
 
-## Host-observed release gates
+## Historical host-observed release gates
 
 Evidence basis for checked items: published `v0.5.0-rc.4` artifact
 (tarball SHA-256 `2ba45154d1e5c5218900b295412744ea9cfa1fe3a452085f9f77693651453df7`),
@@ -52,8 +52,8 @@ host-e2e v2 bundle validated against that archive (secret name present on
   - Manual pass: UserPromptSubmit and Stop hooks executed on the published rc.4
     install; enable/doctor and skill status paths observed
     (`rc4-enable-and-doctor.txt`, `rc4-speculative-adoption-2026-08-05.txt`).
-- [ ] Complete the Windows current-user-only DACL creation and verification gate before any live Windows provider egress.
-- [ ] Decide whether the verified release candidate is eligible for stable `v0.5.0` promotion. That decision remains with the account owner after independent review, published-artifact verification, and host observations are complete.
+- [ ] Complete native Windows Codex host e2e and live Windows local-model review; protected CI is not a substitute for a real Windows host session.
+- [x] Decide whether the verified release candidate is eligible for stable promotion. The account owner authorized the single `v0.6.0` publication after independent review, published-artifact verification, and host observations were reconciled; the current release record is in `docs/releases/v0.6.0.md`.
 
 CLI-observable POSIX evidence can support these checks but cannot replace native rendering, transcript-display, or host-trust observations. The three checked host items above are closed against the **published rc.4** artifact, not against a later source head.
 
@@ -70,9 +70,9 @@ The following repository and API evidence for **rc.3** is complete and remains h
 - Exact-head two-family deep security scan and mode/EVALUATION fixes shipped in PR #41 (`ad57478…`). OpenCode transport classification shipped with PR #42.
 - Host evidence (exact-final fallback, speculative diagnosis #36, five-pet #38) shipped in PR #40 (`c75ce95…`).
 
-## Current stable-promotion disposition (2026-08-06)
+## Historical stable-promotion disposition (2026-08-06)
 
-Do not promote `v0.5.0` yet. **rc.4** is independently verified (publication,
+At the time of this historical entry, do not promote `v0.5.0` yet. **rc.4** was independently verified (publication,
 attestations, published-artifact speculative adoption, five-pet host-e2e bundle,
 Security Log window). Post-rc.4 protected main carries release-tag reconcile
 (#54), suite budget/host-e2e `.git` (#55), and security-scan fixes (#57). The
@@ -80,4 +80,14 @@ exact-head security-scan gate remains **open** until the final promotion head's
 scan surface is re-covered under the rewritten gate in
 `docs/releases/v0.5.0-stable-readiness.md`. Windows DACL/live-egress and the
 remaining owner-only account review (OAuth apps, PAT inventory, 2FA/email,
-admin-bypass) remain open. See that readiness ledger for identities and residue.
+administrator-bypass) remains open. See that readiness ledger for identities and residue.
+
+## Current v0.6.0 governance disposition (2026-08-12)
+
+- [x] The single authorized stable publication workflow run `31596604260` completed successfully from protected source `41b0fadbbbc85fcf3dca02192d002a4139dee504`.
+- [x] The annotated tag, GitHub Release, assets, checksum sidecars, distribution bundle, anonymous downloads, and attestations were independently reconciled after publication.
+- [x] The exact-artifact five-pet host bundle was accepted by the machine validator and stored through the protected environment without exposing its secret value.
+- [ ] Native Windows Codex host e2e and live Windows local-model review remain UNRUN.
+- [ ] OAuth-application inventory, fine-grained PAT inventory, email/2FA review, and the `public-release` administrator-bypass decision remain owner-only follow-ups.
+
+The historical rc.4 checkboxes above are not current evidence. The current stable publication record and its limitations are maintained in `docs/releases/v0.6.0.md` and `docs/releases/v0.6.0-readiness.md`.
