@@ -58,7 +58,7 @@ function validateReviewerDescriptor(configuration, label = 'Buddy mode') {
 }
 
 export function validateReviewerConfiguration(configuration) {
-  // Reasoning models (observed: Grok 4.5 high, GLM 5.2 high) regularly need
+  // Reasoning models (observed: GLM 5.2 high) regularly need
   // more than the old 480 s ceiling. 1800 s trades slower failure detection
   // for reviews that actually complete; the legacy 540 s allowance is
   // subsumed by the higher cap.

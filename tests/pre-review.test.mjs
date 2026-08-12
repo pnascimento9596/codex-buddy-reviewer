@@ -20,8 +20,8 @@ function mode(root, overrides = {}) {
     workspace_root: root,
     enabled: true,
     scope: 'workspace',
-    provider: 'grok',
-    model: 'grok-4.5',
+    provider: 'ollama',
+    model: 'glm-5.2:cloud',
     effort: 'high',
     secondary_provider: null,
     secondary_model: null,
@@ -63,8 +63,8 @@ function evidence(root, id, overrides = {}) {
 
 function reviewResult() {
   return {
-    provider: 'grok',
-    model: 'grok-4.5',
+    provider: 'ollama',
+    model: 'glm-5.2:cloud',
     result: {
       schema_version: '2',
       status: 'no_findings',
@@ -105,6 +105,7 @@ async function harness(overrides = {}) {
   };
   let reviewCalls = 0;
   let capabilityIssues = 0;
+  let approvalCalls = 0;
   let captureCalls = 0;
   let pauses = 0;
   let receiptWrites = 0;
@@ -191,7 +192,10 @@ async function harness(overrides = {}) {
     privacyComplete: () => overrides.privacyComplete ?? true,
     reviewKey: ({ final }) => final.id.repeat(64).slice(0, 64),
     prepareRequest: () => ({ prompt: 'privacy filtered patch', responseSchema: {}, summaryGuardPacket: null }),
-    approveRequest: () => Object.freeze({ approved: true }),
+    approveRequest: () => {
+      approvalCalls += 1;
+      return Object.freeze({ approved: true });
+    },
     issueCapabilities: async ({ entries }) => {
       capabilityIssues += 1;
       return entries.map((_entry, index) => Object.freeze({ capability_id: String(index) }));
@@ -249,7 +253,7 @@ async function harness(overrides = {}) {
     circuitRecords,
     state: () => state,
     setState: (next) => { state = next; },
-    metrics: () => ({ reviewCalls, capabilityIssues, captureCalls, pauses, receiptWrites })
+    metrics: () => ({ reviewCalls, capabilityIssues, approvalCalls, captureCalls, pauses, receiptWrites })
   };
 }
 
@@ -302,6 +306,21 @@ test('debounces exact checkpoint changes and reviews only the stable generation'
   assert.ok(index >= 4);
 });
 
+test('legacy provider mode fails speculative authorization before approval or dispatch', async () => {
+  const seed = await harness({
+    mode: { provider: 'grok', model: 'grok-4.5' }
+  });
+  const result = await runPreReviewWorker(seed.input, seed.options);
+  assert.equal(result.skipped, 'unsupported_provider');
+  assert.equal(seed.metrics().reviewCalls, 0);
+  assert.equal(seed.metrics().approvalCalls, 0);
+  assert.equal(seed.metrics().capabilityIssues, 0);
+  assert.deepEqual(seed.circuitRecords, []);
+  assert.equal(seed.state().worker_state, 'failed');
+  assert.equal(seed.state().failure.code, 'provider_unavailable');
+  assert.equal(seed.writes.some(({ file }) => file.includes(`${path.sep}automatic-reviews${path.sep}`)), false);
+});
+
 test('speculative review routes rejected-response evidence to the mode data root', async () => {
   let reviewDataDir;
   const seed = await harness({
@@ -332,8 +351,8 @@ test('successful speculative review resets only its exact provider circuit', asy
   const result = await runPreReviewWorker(seed.input, seed.options);
   assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
   assert.deepEqual(seed.circuitRecords, [{
-    provider: 'grok',
-    model: 'grok-4.5',
+    provider: 'ollama',
+    model: 'glm-5.2:cloud',
     succeeded: true
   }]);
 });
@@ -349,8 +368,8 @@ test('ordinary speculative provider failure increments its exact circuit', async
   const result = await runPreReviewWorker(seed.input, seed.options);
   assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
   assert.deepEqual(seed.circuitRecords, [{
-    provider: 'grok',
-    model: 'grok-4.5',
+    provider: 'ollama',
+    model: 'glm-5.2:cloud',
     succeeded: false
   }]);
   const receipt = seed.writes.find(({ file }) => file.includes(`${path.sep}automatic-reviews${path.sep}`));
@@ -545,8 +564,8 @@ test('provider-temp DACL failure is platform integrity and never charges provide
     blockMutation: true
   });
   const failure = new ProviderFailure({
-    provider: 'grok',
-    model: 'grok-4.5',
+    provider: 'ollama',
+    model: 'glm-5.2:cloud',
     stage: 'preflight',
     failureCode: 'isolation_failed',
     durationMs: 1,
@@ -635,7 +654,7 @@ test('Windows integrity failure detected after provider entry is containment, no
 
 test('all-open speculative circuits write an exact failure receipt without provider calls', async () => {
   const seed = await harness({
-    openCircuits: [{ provider: 'grok', model: 'grok-4.5' }]
+    openCircuits: [{ provider: 'ollama', model: 'glm-5.2:cloud' }]
   });
   const result = await runPreReviewWorker(seed.input, seed.options);
   assert.equal(result.status, 'ready', result.error?.stack ?? JSON.stringify(result));
@@ -794,7 +813,7 @@ test('an open speculative lane does not suppress a healthy secondary reviewer', 
       secondary_model: 'claude-opus-4-8',
       secondary_effort: 'high'
     },
-    openCircuits: [{ provider: 'grok', model: 'grok-4.5' }],
+    openCircuits: [{ provider: 'ollama', model: 'glm-5.2:cloud' }],
     review: async (reviewOptions) => {
       const { run: _run, ...reviewed } = reviewResult();
       return {
@@ -835,7 +854,7 @@ test('skips speculative review when summary guard is enabled', async () => {
   const result = await runPreReviewWorker(seed.input, seed.options);
   assert.equal(result.skipped, 'summary_guard_enabled');
   assert.deepEqual(seed.metrics(), {
-    reviewCalls: 0, capabilityIssues: 0, captureCalls: 0, pauses: 0, receiptWrites: 0
+    reviewCalls: 0, capabilityIssues: 0, approvalCalls: 0, captureCalls: 0, pauses: 0, receiptWrites: 0
   });
   assert.equal(seed.writes.length, 0);
 });

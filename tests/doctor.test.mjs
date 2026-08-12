@@ -395,7 +395,7 @@ test('doctor rejects a symlinked egress registry instead of following it', {
   assert.match(check(result, 'egress_registry').detail, /regular non-symlink file/);
 });
 
-test('doctor enumerates the four supported adapters and both configured reviewer connections offline', async () => {
+test('doctor enumerates the three operator-supported adapters and both configured reviewer connections offline', async () => {
   const root = await temporaryDirectory('codex-buddy-doctor-connections-');
   const canonicalRoot = await realpath(root);
   const dataDir = path.join(root, 'state');
@@ -417,12 +417,41 @@ test('doctor enumerates the four supported adapters and both configured reviewer
   const state = check(result, 'mode_state');
   assert.equal(state.status, 'pass');
   assert.equal(state.configured_reviewer_count, 2);
-  assert.deepEqual(state.supported_providers, ['claude', 'grok', 'ollama', 'opencode']);
+  assert.deepEqual(state.supported_providers, ['claude', 'ollama', 'opencode']);
   assert.deepEqual(state.configured_reviewers, [
     { role: 'primary', provider: 'claude', model: 'claude-opus-4-8', effort: 'high' },
     { role: 'secondary', provider: 'opencode', model: 'openai/gpt-5.6', effort: 'high' }
   ]);
   assert.equal(check(result, 'provider').status, 'unknown');
+});
+
+test('default doctor marks an enabled legacy provider mode unhealthy without contacting it', async () => {
+  const root = await temporaryDirectory('codex-buddy-doctor-legacy-provider-');
+  const canonicalRoot = await realpath(root);
+  const dataDir = path.join(root, 'state');
+  await writeModeFixture(canonicalRoot, dataDir, true, {
+    provider: 'grok',
+    model: 'grok-4.5'
+  });
+  let providerCalls = 0;
+  const result = await runDoctor({
+    root,
+    resolveRoot: async (value) => value,
+    codexHome: path.join(root, 'codex'),
+    dataDir,
+    pluginRoot: repositoryRoot,
+    platform: 'linux',
+    providerCheck: async () => {
+      providerCalls += 1;
+      return { status: 'pass', summary: 'must not run' };
+    }
+  });
+  const state = check(result, 'mode_state');
+  assert.equal(providerCalls, 0);
+  assert.equal(state.status, 'fail');
+  assert.deepEqual(state.unavailable_operator_providers, ['grok']);
+  assert.match(state.summary, /unavailable operator provider/);
+  assert.deepEqual(state.supported_providers, ['claude', 'ollama', 'opencode']);
 });
 
 test('doctor rejects credential-shaped stored model identifiers without echoing them', async () => {
@@ -481,8 +510,8 @@ test('doctor reports summary advisory consent as primary-only in a dual reviewer
   await writeModeFixture(canonicalRoot, dataDir, true, {
     provider: 'claude',
     model: 'claude-opus-4-8',
-    secondary_provider: 'grok',
-    secondary_model: 'grok-4.5',
+    secondary_provider: 'ollama',
+    secondary_model: 'glm-5.2:cloud',
     secondary_effort: 'high'
   });
   const consentFile = summaryClaimGuardConsentFile(canonicalRoot, dataDir);
@@ -513,11 +542,10 @@ test('doctor reports summary advisory consent as primary-only in a dual reviewer
   assert.match(summary.summary, /secondary reviewer receives technical evidence only/);
 });
 
-test('explicit provider health dispatch supports every registered adapter without repository evidence', async () => {
+test('explicit provider health dispatch supports every operator adapter without repository evidence', async () => {
   const root = '/fixture/workspace';
   const providers = [
     ['claude', 'claude-opus-4-8'],
-    ['grok', 'grok-4.5'],
     ['ollama', 'glm-5.2:cloud'],
     ['opencode', 'openai/gpt-5.6']
   ];
@@ -596,12 +624,12 @@ test('dual provider health reports exact all, partial, and zero success without 
   const mode = modeFixture(root, {
     provider: 'claude',
     model: 'claude-opus-4-8',
-    secondary_provider: 'grok',
-    secondary_model: 'grok-4.5',
+    secondary_provider: 'ollama',
+    secondary_model: 'glm-5.2:cloud',
     secondary_effort: 'high'
   });
   const cases = [
-    { passing: new Set(['claude', 'grok']), status: 'pass', count: 2 },
+    { passing: new Set(['claude', 'ollama']), status: 'pass', count: 2 },
     { passing: new Set(['claude']), status: 'warn', count: 1 },
     { passing: new Set(), status: 'fail', count: 0 }
   ];
@@ -620,7 +648,7 @@ test('dual provider health reports exact all, partial, and zero success without 
         return { provider, reviewPayload: { status: 'ok' } };
       }
     });
-    assert.deepEqual(calls.sort(), ['claude', 'grok']);
+    assert.deepEqual(calls.sort(), ['claude', 'ollama']);
     assert.equal(result.status, fixture.status);
     assert.equal(result.configured_count, 2);
     assert.equal(result.passed_count, fixture.count);
@@ -668,6 +696,23 @@ test('explicit provider health fails closed on an unsupported reviewer without m
   assert.equal(result.status, 'fail');
   assert.equal(result.configured_count, 0);
   assert.match(result.summary, /invalid or unsupported/);
+});
+
+test('explicit provider health does not contact a legacy Grok reviewer', async () => {
+  let calls = 0;
+  const result = await explicitProviderCheck({
+    root: '/fixture/workspace',
+    mode: modeFixture('/fixture/workspace', { provider: 'grok', model: 'grok-4.5' })
+  }, { timeoutMs: 5_000 }, {
+    dispatchProviderReview: async () => {
+      calls += 1;
+      return { reviewPayload: { status: 'ok' } };
+    }
+  });
+  assert.equal(calls, 0);
+  assert.equal(result.status, 'fail');
+  assert.equal(result.configured_count, 1);
+  assert.match(result.summary, /unavailable operator provider/);
 });
 
 test('provider execution occurs only through an explicitly enabled provider-check hook', async () => {

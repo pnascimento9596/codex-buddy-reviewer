@@ -1,8 +1,8 @@
 import { readMode, resolveRepositoryRoot } from './mode.mjs';
-import { supportedProviderIds } from './provider-registry.mjs';
+import { operatorSupportedProviderIds } from './provider-registry.mjs';
 import { changeSummaryClaimGuardConsent } from './summary-claim-guard.mjs';
 
-const SUMMARY_PROVIDERS = supportedProviderIds();
+const SUMMARY_PROVIDERS = operatorSupportedProviderIds();
 
 export const SUMMARY_GUARD_HELP = `Codex Buddy Reviewer summary guard
 
@@ -11,7 +11,7 @@ Usage:
 
 Options:
   --cwd <path>                 Git workspace (default: current directory)
-  --provider <adapter>         Bind consent to claude, grok, ollama, or opencode (default: mode)
+  --provider <adapter>         Bind consent to claude, ollama, or opencode (default: mode)
   --model <id>                 Bind consent to this model (default: mode)
   --confirm-summary-egress     Required to enable worker-summary egress
   --json                       Emit machine-readable consent state

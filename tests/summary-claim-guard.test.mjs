@@ -25,19 +25,23 @@ const reviewKey = 'c'.repeat(64);
 test('summary-guard CLI requires explicit enable confirmation and rejects ignored status flags', () => {
   assert.equal(parseSummaryGuardArgs(['status', '--json']).action, 'status');
   assert.equal(parseSummaryGuardArgs([
-    'enable', '--confirm-summary-egress', '--provider', 'grok', '--model', 'grok-4.5'
+    'enable', '--confirm-summary-egress', '--provider', 'ollama', '--model', 'glm-5.2:cloud'
   ]).confirmSummaryEgress, true);
-  for (const provider of ['claude', 'grok', 'ollama', 'opencode']) {
+  for (const provider of ['claude', 'ollama', 'opencode']) {
     assert.equal(parseSummaryGuardArgs([
       'enable', '--confirm-summary-egress', '--provider', provider, '--model', 'provider/model'
     ]).provider, provider);
   }
   assert.throws(
     () => parseSummaryGuardArgs(['enable', '--provider', 'grok']),
+    /claude, ollama, opencode/
+  );
+  assert.throws(
+    () => parseSummaryGuardArgs(['enable', '--provider', 'ollama']),
     /requires --confirm-summary-egress/
   );
   assert.throws(
-    () => parseSummaryGuardArgs(['status', '--provider', 'grok']),
+    () => parseSummaryGuardArgs(['status', '--provider', 'ollama']),
     /only valid for summary-guard enable/
   );
   assert.throws(

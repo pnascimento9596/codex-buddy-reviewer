@@ -1,4 +1,7 @@
 import { changeMode, resolveRepositoryRoot } from './mode.mjs';
+import { operatorSupportedProviderIds } from './provider-registry.mjs';
+
+const OPERATOR_PROVIDERS = operatorSupportedProviderIds();
 
 const MODE_HELP = `Codex Buddy Reviewer mode
 
@@ -7,7 +10,7 @@ Usage:
 
 Options:
   --cwd <path>                 Git workspace (default: current directory)
-  --provider <adapter>         Primary connection: grok, ollama, claude, or opencode
+  --provider <adapter>         Primary connection: claude, ollama, or opencode
   --model <id>                 Primary reviewer model
   --effort <level>             Primary reviewer reasoning effort
   --also-provider <adapter>    Add a second independent reviewer connection
@@ -63,12 +66,11 @@ export function parseModeArgs(argv) {
   if (!['toggle', 'enable', 'disable', 'status'].includes(options.action)) {
     throw new Error('mode action must be toggle, enable, disable, or status');
   }
-  if (options.provider && !['grok', 'ollama', 'claude', 'opencode'].includes(options.provider)) {
-    throw new Error('--provider must be grok, ollama, claude, or opencode');
+  if (options.provider && !OPERATOR_PROVIDERS.includes(options.provider)) {
+    throw new Error(`--provider must be one of ${OPERATOR_PROVIDERS.join(', ')}`);
   }
-  if (options.secondaryProvider
-    && !['grok', 'ollama', 'claude', 'opencode'].includes(options.secondaryProvider)) {
-    throw new Error('--also-provider must be grok, ollama, claude, or opencode');
+  if (options.secondaryProvider && !OPERATOR_PROVIDERS.includes(options.secondaryProvider)) {
+    throw new Error(`--also-provider must be one of ${OPERATOR_PROVIDERS.join(', ')}`);
   }
   if (options.singleReviewer && (
     options.secondaryProvider !== undefined

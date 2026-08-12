@@ -7,6 +7,7 @@ import { assertProviderEgressPlatformAllowed } from './provider-egress-platform.
 import { assessProviderModelIdentifier } from './secret-scan.mjs';
 
 const PROVIDER_IDS = Object.freeze(['claude', 'grok', 'ollama', 'opencode']);
+const OPERATOR_PROVIDER_IDS = Object.freeze(['claude', 'ollama', 'opencode']);
 const EXTENDED_EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
 const OLLAMA_EFFORTS = Object.freeze(['low', 'medium', 'high']);
 const APPROVAL_AUTHORITY = createApprovedProviderRequestAuthority();
@@ -75,6 +76,10 @@ function normalizeOptions(definition, options) {
 
 export function supportedProviderIds() {
   return PROVIDER_IDS;
+}
+
+export function operatorSupportedProviderIds() {
+  return OPERATOR_PROVIDER_IDS;
 }
 
 export function getProviderDefinition(provider) {

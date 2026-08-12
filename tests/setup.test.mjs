@@ -45,15 +45,15 @@ test('setup CLI keeps plan options separate from immutable apply and rollback id
   assert.deepEqual(parseSetupArgs([
     'plan',
     '--provider', 'claude',
-    '--also-provider', 'grok',
-    '--also-model', 'grok-4.5',
+    '--also-provider', 'ollama',
+    '--also-model', 'glm-5.2:cloud',
     '--also-effort', 'xhigh'
   ]), {
     action: 'plan',
     json: false,
     provider: 'claude',
-    secondaryProvider: 'grok',
-    secondaryModel: 'grok-4.5',
+    secondaryProvider: 'ollama',
+    secondaryModel: 'glm-5.2:cloud',
     secondaryEffort: 'xhigh'
   });
   assert.equal(parseSetupArgs(['plan', '--provider', 'opencode']).provider, 'opencode');
@@ -84,11 +84,11 @@ test('setup CLI keeps plan options separate from immutable apply and rollback id
     /--plan-id is only valid for setup apply or rollback/
   );
   assert.throws(
-    () => parseSetupArgs(['plan', '--single-reviewer', '--also-provider', 'grok']),
+    () => parseSetupArgs(['plan', '--single-reviewer', '--also-provider', 'ollama']),
     /cannot be combined/
   );
-  assert.throws(() => parseSetupArgs(['plan', '--provider', 'kimi']), /claude, or opencode/);
-  assert.throws(() => parseSetupArgs(['plan', '--also-provider', 'kimi']), /claude, or opencode/);
+  assert.throws(() => parseSetupArgs(['plan', '--provider', 'kimi']), /claude, ollama, opencode/);
+  assert.throws(() => parseSetupArgs(['plan', '--also-provider', 'kimi']), /claude, ollama, opencode/);
 });
 
 test.after(async () => {
